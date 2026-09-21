@@ -3,6 +3,7 @@ package main
 import (
 	"Aegis/internal/decision"
 	"Aegis/internal/runtime/mcp"
+	"Aegis/internal/skillruntime"
 	"Aegis/internal/tool/news"
 	"Aegis/internal/tool/overview"
 	"Aegis/internal/tool/technical"
@@ -24,7 +25,10 @@ import (
 
 func main() {
 	ctx := context.Background()
-
+	middlewares, err := skillruntime.New(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
 	mcpConfigs, err := mcp.LoadConfig("configs/mcp.json")
 	if err != nil {
 		log.Printf("[mcp] load config failed: %v", err)
@@ -63,15 +67,45 @@ func main() {
 	//}
 	handler := callbacksHelper.NewHandlerHelper().
 		Tool(&callbacksHelper.ToolCallbackHandler{
-			OnStart: func(ctx context.Context, info *callbacks.RunInfo, input *tool.CallbackInput) context.Context {
-				log.Printf("[tool:start] %s", info.Name)
+			OnStart: func(
+				ctx context.Context,
+				info *callbacks.RunInfo,
+				input *tool.CallbackInput,
+			) context.Context {
+				log.Printf(
+					"[tool:start] %s input=%s",
+					info.Name,
+					input.ArgumentsInJSON,
+				)
 				return ctx
 			},
-			OnEnd: func(ctx context.Context, info *callbacks.RunInfo, output *tool.CallbackOutput) context.Context {
-				log.Printf("[tool:end] %s", info.Name)
+
+			OnEnd: func(
+				ctx context.Context,
+				info *callbacks.RunInfo,
+				output *tool.CallbackOutput,
+			) context.Context {
+				if output.ToolOutput != nil {
+					log.Printf(
+						"[tool:end] %s tool_output=%+v",
+						info.Name,
+						output.ToolOutput,
+					)
+				} else {
+					log.Printf(
+						"[tool:end] %s output=%q",
+						info.Name,
+						output.Response,
+					)
+				}
 				return ctx
 			},
-			OnError: func(ctx context.Context, info *callbacks.RunInfo, err error) context.Context {
+
+			OnError: func(
+				ctx context.Context,
+				info *callbacks.RunInfo,
+				err error,
+			) context.Context {
 				log.Printf("[tool:error] %s: %v", info.Name, err)
 				return ctx
 			},
@@ -188,6 +222,7 @@ evidence 和 risk 必须始终输出为 JSON 字符串数组。
 					Tools: tls,
 				},
 			},
+			Handlers: middlewares,
 		},
 	)
 	if err != nil {
@@ -204,7 +239,7 @@ evidence 和 risk 必须始终输出为 JSON 字符串数组。
 	events := runner.Run(
 		ctx,
 		[]*schema.AgenticMessage{
-			schema.UserAgenticMessage("分析一下 600519 当前短线状态。"),
+			schema.UserAgenticMessage("测试一下 test-script skill"),
 		},
 		adk.WithCallbacks(handler),
 	)
