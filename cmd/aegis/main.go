@@ -239,7 +239,7 @@ evidence 和 risk 必须始终输出为 JSON 字符串数组。
 	events := runner.Run(
 		ctx,
 		[]*schema.AgenticMessage{
-			schema.UserAgenticMessage("测试一下 test-script skill"),
+			schema.UserAgenticMessage("分析 600519 当前短线状态，获取真实行情、资金流以及需要的其他数据。"),
 		},
 		adk.WithCallbacks(handler),
 	)
