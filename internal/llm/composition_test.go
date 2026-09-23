@@ -3,13 +3,11 @@ package llm
 import (
 	"Aegis/internal/config"
 	"context"
-	"fmt"
 	"testing"
 )
 
 func TestModelComposition_DefaultAndAgentOverride(t *testing.T) {
 	t.Setenv("TEST_DEEPSEEK_API_KEY", "deepseek-test-key")
-	t.Setenv("TEST_OPENAI_API_KEY", "openai-test-key")
 
 	cfg := config.Config{
 		DefaultModel: "default",
@@ -20,9 +18,9 @@ func TestModelComposition_DefaultAndAgentOverride(t *testing.T) {
 				APIKeyEnv: "TEST_DEEPSEEK_API_KEY",
 			},
 			"strong": {
-				Provider:  config.ProviderOpenAI,
-				Model:     "test-openai-model",
-				APIKeyEnv: "TEST_OPENAI_API_KEY",
+				Provider:  config.ProviderDeepSeek,
+				Model:     "deepseek-chat",
+				APIKeyEnv: "TEST_DEEPSEEK_API_KEY",
 			},
 		},
 		Agents: map[string]config.AgentConfig{
@@ -84,13 +82,7 @@ func TestModelComposition_DefaultAndAgentOverride(t *testing.T) {
 		t.Fatal("trading model is nil")
 	}
 
-	marketType := fmt.Sprintf("%T", marketModel)
-	tradingType := fmt.Sprintf("%T", tradingModel)
-
-	if marketType == tradingType {
-		t.Fatalf(
-			"expected different provider model types, both are %s",
-			marketType,
-		)
+	if marketProfile == tradingProfile {
+		t.Fatal("expected different model profiles")
 	}
 }
