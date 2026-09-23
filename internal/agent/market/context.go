@@ -30,6 +30,7 @@ type Context struct {
 	LimitUpCount   int `json:"limit_up_count"`
 	LimitDownCount int `json:"limit_down_count"`
 
+	// Turnover is total market turnover in CNY yuan.
 	Turnover float64 `json:"turnover"`
 
 	LeadingSectors []SectorPerformance `json:"leading_sectors"`
