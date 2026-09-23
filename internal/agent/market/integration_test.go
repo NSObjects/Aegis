@@ -1,6 +1,8 @@
 package market
 
 import (
+	"Aegis/internal/config"
+	"Aegis/internal/llm"
 	"Aegis/internal/runtime"
 	"context"
 	"encoding/json"
@@ -8,13 +10,19 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/cloudwego/eino-ext/components/model/agenticdeepseek"
 )
 
 func TestMarketAgent_Analyze_Integration(t *testing.T) {
 	if os.Getenv("AEGIS_INTEGRATION") != "1" {
 		t.Skip("set AEGIS_INTEGRATION=1 to run integration test")
+	}
+
+	if os.Getenv("DEEPSEEK_API_KEY") == "" {
+		t.Fatal("DEEPSEEK_API_KEY is required")
+	}
+
+	if os.Getenv("TUSHARE_TOKEN") == "" {
+		t.Fatal("TUSHARE_TOKEN is required")
 	}
 
 	ctx, cancel := context.WithTimeout(
@@ -23,26 +31,44 @@ func TestMarketAgent_Analyze_Integration(t *testing.T) {
 	)
 	defer cancel()
 
-	apiKey := os.Getenv("DEEPSEEK_API_KEY")
-	if apiKey == "" {
-		t.Fatal("DEEPSEEK_API_KEY is required")
-	}
-
-	if os.Getenv("TUSHARE_TOKEN") == "" {
-		t.Fatal("TUSHARE_TOKEN is required")
-	}
-
 	skillsDir, err := findSkillsDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	dp, err := newIntegrationModel(
-		ctx,
-		apiKey,
-	)
+	appCfg := config.Config{
+		DefaultModel: "default",
+		Models: map[string]config.ModelConfig{
+			"default": {
+				Provider:  config.ProviderDeepSeek,
+				Model:     envOrDefault(
+					"DEEPSEEK_MODEL",
+					"deepseek-chat",
+				),
+				APIKeyEnv: "DEEPSEEK_API_KEY",
+				BaseURL:   os.Getenv("DEEPSEEK_BASE_URL"),
+			},
+		},
+	}
+
+	profile, err := appCfg.ModelProfileForAgent("market")
 	if err != nil {
-		t.Fatalf("create model: %v", err)
+		t.Fatalf("resolve market model profile: %v", err)
+	}
+
+	if profile != "default" {
+		t.Fatalf(
+			"market model profile = %q, want %q",
+			profile,
+			"default",
+		)
+	}
+
+	models := llm.NewManager(appCfg.Models)
+
+	marketModel, err := models.Get(ctx, profile)
+	if err != nil {
+		t.Fatalf("create market model: %v", err)
 	}
 
 	rt, err := runtime.New(
@@ -59,9 +85,8 @@ func TestMarketAgent_Analyze_Integration(t *testing.T) {
 	a, err := New(
 		ctx,
 		Config{
-			Model:    dp,
-			Handlers: rt.Handlers(),
-
+			Model:         marketModel,
+			Handlers:      rt.Handlers(),
 			MaxIterations: 30,
 		},
 	)
@@ -77,11 +102,26 @@ func TestMarketAgent_Analyze_Integration(t *testing.T) {
 		t.Fatalf("analyze market: %v", err)
 	}
 
-	data, _ := json.MarshalIndent(
+	if result == nil {
+		t.Fatal("market context is nil")
+	}
+
+	if result.AsOf == "" {
+		t.Fatal("market context as_of is empty")
+	}
+
+	if len(result.Evidence) == 0 {
+		t.Fatal("market context evidence is empty")
+	}
+
+	data, err := json.MarshalIndent(
 		result,
 		"",
 		"  ",
 	)
+	if err != nil {
+		t.Fatalf("marshal market context: %v", err)
+	}
 
 	t.Logf(
 		"market context:\n%s",
@@ -89,32 +129,15 @@ func TestMarketAgent_Analyze_Integration(t *testing.T) {
 	)
 }
 
-func newIntegrationModel(
-	ctx context.Context,
-	apiKey string,
-) (*agenticdeepseek.Model, error) {
-	modelName := os.Getenv("DEEPSEEK_MODEL")
-	if modelName == "" {
-		modelName = "deepseek-chat"
+func envOrDefault(
+	name string,
+	fallback string,
+) string {
+	if value := os.Getenv(name); value != "" {
+		return value
 	}
 
-	cfg := &agenticdeepseek.Config{
-		APIKey: apiKey,
-		Model:  modelName,
-
-		Timeout: 120 * time.Second,
-
-		ResponseFormatType: agenticdeepseek.ResponseFormatTypeJSONObject,
-	}
-
-	if baseURL := os.Getenv("DEEPSEEK_BASE_URL"); baseURL != "" {
-		cfg.BaseURL = baseURL
-	}
-
-	return agenticdeepseek.New(
-		ctx,
-		cfg,
-	)
+	return fallback
 }
 
 func findSkillsDir() (string, error) {
