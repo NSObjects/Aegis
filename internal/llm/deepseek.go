@@ -40,20 +40,20 @@ func newDeepSeek(
 func apiKey(
 	cfg config.ModelConfig,
 ) (string, error) {
-	if cfg.APIKey == "" {
+	if cfg.APIKeyEnv == "" {
 		return "", errors.New(
 			"api_key_env is required",
 		)
 	}
 
 	value := strings.TrimSpace(
-		os.Getenv(cfg.APIKey),
+		os.Getenv(cfg.APIKeyEnv),
 	)
 
 	if value == "" {
 		return "", fmt.Errorf(
 			"environment variable %s is not set",
-			cfg.APIKey,
+			cfg.APIKeyEnv,
 		)
 	}
 
