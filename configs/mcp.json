@@ -1,0 +1,7 @@
+[
+  {
+    "name": "tushareMcp",
+    "transport": "streamable-http",
+    "url": "https://api.tushare.pro/mcp/?token=84ec3dc30c938ef24e0a2489d5bd1e32d353de07d2196230ab56db6e"
+  }
+]
