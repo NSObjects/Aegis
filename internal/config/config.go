@@ -20,21 +20,21 @@ type ModelConfig struct {
 	Provider Provider `yaml:"provider"`
 	Model    string   `yaml:"model"`
 
-	APIKey  string `yaml:"api_key"`
-	BaseURL string `yaml:"base_url"`
+	APIKeyEnv string `yaml:"api_key_env"`
+	BaseURL   string `yaml:"base_url,omitempty"`
 
-	MaxTokens *int `yaml:"max_tokens"`
+	MaxTokens *int `yaml:"max_tokens,omitempty"`
 }
 
 type AgentConfig struct {
-	Model string `yaml:"model"`
+	Model string `yaml:"model,omitempty"`
 }
 
 type Config struct {
 	DefaultModel string `yaml:"default_model"`
 
 	Models map[string]ModelConfig `yaml:"models"`
-	Agents map[string]AgentConfig `yaml:"agents"`
+	Agents map[string]AgentConfig `yaml:"agents,omitempty"`
 }
 
 func (c *Config) ModelProfileForAgent(agentName string) (string, error) {
@@ -45,7 +45,7 @@ func (c *Config) ModelProfileForAgent(agentName string) (string, error) {
 	}
 
 	if profile == "" {
-		return "", errors.New("no model profile specified for agent")
+		return "", errors.New("default_model is required")
 	}
 
 	if _, ok := c.Models[profile]; !ok {
