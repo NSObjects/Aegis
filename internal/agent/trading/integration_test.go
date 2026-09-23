@@ -18,8 +18,8 @@ func TestTradingAgent_Analyze_Integration(t *testing.T) {
 		t.Skip("set AEGIS_INTEGRATION=1 to run integration test")
 	}
 
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Fatal("OPENAI_API_KEY is required")
+	if os.Getenv("DEEPSEEK_API_KEY") == "" {
+		t.Fatal("DEEPSEEK_API_KEY is required")
 	}
 
 	if os.Getenv("TUSHARE_TOKEN") == "" {
@@ -46,13 +46,13 @@ func TestTradingAgent_Analyze_Integration(t *testing.T) {
 				APIKeyEnv: "DEEPSEEK_API_KEY",
 			},
 			"strong": {
-				Provider: config.ProviderOpenAI,
+				Provider: config.ProviderDeepSeek,
 				Model: envOrDefault(
-					"OPENAI_MODEL",
-					"gpt-5.6",
+					"DEEPSEEK_STRONG_MODEL",
+					"deepseek-chat",
 				),
-				APIKeyEnv: "OPENAI_API_KEY",
-				BaseURL:   os.Getenv("OPENAI_BASE_URL"),
+				APIKeyEnv: "DEEPSEEK_API_KEY",
+				BaseURL:   os.Getenv("DEEPSEEK_BASE_URL"),
 			},
 		},
 		Agents: map[string]config.AgentConfig{
