@@ -24,7 +24,13 @@ func NewManager(configs map[string]config.ModelConfig) *Manager {
 	}
 }
 
-func (m *Manager) Get(ctx context.Context, profile string) (model.BaseModel[*schema.AgenticMessage], error) {
+func (m *Manager) Get(
+	ctx context.Context,
+	profile string,
+) (
+	model.BaseModel[*schema.AgenticMessage],
+	error,
+) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -34,13 +40,19 @@ func (m *Manager) Get(ctx context.Context, profile string) (model.BaseModel[*sch
 
 	cfg, ok := m.configs[profile]
 	if !ok {
-		return nil, fmt.Errorf("model profile %q not found", profile)
+		return nil, fmt.Errorf(
+			"model profile %q not found",
+			profile,
+		)
 	}
 
 	instance, err := New(ctx, cfg)
-
 	if err != nil {
-		return nil, fmt.Errorf("failed to create model,%s: %w", profile, err)
+		return nil, fmt.Errorf(
+			"create model profile %q: %w",
+			profile,
+			err,
+		)
 	}
 
 	m.models[profile] = instance
@@ -48,11 +60,24 @@ func (m *Manager) Get(ctx context.Context, profile string) (model.BaseModel[*sch
 	return instance, nil
 }
 
-func New(ctx context.Context, cfg config.ModelConfig) (model.BaseModel[*schema.AgenticMessage], error) {
+func New(
+	ctx context.Context,
+	cfg config.ModelConfig,
+) (
+	model.BaseModel[*schema.AgenticMessage],
+	error,
+) {
 	switch cfg.Provider {
 	case config.ProviderDeepSeek:
 		return newDeepSeek(ctx, cfg)
+
+	case config.ProviderOpenAI:
+		return newOpenAI(ctx, cfg)
+
 	default:
-		return nil, fmt.Errorf("unsupported provider: %q", cfg.Provider)
+		return nil, fmt.Errorf(
+			"unsupported provider: %q",
+			cfg.Provider,
+		)
 	}
 }
