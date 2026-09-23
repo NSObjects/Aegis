@@ -58,34 +58,34 @@ func TestManagerGetMissingProfile(t *testing.T) {
 	}
 }
 
-func TestManagerGetOpenAIProfile(t *testing.T) {
-	t.Setenv("TEST_OPENAI_API_KEY", "test-key")
+func TestManagerGetCachesProfile(t *testing.T) {
+	t.Setenv("TEST_DEEPSEEK_API_KEY", "test-key")
 
 	manager := NewManager(
 		map[string]config.ModelConfig{
-			"strong": {
-				Provider:  config.ProviderOpenAI,
-				Model:     "test-model",
-				APIKeyEnv: "TEST_OPENAI_API_KEY",
+			"default": {
+				Provider:  config.ProviderDeepSeek,
+				Model:     "deepseek-chat",
+				APIKeyEnv: "TEST_DEEPSEEK_API_KEY",
 			},
 		},
 	)
 
 	first, err := manager.Get(
 		context.Background(),
-		"strong",
+		"default",
 	)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
 
 	if first == nil {
-		t.Fatal("expected OpenAI model")
+		t.Fatal("expected model")
 	}
 
 	second, err := manager.Get(
 		context.Background(),
-		"strong",
+		"default",
 	)
 	if err != nil {
 		t.Fatalf("second Get() error = %v", err)
