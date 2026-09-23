@@ -6,6 +6,7 @@ require (
 	github.com/cloudwego/eino v0.9.19
 	github.com/cloudwego/eino-ext/adk/backend/local v0.2.6
 	github.com/cloudwego/eino-ext/components/model/agenticdeepseek v0.1.0
+	github.com/cloudwego/eino-ext/components/model/agenticopenai v0.2.2
 	github.com/cloudwego/eino-ext/components/tool/mcp/officialmcp v0.1.1
 	github.com/cloudwego/eino-ext/devops v0.1.9
 )
