@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestConfig_ModelProfileForAgent(t *testing.T) {
 	tests := []struct {
@@ -143,4 +147,137 @@ func TestConfig_ModelProfileForAgent(t *testing.T) {
 			}
 		})
 	}
+}
+
+
+func TestLoad(t *testing.T) {
+	t.Run("loads yaml", func(t *testing.T) {
+		path := writeTestConfig(
+			t,
+			`default_model: default
+models:
+  default:
+    provider: deepseek
+    model: deepseek-chat
+    api_key_env: DEEPSEEK_API_KEY
+agents:
+  trading:
+    model: default
+`,
+		)
+
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if cfg.DefaultModel != "default" {
+			t.Fatalf(
+				"DefaultModel = %q",
+				cfg.DefaultModel,
+			)
+		}
+
+		if cfg.Models["default"].Provider !=
+			ProviderDeepSeek {
+			t.Fatalf(
+				"provider = %q",
+				cfg.Models["default"].Provider,
+			)
+		}
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		_, err := Load(
+			filepath.Join(
+				t.TempDir(),
+				"missing.yaml",
+			),
+		)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("invalid yaml", func(t *testing.T) {
+		path := writeTestConfig(
+			t,
+			"default_model: [",
+		)
+
+		_, err := Load(path)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing default model", func(t *testing.T) {
+		path := writeTestConfig(
+			t,
+			`models:
+  default:
+    provider: deepseek
+    model: deepseek-chat
+    api_key_env: DEEPSEEK_API_KEY
+`,
+		)
+
+		_, err := Load(path)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("unknown default profile", func(t *testing.T) {
+		path := writeTestConfig(
+			t,
+			`default_model: missing
+models:
+  default:
+    provider: deepseek
+    model: deepseek-chat
+    api_key_env: DEEPSEEK_API_KEY
+`,
+		)
+
+		_, err := Load(path)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestConfig_ModelProfileForAgent_NilConfig(
+	t *testing.T,
+) {
+	var cfg *Config
+
+	_, err := cfg.ModelProfileForAgent(
+		"market",
+	)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func writeTestConfig(
+	t *testing.T,
+	content string,
+) string {
+	t.Helper()
+
+	path := filepath.Join(
+		t.TempDir(),
+		"config.yaml",
+	)
+
+	if err := os.WriteFile(
+		path,
+		[]byte(content),
+		0600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	return path
 }
