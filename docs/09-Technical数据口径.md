@@ -88,6 +88,9 @@ adjusted_price(t)
 - 先做时间裁剪，再复权，再计算指标。
 - 历史研究不得使用未来复权因子。
 - 不得用今天看到的最新前复权历史序列回算过去。
+- 因 PIT_QFQ 以 effective_as_of 为锚点，所以 adjusted_price(effective_as_of) = raw_price(effective_as_of)。
+- 因此当前 snapshot.close 可以与同一 effective_as_of 锚定序列计算出的 MA5 / MA10 / MA20 / MA60 直接比较。
+- 不得再把“当前未复权 close 与 PIT_QFQ 均线不能比较”写入 risk；该说法与本项目的锚定公式冲突。
 
 ## 4. 基础数据窗口
 
