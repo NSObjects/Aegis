@@ -67,49 +67,59 @@ Aegis 的目标不是：
 一个超级 Trading Agent
 ```
 
-而是形成分层组织：
+而是形成两个互相连接、但职责不同的系统：
+
+```text
+① Online Decision Loop
+   当前市场事实 → 研究 → 交易 → 风险/组合决策
+
+② Offline Evolution Loop
+   历史/PIT 数据 → 策略研究 → 独立回测 → 鲁棒性验证
+   → Approved Strategy → 进入下一轮 Online Decision
+```
+
+组织结构：
 
 ```text
                     Aegis Investment Research Firm
-                               │
-                               ▼
-                        Analyst Team
-          ┌────────────────────┼────────────────────┐
-          │                    │                    │
-   Market Analyst      Technical Analyst      News/Event Analyst
-          │                    │                    │
-          ├──────── Fundamental Analyst ────────────┤
-          ├──────── Capital Flow Analyst ──────────┤
-          └──────── Macro / Sector / Sentiment ────┘
-                               │
-                               ▼
-                         Research Team
-                    ┌──────────┴──────────┐
-                    │                     │
-             Bull Researcher       Bear Researcher
-                    └──────────┬──────────┘
-                               ▼
-                        Research Manager
-                               │
-                               ▼
-                       Investment Thesis
-                               │
-                               ▼
-                         Trading Team
-                               │
-                            Trader
-                               │
-                               ▼
-                         Trade Proposal
-                               │
-                               ▼
-                    Risk / Portfolio Team
-                    ┌──────────┴──────────┐
-                    │                     │
-               Risk Analyst       Portfolio Manager
-                    └──────────┬──────────┘
-                               ▼
-                      Portfolio Decision
+
+        ┌──────────────── Online Decision Loop ────────────────┐
+        │                                                      │
+        │                 Analyst Team                         │
+        │   Market / Technical / News / Fundamental / Flow    │
+        │                        │                             │
+        │                        ▼                             │
+        │                 Research Team                        │
+        │          Bull / Bear / Research Manager             │
+        │                        │                             │
+        │                        ▼                             │
+        │                  Trading Team                        │
+        │                      Trader                          │
+        │                        │                             │
+        │                        ▼                             │
+        │              Risk / Portfolio Team                  │
+        │          Risk Analyst / Portfolio Manager           │
+        │                        │                             │
+        └────────────────────────┼─────────────────────────────┘
+                                 │
+                                 │ production outcome / feedback
+                                 ▼
+        ┌──────────────── Offline Evolution Loop ──────────────┐
+        │                                                      │
+        │                 Strategy Team                         │
+        │     Strategy Research / Regime Research / Tuning     │
+        │                        │                             │
+        │                 StrategyCandidate                    │
+        │                        ▼                             │
+        │              Backtest / Validation Team              │
+        │   Backtest / Walk-forward / Robustness / Cost Test   │
+        │                        │                             │
+        │                 ValidationReport                     │
+        │                        ▼                             │
+        │                 ApprovedStrategy                     │
+        └────────────────────────┼─────────────────────────────┘
+                                 │
+                                 └────→ 下一轮 Online Decision
 ```
 
 这是长期组织模型，不代表当前版本要一次性实现所有节点。
@@ -136,6 +146,12 @@ Trading Team
 
 Risk / Portfolio Team
 → 负责组合约束、风险预算和最终组合决策
+
+Strategy Team
+→ 负责发现、设计、改进和版本化策略，不负责证明自己有效
+
+Backtest / Validation Team
+→ 独立验证策略在历史、样本外、不同市场环境和真实成本下是否成立
 ```
 
 Team 不是数据源，也不是一个万能 Agent。
@@ -439,7 +455,279 @@ PortfolioContext
 
 ---
 
-## 8. Context 是组织交接物
+## 8. Strategy Team：持续寻找“当前环境下更合适的策略”
+
+Strategy Team 是**策略研发部门**，不直接负责某一次标的判断。
+
+它回答：
+
+```text
+当前市场环境下，
+什么规则、参数、持有周期、过滤条件和组合方式更值得使用？
+```
+
+但这里的“最优”必须严格定义为：
+
+```text
+在指定数据范围、市场 regime、成本模型、风险约束和验证方法下，
+当前已验证候选集合中的相对更优方案
+```
+
+不能宣称存在永久、全市场、未来确定的“绝对最优策略”。
+
+### 8.1 Strategy Researcher
+
+职责：
+
+- 从历史结构和当前 MarketContext 中发现可研究假设
+- 设计入场 / 退出 / 过滤 / 持有周期规则
+- 组合已有 Analyst Context 形成策略特征
+- 设计参数搜索空间
+- 生成明确、可执行、可回测的 StrategyCandidate
+- 根据回测反馈产生新版本，而不是直接修改生产策略
+
+不负责：
+
+- 自己决定回测是否通过
+- 使用未来数据证明策略
+- 因一次近期收益好就自动上线
+
+### 8.2 Regime Research
+
+策略不能只看全样本平均收益。
+
+Strategy Team 应研究：
+
+```text
+RISK_ON
+MIXED
+RISK_OFF
+
+趋势 / 震荡
+高波动 / 低波动
+放量 / 缩量
+大盘 / 小盘风格
+行业轮动环境
+流动性环境
+```
+
+目标不是找“一套永远最好”的策略，而是建立：
+
+```text
+Market Regime
+      ↓
+Validated Strategy Set
+      ↓
+当前可用策略及适用条件
+```
+
+例如未来可以形成：
+
+```text
+StrategyPolicy
+├── regime
+├── eligible_strategies
+├── ranking_metrics
+├── risk_constraints
+└── selection_reason
+```
+
+### 8.3 Strategy Artifact
+
+策略必须是版本化、可复现的结构化 Artifact，而不是一句 Prompt。
+
+长期至少应表达：
+
+```text
+StrategySpec
+├── id
+├── version
+├── universe
+├── required_features
+├── entry_rules
+├── exit_rules
+├── holding_period
+├── filters
+├── parameters
+├── applicable_regimes
+├── risk_constraints
+└── data_requirements
+```
+
+具体 Go 类型等真正实现 Strategy Team 时再定义。
+
+---
+
+## 9. Backtest / Validation Team：独立证明策略是否站得住
+
+Backtest Team 与 Strategy Team 必须分离。
+
+核心原则：
+
+```text
+Strategy Team 提案
+        ↓
+Backtest Team 验证
+        ↓
+通过后才成为 ApprovedStrategy
+```
+
+不能：
+
+```text
+Strategy Agent
+├── 发明策略
+├── 自己选择最有利数据
+├── 自己回测
+└── 自己宣布上线
+```
+
+这会形成典型的过拟合和自我确认。
+
+### 9.1 Backtest Engineer
+
+负责确定性执行：
+
+- 历史信号生成
+- 订单 / 成交模拟
+- 持仓状态
+- 手续费
+- 滑点
+- 涨跌停
+- 停牌
+- 流动性约束
+- 交易日历
+- 组合净值
+
+LLM 不参与逐笔收益计算。
+
+### 9.2 Validation / Robustness
+
+验证至少逐步覆盖：
+
+```text
+In-sample
+Out-of-sample
+Walk-forward
+Rolling windows
+不同 Market Regime
+参数敏感性
+交易成本敏感性
+流动性约束
+不同股票池
+不同时间区间
+```
+
+必须防止：
+
+- look-ahead bias
+- survivorship bias
+- future adjustment leakage
+- data snooping
+- parameter overfitting
+- cherry-picking
+- 忽略交易成本
+- 用全样本调参后再把同一全样本称为验证集
+
+### 9.3 ValidationReport
+
+长期产物应是结构化验证结果：
+
+```text
+ValidationReport
+├── strategy_id / version
+├── data_period
+├── in_sample
+├── out_of_sample
+├── walk_forward
+├── regime_breakdown
+├── return
+├── max_drawdown
+├── volatility
+├── win_rate
+├── turnover
+├── cost_assumptions
+├── robustness
+├── failure_modes
+└── verdict
+```
+
+通过验证的策略才能进入 ApprovedStrategy 集合。
+
+---
+
+## 10. 持续进化闭环
+
+Aegis 的长期“不断升级”不是让一个 Agent 永久自我修改，而是建立可审计闭环：
+
+```text
+历史/PIT 数据
+    ↓
+Strategy Team
+    ↓
+StrategyCandidate vN
+    ↓
+Backtest / Validation Team
+    ↓
+ValidationReport
+    ↓
+Reject / Revise / Approve
+              │
+              ▼
+      ApprovedStrategy vN
+              ↓
+      Online Decision Loop
+              ↓
+      真实运行结果 / 新数据
+              ↓
+      Performance Review
+              ↓
+Strategy Team 产生 vN+1
+```
+
+关键规则：
+
+1. 生产策略必须版本化。
+2. 新策略不能覆盖旧策略历史记录。
+3. 每个版本必须绑定数据窗口和验证结果。
+4. 策略升级必须能解释“为什么变更”。
+5. 在线结果可以反馈给策略研究，但不能直接污染历史 OOS 验证。
+6. 策略选择与策略生成分离。
+7. 回测计算必须确定性、可复现。
+8. 任何“当前最优”都必须带 regime、时间和约束条件。
+
+### Online Strategy Selection
+
+在线阶段不应该临时重新优化整个策略空间。
+
+正确方式：
+
+```text
+Current MarketContext
+        ↓
+Regime / Environment
+        ↓
+ApprovedStrategy Set
+        ↓
+Strategy Selector
+        ↓
+Selected Strategy / Policy
+        ↓
+Research / Trading Pipeline
+```
+
+也就是说：
+
+- Offline Loop 负责“研发和验证策略”
+- Online Loop 负责“在已批准策略中选择当前更合适的方案”
+
+这可以避免实时环境下反复调参导致数据追逐和过拟合。
+
+---
+
+## 11. Context 是组织交接物
+
+## 11. Context 是组织交接物
 
 Aegis 不把 Agent 之间的主要通信建立在长篇自然语言 report 上。
 
@@ -507,7 +795,7 @@ Risk / Portfolio Artifacts
 
 ---
 
-## 9. Capability / Provider：组织结构与数据源彻底解耦
+## 12. Capability / Provider：组织结构与数据源彻底解耦
 
 Capability 表达“Role 需要什么能力”。
 
@@ -569,7 +857,7 @@ Agent / Role 不应该把具体 Provider 写入核心业务 Prompt 或 Context�
 
 ---
 
-## 10. Skill / MCP / Crawler / API / DB 的正确位置
+## 13. Skill / MCP / Crawler / API / DB 的正确位置
 
 ### Skill
 
@@ -613,7 +901,7 @@ API、DuckDB、MySQL、本地文件等都是基础设施来源。
 
 ---
 
-## 11. 确定性计算与 Agent 推理边界
+## 14. 确定性计算与 Agent 推理边界
 
 确定性计算不能交给 LLM 临场发挥。
 
@@ -655,7 +943,7 @@ Agent 负责：
 
 ---
 
-## 12. Graph 是公司的工作流
+## 15. Graph 是公司的工作流
 
 Graph 不是“Agent 数组”，而是组织流程。
 
@@ -709,7 +997,11 @@ END
 
 ### 长期
 
+Aegis 有两条 Graph：
+
 ```text
+Online Decision Graph
+
 Analyst Team
      ↓
 Research Team
@@ -719,11 +1011,29 @@ Trading Team
 Risk / Portfolio Team
 ```
 
-并行、debate、manager 节点只有真实需要出现时再进入 Graph。
+以及：
+
+```text
+Offline Evolution Graph
+
+Historical/PIT Data
+     ↓
+Strategy Team
+     ↓
+Backtest / Validation Team
+     ↓
+ApprovedStrategy
+     ↓
+Strategy Selection Policy
+```
+
+两条 Graph 通过版本化 Strategy Artifact、ValidationReport 和生产反馈连接。
+
+并行、debate、manager、自动策略搜索节点只有真实需要出现时再进入 Graph。
 
 ---
 
-## 13. TradingAgents 给 Aegis 的参考
+## 16. TradingAgents 给 Aegis 的参考
 
 TradingAgents 的核心价值不是 Agent 数量，而是组织分层：
 
@@ -764,7 +1074,7 @@ Aegis 不直接照搬：
 
 ---
 
-## 14. 扩展新 Agent 的判定规则
+## 17. 扩展新 Agent 的判定规则
 
 新增 Agent 前必须回答：
 
@@ -804,7 +1114,7 @@ Integration Test
 
 ---
 
-## 15. 明确禁止的走偏方式
+## 18. 明确禁止的走偏方式
 
 ### 禁止 1：超级 Trading Agent
 
@@ -845,7 +1155,15 @@ Report 可以作为 Summary，但不是唯一协议。
 
 已有公式实现后，不允许 Agent 临时再写一套。
 
-### 禁止 6：先实现组织框架再找职责
+### 禁止 6：策略部门自己给自己打分
+
+禁止 Strategy Team 同时承担策略设计、样本选择、回测验证和上线批准。策略提案与独立验证必须分开。
+
+### 禁止 7：实时无限调参
+
+Online Decision 不在当天数据上持续搜索参数来追逐“最优”。参数研发和策略筛选属于 Offline Evolution Loop。
+
+### 禁止 8：先实现组织框架再找职责
 
 当前不创建：
 
@@ -861,7 +1179,7 @@ ProviderRegistry
 
 ---
 
-## 16. 当前实现策略
+## 19. 当前实现策略
 
 长期架构确定，不等于一次性开发。
 
@@ -884,6 +1202,12 @@ Trading Agent
 + News/Event Analyst
 + Fundamental Analyst
 + Capital Flow Analyst
+
+独立并行建设
++ Strategy Team
++ Backtest / Validation Team
++ StrategySpec / ValidationReport
++ Regime-aware Strategy Selection
 
 研究维度足够多以后
   ↓
