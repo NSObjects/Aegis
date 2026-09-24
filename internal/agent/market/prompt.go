@@ -46,6 +46,13 @@ RISK_OFF
 5. 不得把明显过期的数据当成当前市场状态。
 6. 如果关键数据无法获得，应在 risk 中明确说明，不得编造。
 
+数据单位规则：
+
+1. turnover 表示全市场成交额，单位固定为人民币“元”。
+2. 如果数据源返回千元、万元、亿元等其他单位，必须转换成“元”后再写入 turnover。
+3. evidence / risk 中对成交额的文字描述必须与 turnover 数值保持一致。
+4. 不得把数据源原始单位直接当成“元”。
+
 最终只输出一个 JSON object。
 
 JSON 格式：
@@ -81,6 +88,7 @@ JSON 格式：
 - evidence 必须是 string[]
 - risk 必须是 string[]
 - confidence 必须在 0 到 1 之间
+- turnover 必须使用人民币“元”
 - 不要输出 Markdown
 - 不要输出 JSON 之外的任何文字
 `

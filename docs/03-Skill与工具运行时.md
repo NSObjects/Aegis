@@ -1,3 +1,6 @@
+> **状态说明（2026-09-24）**  
+> 本文保留为设计与演进记录，不作为当前实现状态的权威来源。当前代码结构、已实现能力与运行方式请以 [docs/README.md](README.md) 和 [08-演进路线与现状.md](08-演进路线与现状.md) 为准。文中出现的 legacy skillruntime、MCP、mock tools、多 Provider 等内容可能描述的是历史方案或未来方向。
+
 # Aegis 的 Skill 体系与工具运行时
 
 本文档说明 Aegis 的 Skill 体系如何建立在 Eino 的 Tool 与 Middleware 模型之上：Skill 的标准形态、为什么它必须有执行能力、工具能力集如何收敛，以及 `internal/runtime` 这一共享 Harness 层的边界与接口。

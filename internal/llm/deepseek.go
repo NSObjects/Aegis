@@ -25,7 +25,7 @@ func newDeepSeek(
 		return nil, err
 	}
 
-	return agenticdeepseek.New(
+	base, err := agenticdeepseek.New(
 		ctx,
 		&agenticdeepseek.Config{
 			APIKey:  apiKey,
@@ -35,25 +35,30 @@ func newDeepSeek(
 			ResponseFormatType: agenticdeepseek.ResponseFormatTypeJSONObject,
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	return newDSMLNormalizingModel(base), nil
 }
 
 func apiKey(
 	cfg config.ModelConfig,
 ) (string, error) {
-	if cfg.APIKey == "" {
+	if cfg.APIKeyEnv == "" {
 		return "", errors.New(
 			"api_key_env is required",
 		)
 	}
 
 	value := strings.TrimSpace(
-		os.Getenv(cfg.APIKey),
+		os.Getenv(cfg.APIKeyEnv),
 	)
 
 	if value == "" {
 		return "", fmt.Errorf(
 			"environment variable %s is not set",
-			cfg.APIKey,
+			cfg.APIKeyEnv,
 		)
 	}
 

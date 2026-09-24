@@ -1,8 +1,8 @@
 package runtime
 
 import (
+	"Aegis/internal/middleware"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,15 +23,21 @@ type Runtime struct {
 	handlers []adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage]
 }
 
-func New(ctx context.Context, cfg Config) (*Runtime, error) {
+func New(
+	ctx context.Context,
+	cfg Config,
+) (*Runtime, error) {
 	skillsDir := strings.TrimSpace(cfg.SkillsDir)
 	if skillsDir == "" {
-		return nil, errors.New("skills dir is required")
+		return nil, fmt.Errorf("runtime skills directory is required")
 	}
 
 	skillsDir, err := filepath.Abs(skillsDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path of skills dir: %w", err)
+		return nil, fmt.Errorf(
+			"resolve runtime skills directory: %w",
+			err,
+		)
 	}
 
 	info, err := os.Stat(skillsDir)
@@ -42,24 +48,76 @@ func New(ctx context.Context, cfg Config) (*Runtime, error) {
 			err,
 		)
 	}
-
 	if !info.IsDir() {
-		return nil, fmt.Errorf("skills dir %q is not a directory", skillsDir)
+		return nil, fmt.Errorf(
+			"runtime skills path is not a directory: %s",
+			skillsDir,
+		)
 	}
 
-	location := strings.TrimSpace(cfg.TimeZone)
-	if location == "" {
-		return nil, errors.New("time zone is required")
+	timeZone := strings.TrimSpace(cfg.TimeZone)
+	if timeZone == "" {
+		return nil, fmt.Errorf("runtime timezone is required")
 	}
 
-	timeZone, err := time.LoadLocation(location)
+	location, err := time.LoadLocation(timeZone)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load time zone: %w", err)
+		return nil, fmt.Errorf(
+			"load runtime timezone %q: %w",
+			timeZone,
+			err,
+		)
 	}
 
-	backend, err := local.NewBackend(ctx, &local.Config{})
+	backend, err := local.NewBackend(
+		ctx,
+		&local.Config{},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create backend: %w", err)
+		return nil, fmt.Errorf(
+			"create runtime local backend: %w",
+			err,
+		)
 	}
-	
+
+	skillMW, err := middleware.NewSkill(
+		ctx,
+		backend,
+		skillsDir,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	filesystemMW, err := middleware.NewFilesystem(
+		ctx,
+		backend,
+		backend,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	contextMW := middleware.NewContext[*schema.AgenticMessage](
+		location,
+	)
+
+	return &Runtime{
+		handlers: []adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage]{
+			skillMW,
+			filesystemMW,
+			contextMW,
+		},
+	}, nil
+}
+
+func (r *Runtime) Handlers() []adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage] {
+	if r == nil {
+		return nil
+	}
+
+	return append(
+		[]adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage](nil),
+		r.handlers...,
+	)
 }

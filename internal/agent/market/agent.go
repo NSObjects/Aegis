@@ -190,14 +190,24 @@ func parseContext(
 func assistantText(
 	msg *schema.AgenticMessage,
 ) string {
-	if msg == nil {
+	if msg == nil ||
+		msg.Role != schema.AgenticRoleTypeAssistant {
 		return ""
+	}
+
+	for _, block := range msg.ContentBlocks {
+		if block != nil &&
+			block.Type == schema.ContentBlockTypeFunctionToolCall &&
+			block.FunctionToolCall != nil {
+			return ""
+		}
 	}
 
 	var b strings.Builder
 
 	for _, block := range msg.ContentBlocks {
 		if block == nil ||
+			block.Type != schema.ContentBlockTypeAssistantGenText ||
 			block.AssistantGenText == nil {
 			continue
 		}

@@ -1,4 +1,4 @@
-package runtime
+package middleware
 
 import (
 	"context"
@@ -8,28 +8,40 @@ import (
 	"github.com/cloudwego/eino/adk"
 )
 
-type ContextMiddleware[M adk.MessageType] struct {
+type Context[M adk.MessageType] struct {
 	*adk.TypedBaseChatModelAgentMiddleware[M]
 
 	location *time.Location
 	now      func() time.Time
 }
 
-func NewContextMiddleware[M adk.MessageType](location *time.Location) *ContextMiddleware[M] {
-	return &ContextMiddleware[M]{
+func NewContext[M adk.MessageType](location *time.Location) *Context[M] {
+	if location == nil {
+		location = time.Local
+	}
+
+	return &Context[M]{
 		TypedBaseChatModelAgentMiddleware: &adk.TypedBaseChatModelAgentMiddleware[M]{},
 		location:                          location,
 		now:                               time.Now,
 	}
 }
 
-func (m *ContextMiddleware[M]) BeforeAgent(ctx context.Context, runCtx *adk.ChatModelAgentContext) (context.Context, *adk.ChatModelAgentContext, error) {
-	now := m.now()
-	if m.location != nil {
-		now = now.In(m.location)
+func (m *Context[M]) BeforeAgent(
+	ctx context.Context,
+	runCtx *adk.ChatModelAgentContext,
+) (
+	context.Context,
+	*adk.ChatModelAgentContext,
+	error,
+) {
+	if runCtx == nil {
+		return ctx, nil, nil
 	}
 
-	runCtx.Instruction += fmt.Sprintf(`
+	now := m.now().In(m.location)
+
+	runtimeContext := fmt.Sprintf(`
 # Runtime Context
 
 The following values are runtime facts provided by the Aegis Harness.
@@ -44,8 +56,13 @@ Rules:
 - Relative expressions such as "当前", "今天", "最近", "昨天" may use current_time as their reference.
 - Explicit historical dates or ranges must remain historical and must not be replaced by current_time.
 - Domain-specific time decisions, such as trading days, market sessions, data completeness, and latest available market data, must be determined using the appropriate Skill or tools.
-`, now.Format(time.RFC3339),
-		now.Location().String())
+`,
+		now.Format(time.RFC3339),
+		m.location.String(),
+	)
 
-	return ctx, runCtx, nil
+	next := *runCtx
+	next.Instruction += runtimeContext
+
+	return ctx, &next, nil
 }
