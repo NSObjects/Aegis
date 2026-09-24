@@ -19,13 +19,13 @@ func NewTool(
 		)
 	}
 
-	return toolutils.InferTool[Request, map[string]any](
+	return toolutils.InferTool[Request, *Result](
 		ToolName,
-		"Fetch point-in-time event facts for one A-share symbol and as-of date. The current implementation covers listed-company announcements only and returns explicit coverage metadata. Do not claim news or policy coverage when those sources are not covered.",
+		"Collect point-in-time event evidence for one A-share symbol from multiple configured sources. The result contains explicit per-source coverage and raw items. Treat missing or failed coverage separately from NO_EVENT, and do not claim sources that were not queried.",
 		func(
 			ctx context.Context,
 			req Request,
-		) (map[string]any, error) {
+		) (*Result, error) {
 			return researcher.Research(
 				ctx,
 				req,
