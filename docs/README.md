@@ -2,7 +2,7 @@
 
 > 当前实现状态更新时间：2026-09-24
 
-Aegis 当前已经完成一条可运行的 A 股研究主链路：
+Aegis 当前已经完成一条可运行的 V2.5 A 股研究主链路：
 
 ```text
 Config
@@ -25,6 +25,39 @@ Trading Agent
 Decision
 ```
 
+这只是**当前已实现链路**，不是最终职责划分。
+
+V2.6 起，长期架构调整为**组织级 Multi-Agent**，目标是逐步形成真实投资研究公司的分工：
+
+```text
+Analyst Team
+├── Market Analyst
+├── Technical Analyst
+├── News/Event Analyst
+├── Fundamental Analyst
+└── Capital Flow Analyst
+        ↓
+Research Team
+├── Bull Researcher
+├── Bear Researcher
+└── Research Manager
+        ↓
+Trading Team
+└── Trader
+        ↓
+Risk / Portfolio Team
+├── Risk Analyst
+└── Portfolio Manager
+
+Offline Evolution
+├── Strategy Team
+└── Backtest / Validation Team
+```
+
+其中 Strategy Team 负责提出和升级策略，Backtest / Validation Team 独立验证，形成版本化 ApprovedStrategy，再供在线决策流程选择使用。
+
+当前不会一次性实现这些角色。V2.6 只先完成 Technical Agent，并继续验证 typed Context + Graph 协作。策略/回测部门属于长期并行演进方向，尚未实现。
+
 ## 当前权威代码
 
 | 模块 | 状态 | 说明 |
@@ -35,8 +68,9 @@ Decision
 | `internal/middleware` | 已实现 | Context / Skill / Filesystem |
 | `internal/runtime` | 已实现 | 创建共享 local backend 并装配 middleware |
 | `internal/agent/market` | 已实现 | 真实市场环境研究，输出 `MarketContext` |
-| `internal/agent/trading` | 已实现 | 消费 `MarketContext` + 个股数据，输出 `Decision` |
-| `internal/research` | 已实现 | Eino Graph：Market Agent → Trading Agent |
+| `internal/agent/trading` | 已实现（待 V2.6 收窄职责） | 当前消费 `MarketContext` 并自行补个股研究；目标是只综合各 Domain Context |
+| `internal/agent/technical` | V2.6 进行中 | Context/Agent 单测已通过；旧 integration 暴露临时 execute 计算，现已切到专属 stock_technical_research Tool，待重新验证 |
+| `internal/research` | 已实现 V2.5 | 当前 Graph：Market Agent → Trading Agent；V2.6 将升级为 Market → Technical → Trading |
 | `internal/decision` | 已实现 | WATCH / AVOID / CANDIDATE 输出契约 |
 
 ## 当前明确不包含
@@ -49,7 +83,6 @@ Decision
 - scenario mock
 - 旧 MarketContext / 旧 Market Prompt
 - OpenAI / Claude / Qwen / Gemini / Ark provider adapter
-- JetBrains `.idea` 项目文件
 
 当前唯一实际支持的模型供应商是 **DeepSeek**。
 
@@ -65,6 +98,38 @@ Runtime
 ```
 
 Model 不属于 Runtime。不同 Agent 通过配置选择 profile，再由 `llm.Manager` 获取模型实例。
+
+## Multi-Agent 架构边界
+
+后续新增 Agent / Tool / 数据源前，必须先阅读：
+
+- `docs/10-多Agent架构与职责边界.md`
+
+核心规则：
+
+```text
+Team        = 共同完成某类组织目标的一组 Role
+Role        = 稳定组织职责
+Agent       = Role 的具体运行实例
+Context     = Role / Team 间结构化交接物
+Capability  = Agent 完成职责所需能力
+Provider    = Capability 的具体来源
+Graph       = 公司的工作流
+```
+
+长期有两条主要工作流：
+
+```text
+Online Decision Loop
+→ Analyst / Research / Trading / Risk
+
+Offline Evolution Loop
+→ Strategy / Backtest / Validation / ApprovedStrategy
+```
+
+Skill / MCP / API / Crawler / DB / Tushare 都不是 Agent 职责分类。
+
+**重要：Team / Role 当前首先是架构概念，不代表已经存在 TeamRegistry / RoleRegistry 等运行时抽象。只有真实重复出现后才实现框架层类型。
 
 ## Skill
 
@@ -123,7 +188,25 @@ Agent 业务层不感知 DSML。
 
 ## 真实链路验证
 
-已实际跑通：
+V2.6 Technical Agent 已真实取得过行情并成功生成 TechnicalContext，但 Tool Trace 发现旧路径仍通过通用 execute 临时计算指标，因此该次 PASS 不作为最终 Capability 验收。
+
+当前修正后的待验证链路：
+
+```text
+Technical Agent
+  ↓
+stock_technical_research
+  ↓
+Technical Researcher
+  ↓
+仓库受控 deterministic script
+  ↓
+Tushare
+  ↓
+TechnicalContext
+```
+
+V2.5 主链路仍已实际跑通：
 
 ```text
 Market Agent
@@ -176,8 +259,20 @@ go run ./cmd/aegis \
 
 ## 文档说明
 
-- `docs/08-演进路线与现状.md`：当前实现与下一阶段。
+- `docs/10-多Agent架构与职责边界.md`：**最高优先级架构约束**，定义 Agent / Context / Capability / Provider / Graph 边界。
+- `docs/08-演进路线与现状.md`：当前实现、已知过渡状态与下一阶段。
+- `docs/09-Technical数据口径.md`：Technical Agent / TechnicalContext 的 A 股技术数据语义。
 - `docs/01-*.md` ~ `docs/07-*.md`：保留的设计/演进记录，其中部分内容描述历史实现，不作为当前代码状态的权威来源。
 - `docs/research/tradingagents/`：外部项目研究与架构取舍记录。
 
-当前代码状态以本文件和 `docs/08-演进路线与现状.md` 为准。
+发生冲突时，优先级为：
+
+```text
+10-多Agent架构与职责边界
+  ↓
+README / 08-演进路线与现状
+  ↓
+09-Technical数据口径
+  ↓
+历史设计文档
+```

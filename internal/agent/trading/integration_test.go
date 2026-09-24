@@ -37,6 +37,7 @@ func TestTradingAgent_Analyze_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+
 	appCfg := config.Config{
 		DefaultModel: "default",
 		Models: map[string]config.ModelConfig{
@@ -247,3 +248,4 @@ func findSkillsDir() (string, error) {
 		dir = parent
 	}
 }
+
