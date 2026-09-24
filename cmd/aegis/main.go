@@ -217,7 +217,6 @@ func run(
 		ctx,
 		trading.Config{
 			Model:         tradingModel,
-			Handlers:      rt.Handlers(),
 			MaxIterations: 30,
 		},
 	)
