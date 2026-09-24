@@ -6,10 +6,17 @@ import (
 	"Aegis/internal/runtime"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/callbacks"
+	"github.com/cloudwego/eino/components/tool"
+	callbacksHelper "github.com/cloudwego/eino/utils/callbacks"
 )
 
 func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
@@ -114,12 +121,67 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 		requestedAsOf = "20260923"
 	)
 
+	var (
+		traceMu   sync.Mutex
+		toolTrace []string
+	)
+
+	handler := callbacksHelper.NewHandlerHelper().
+		Tool(&callbacksHelper.ToolCallbackHandler{
+			OnStart: func(
+				ctx context.Context,
+				info *callbacks.RunInfo,
+				input *tool.CallbackInput,
+			) context.Context {
+				if info == nil || input == nil {
+					return ctx
+				}
+
+				traceMu.Lock()
+				toolTrace = append(
+					toolTrace,
+					fmt.Sprintf(
+						"%s input=%s",
+						info.Name,
+						input.ArgumentsInJSON,
+					),
+				)
+				traceMu.Unlock()
+
+				return ctx
+			},
+			OnError: func(
+				ctx context.Context,
+				info *callbacks.RunInfo,
+				err error,
+			) context.Context {
+				if info == nil {
+					return ctx
+				}
+
+				traceMu.Lock()
+				toolTrace = append(
+					toolTrace,
+					fmt.Sprintf(
+						"%s error=%v",
+						info.Name,
+						err,
+					),
+				)
+				traceMu.Unlock()
+
+				return ctx
+			},
+		}).
+		Handler()
+
 	result, err := a.Analyze(
 		ctx,
 		Input{
 			Symbol:        symbol,
 			RequestedAsOf: requestedAsOf,
 		},
+		adk.WithCallbacks(handler),
 	)
 	if err != nil {
 		t.Fatalf(
@@ -193,6 +255,25 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 		"technical context:\n%s",
 		string(data),
 	)
+
+	traceMu.Lock()
+	trace := append(
+		[]string(nil),
+		toolTrace...,
+	)
+	traceMu.Unlock()
+
+	if len(trace) == 0 {
+		t.Log(
+			"tool trace is empty; TechnicalContext passed, but tool/capability execution path was not observed",
+		)
+		return
+	}
+
+	t.Log("tool trace:")
+	for _, entry := range trace {
+		t.Log(entry)
+	}
 }
 
 func envOrDefault(
