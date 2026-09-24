@@ -27,21 +27,30 @@ Decision
 
 这只是**当前已实现链路**，不是最终职责划分。
 
-V2.6 起，架构目标明确调整为职责型 Multi-Agent：
+V2.6 起，长期架构调整为**组织级 Multi-Agent**，目标是逐步形成真实投资研究公司的分工：
 
 ```text
-Market Agent      → MarketContext
-Technical Agent   → TechnicalContext
-News/Event Agent  → EventContext
-Fundamental Agent → FundamentalContext
-Capital Flow Agent→ CapitalFlowContext
-                         ↓
-                    Trading Agent
-                         ↓
-                      Decision
+Analyst Team
+├── Market Analyst
+├── Technical Analyst
+├── News/Event Analyst
+├── Fundamental Analyst
+└── Capital Flow Analyst
+        ↓
+Research Team
+├── Bull Researcher
+├── Bear Researcher
+└── Research Manager
+        ↓
+Trading Team
+└── Trader
+        ↓
+Risk / Portfolio Team
+├── Risk Analyst
+└── Portfolio Manager
 ```
 
-其中 Trading Agent 是综合判断者，不应长期承担行情抓取、技术指标计算、新闻爬取、财务研究等职责。
+当前不会一次性实现这些角色。V2.6 只先完成 Technical Agent，并继续验证 typed Context + Graph 协作。
 
 ## 当前权威代码
 
@@ -93,14 +102,18 @@ Model 不属于 Runtime。不同 Agent 通过配置选择 profile，再由 `llm.
 核心规则：
 
 ```text
-Agent       = 研究职责
-Context     = Agent 间结构化契约
-Capability  = Agent 需要的能力
-Provider    = 能力的具体来源
-Graph       = Agent 协作关系
+Team        = 共同完成某类组织目标的一组 Role
+Role        = 稳定组织职责
+Agent       = Role 的具体运行实例
+Context     = Role / Team 间结构化交接物
+Capability  = Agent 完成职责所需能力
+Provider    = Capability 的具体来源
+Graph       = 公司的工作流
 ```
 
 Skill / MCP / API / Crawler / DB / Tushare 都不是 Agent 职责分类。
+
+**重要：Team / Role 当前首先是架构概念，不代表已经存在 TeamRegistry / RoleRegistry 等运行时抽象。只有真实重复出现后才实现框架层类型。
 
 ## Skill
 
