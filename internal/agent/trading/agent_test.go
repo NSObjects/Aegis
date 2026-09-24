@@ -295,3 +295,31 @@ func TestNewRequiresModel(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+
+func TestAssistantTextIgnoresToolCallMessage(t *testing.T) {
+	msg := &schema.AgenticMessage{
+		Role: schema.AgenticRoleTypeAssistant,
+		ContentBlocks: []*schema.ContentBlock{
+			schema.NewContentBlock(
+				&schema.AssistantGenText{
+					Text: "I will call a tool",
+				},
+			),
+			schema.NewContentBlock(
+				&schema.FunctionToolCall{
+					CallID:    "call-1",
+					Name:      "execute",
+					Arguments: `{"command":"true"}`,
+				},
+			),
+		},
+	}
+
+	if got := assistantText(msg); got != "" {
+		t.Fatalf(
+			"assistantText() = %q, want empty for tool-call message",
+			got,
+		)
+	}
+}
