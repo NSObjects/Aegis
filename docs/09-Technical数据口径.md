@@ -29,7 +29,19 @@ Technical Agent 负责解释个股技术状态。
 
 Trading Agent 消费 TechnicalContext 做综合判断，不负责重新获取行情或重算指标。
 
-本文中的确定性计算可以由 Skill script、Go package、服务或其他 Capability 实现；stock_research.py 只是当前可用实现之一，不是架构契约。
+本文中的确定性计算可以由 Go package、受控脚本、服务、MCP、API 或数据库 Capability 实现；具体 Provider 不是架构契约。
+
+当前第一套受控实现位于：
+
+```text
+internal/capability/technical/
+├── researcher.go
+├── script.go
+├── tool.go
+└── scripts/stock_research.py
+```
+
+其中 Agent 只依赖 `stock_technical_research` Tool；脚本路径和 Tushare 只属于第一套 Capability 实现。
 
 ## 2. 时间语义
 
@@ -243,17 +255,35 @@ Trading Agent 不应：
 
 ## 12. 当前实现策略
 
-当前本地 tushare-data Skill 中可以存在 stock_research.py 作为第一套确定性实现，用于验证上述数据口径。
-
-正确依赖方向：
+当前第一套实现：
 
 ```text
 Technical Agent
   ↓
-Technical Capability
+stock_technical_research Tool
   ↓
-stock_research.py / Tushare / MCP / DB / API
+Researcher interface
+  ↓
+ScriptResearcher
+  ↓
+internal/capability/technical/scripts/stock_research.py
+  ↓
+Tushare
 ```
+
+该脚本进入 Git，属于 Capability 自有实现，不依赖 gitignored 的本地 Skill 文件。
+
+未来可以增加：
+
+```text
+Researcher
+├── ScriptResearcher
+├── DuckDBResearcher
+├── MCPResearcher
+└── APIResearcher
+```
+
+但当前没有 Provider Registry。
 
 错误依赖方向：
 
