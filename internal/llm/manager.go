@@ -71,9 +71,6 @@ func New(
 	case config.ProviderDeepSeek:
 		return newDeepSeek(ctx, cfg)
 
-	case config.ProviderOpenAI:
-		return newOpenAI(ctx, cfg)
-
 	default:
 		return nil, fmt.Errorf(
 			"unsupported provider: %q",
