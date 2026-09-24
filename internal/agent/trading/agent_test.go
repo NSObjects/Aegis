@@ -199,8 +199,9 @@ func TestAgentAnalyzeInvalidTechnicalContext(t *testing.T) {
 		_, err := a.Analyze(
 			ctx,
 			Input{
-				Symbol:        "600519.SH",
-				MarketContext: validMarketContext(),
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: validTechnicalContext(),
 			},
 		)
 		if err == nil {
@@ -262,8 +263,9 @@ func TestAgentAnalyzeInvalidOutput(t *testing.T) {
 		_, err = a.Analyze(
 			ctx,
 			Input{
-				Symbol:        "600519.SH",
-				MarketContext: validMarketContext(),
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: validTechnicalContext(),
 			},
 		)
 		if err == nil {
@@ -294,8 +296,9 @@ func TestAgentAnalyzeInvalidOutput(t *testing.T) {
 		_, err = a.Analyze(
 			ctx,
 			Input{
-				Symbol:        "600519.SH",
-				MarketContext: validMarketContext(),
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: validTechnicalContext(),
 			},
 		)
 		if err == nil {
@@ -326,8 +329,9 @@ func TestAgentAnalyzeInvalidOutput(t *testing.T) {
 		_, err = a.Analyze(
 			ctx,
 			Input{
-				Symbol:        "600519.SH",
-				MarketContext: validMarketContext(),
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: validTechnicalContext(),
 			},
 		)
 		if err == nil {
