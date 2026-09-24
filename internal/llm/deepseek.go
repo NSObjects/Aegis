@@ -25,7 +25,7 @@ func newDeepSeek(
 		return nil, err
 	}
 
-	return agenticdeepseek.New(
+	base, err := agenticdeepseek.New(
 		ctx,
 		&agenticdeepseek.Config{
 			APIKey:  apiKey,
@@ -35,6 +35,11 @@ func newDeepSeek(
 			ResponseFormatType: agenticdeepseek.ResponseFormatTypeJSONObject,
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	return newDSMLNormalizingModel(base), nil
 }
 
 func apiKey(
