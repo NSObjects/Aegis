@@ -1,9 +1,9 @@
 package technical
 
 import (
+	technicalcap "Aegis/internal/capability/technical"
 	"Aegis/internal/config"
 	"Aegis/internal/llm"
-	"Aegis/internal/runtime"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -87,16 +87,29 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 		)
 	}
 
-	rt, err := runtime.New(
-		ctx,
-		runtime.Config{
-			SkillsDir: skillsDir,
-			TimeZone:  "Asia/Shanghai",
+	researcher, err := technicalcap.NewScriptResearcher(
+		technicalcap.ScriptResearcherConfig{
+			ScriptPath: filepath.Join(
+				skillsDir,
+				"tushare-data",
+				"scripts",
+				"stock_research.py",
+			),
 		},
 	)
 	if err != nil {
 		t.Fatalf(
-			"create runtime: %v",
+			"create technical researcher: %v",
+			err,
+		)
+	}
+
+	researchTool, err := technicalcap.NewTool(
+		researcher,
+	)
+	if err != nil {
+		t.Fatalf(
+			"create technical research tool: %v",
 			err,
 		)
 	}
@@ -104,8 +117,10 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 	a, err := New(
 		ctx,
 		Config{
-			Model:         technicalModel,
-			Handlers:      rt.Handlers(),
+			Model: technicalModel,
+			Tools: []tool.BaseTool{
+				researchTool,
+			},
 			MaxIterations: 30,
 		},
 	)
