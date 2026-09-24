@@ -2,6 +2,7 @@ package trading
 
 import (
 	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/technical"
 	"Aegis/internal/decision"
 	"context"
 	"errors"
@@ -63,6 +64,21 @@ func validMarketContext() *market.Context {
 	}
 }
 
+func validTechnicalContext() *technical.Context {
+	return &technical.Context{
+		Symbol:        "600519.SH",
+		RequestedAsOf: "20260923",
+		EffectiveAsOf: "20260923",
+		Status:        technical.StatusNormal,
+		Snapshot: &technical.Snapshot{
+			Close: 1251.24,
+		},
+		Evidence: []string{"收盘价低于主要均线"},
+		Risk: []string{"短期弱势仍需后续交易日确认"},
+		Confidence: 0.82,
+	}
+}
+
 func TestAgentAnalyze(t *testing.T) {
 	ctx := context.Background()
 
@@ -94,7 +110,8 @@ func TestAgentAnalyze(t *testing.T) {
 		ctx,
 		Input{
 			Symbol:        "600519.SH",
-			MarketContext: validMarketContext(),
+			MarketContext:    validMarketContext(),
+			TechnicalContext: validTechnicalContext(),
 		},
 	)
 	if err != nil {
@@ -154,10 +171,72 @@ func TestAgentAnalyzeInvalidInput(t *testing.T) {
 			ctx,
 			Input{
 				Symbol:        "600519.SH",
-				MarketContext: &market.Context{},
+				MarketContext:    &market.Context{},
+				TechnicalContext: validTechnicalContext(),
 			},
 		)
 
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestAgentAnalyzeInvalidTechnicalContext(t *testing.T) {
+	ctx := context.Background()
+
+	a, err := New(
+		ctx,
+		Config{
+			Model: &fakeModel{},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("missing technical context", func(t *testing.T) {
+		_, err := a.Analyze(
+			ctx,
+			Input{
+				Symbol:        "600519.SH",
+				MarketContext: validMarketContext(),
+			},
+		)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("technical symbol mismatch", func(t *testing.T) {
+		technicalContext := validTechnicalContext()
+		technicalContext.Symbol = "000001.SZ"
+
+		_, err := a.Analyze(
+			ctx,
+			Input{
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: technicalContext,
+			},
+		)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("technical as_of mismatch", func(t *testing.T) {
+		technicalContext := validTechnicalContext()
+		technicalContext.RequestedAsOf = "20260922"
+
+		_, err := a.Analyze(
+			ctx,
+			Input{
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: technicalContext,
+			},
+		)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -183,8 +262,9 @@ func TestAgentAnalyzeInvalidOutput(t *testing.T) {
 		_, err = a.Analyze(
 			ctx,
 			Input{
-				Symbol:        "600519.SH",
-				MarketContext: validMarketContext(),
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: validTechnicalContext(),
 			},
 		)
 		if err == nil {
@@ -215,8 +295,9 @@ func TestAgentAnalyzeInvalidOutput(t *testing.T) {
 		_, err = a.Analyze(
 			ctx,
 			Input{
-				Symbol:        "600519.SH",
-				MarketContext: validMarketContext(),
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: validTechnicalContext(),
 			},
 		)
 		if err == nil {
@@ -247,8 +328,9 @@ func TestAgentAnalyzeInvalidOutput(t *testing.T) {
 		_, err = a.Analyze(
 			ctx,
 			Input{
-				Symbol:        "600519.SH",
-				MarketContext: validMarketContext(),
+				Symbol:           "600519.SH",
+				MarketContext:    validMarketContext(),
+				TechnicalContext: validTechnicalContext(),
 			},
 		)
 		if err == nil {
@@ -276,7 +358,8 @@ func TestAgentAnalyzeModelError(t *testing.T) {
 		ctx,
 		Input{
 			Symbol:        "600519.SH",
-			MarketContext: validMarketContext(),
+			MarketContext:    validMarketContext(),
+			TechnicalContext: validTechnicalContext(),
 		},
 	)
 

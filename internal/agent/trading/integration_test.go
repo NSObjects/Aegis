@@ -2,13 +2,13 @@ package trading
 
 import (
 	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/technical"
 	"Aegis/internal/config"
+	"Aegis/internal/decision"
 	"Aegis/internal/llm"
-	"Aegis/internal/runtime"
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -22,21 +22,11 @@ func TestTradingAgent_Analyze_Integration(t *testing.T) {
 		t.Fatal("DEEPSEEK_API_KEY is required")
 	}
 
-	if os.Getenv("TUSHARE_TOKEN") == "" {
-		t.Fatal("TUSHARE_TOKEN is required")
-	}
-
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
 		3*time.Minute,
 	)
 	defer cancel()
-
-	skillsDir, err := findSkillsDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 
 	appCfg := config.Config{
 		DefaultModel: "default",
@@ -83,23 +73,11 @@ func TestTradingAgent_Analyze_Integration(t *testing.T) {
 		t.Fatalf("create trading model: %v", err)
 	}
 
-	rt, err := runtime.New(
-		ctx,
-		runtime.Config{
-			SkillsDir: skillsDir,
-			TimeZone:  "Asia/Shanghai",
-		},
-	)
-	if err != nil {
-		t.Fatalf("create runtime: %v", err)
-	}
-
 	a, err := New(
 		ctx,
 		Config{
 			Model:         tradingModel,
-			Handlers:      rt.Handlers(),
-			MaxIterations: 30,
+			MaxIterations: 10,
 		},
 	)
 	if err != nil {
@@ -109,8 +87,9 @@ func TestTradingAgent_Analyze_Integration(t *testing.T) {
 	result, err := a.Analyze(
 		ctx,
 		Input{
-			Symbol:        "600519.SH",
-			MarketContext: integrationMarketContext(),
+			Symbol:           "600519.SH",
+			MarketContext:    integrationMarketContext(),
+			TechnicalContext: integrationTechnicalContext(),
 		},
 	)
 	if err != nil {
@@ -127,6 +106,10 @@ func TestTradingAgent_Analyze_Integration(t *testing.T) {
 			result.Symbol,
 			"600519.SH",
 		)
+	}
+
+	if err := decision.Validate(result); err != nil {
+		t.Fatalf("validate trading decision: %v", err)
 	}
 
 	data, err := json.MarshalIndent(
@@ -198,11 +181,78 @@ func integrationMarketContext() *market.Context {
 		},
 		Risk: []string{
 			"指数跌幅与个股广度存在背离。",
-			"主力资金偏流出，结构性行情可能进一步收窄。",
+			"结构性行情可能进一步收窄。",
 			"市场热点集中，轮动速度较快。",
 		},
 		Confidence: 0.64,
 	}
+}
+
+func integrationTechnicalContext() *technical.Context {
+	return &technical.Context{
+		Symbol:          "600519.SH",
+		RequestedAsOf:   "20260923",
+		EffectiveAsOf:   "20260923",
+		LastTradeDate:   "20260923",
+		Status:          technical.StatusNormal,
+		Snapshot: &technical.Snapshot{
+			Open:          1255.03,
+			High:          1271.50,
+			Low:           1250.89,
+			Close:         1251.24,
+			PreClose:      1253.80,
+			ChangePercent: -0.2042,
+			Volume:        3_098_122,
+			Amount:        3_894_630_783,
+		},
+		Returns: technical.Returns{
+			Return1D:  float64Ptr(-0.2042),
+			Return5D:  float64Ptr(-0.5374),
+			Return10D: float64Ptr(-3.0708),
+			Return20D: float64Ptr(-3.9576),
+			Return60D: float64Ptr(4.8809),
+		},
+		MovingAverages: technical.MovingAverages{
+			MA5:  float64Ptr(1256.342),
+			MA10: float64Ptr(1265.071),
+			MA20: float64Ptr(1284.103),
+			MA60: float64Ptr(1285.7557),
+		},
+		Momentum: technical.Momentum{
+			RSI14: float64Ptr(37.0889),
+			MACD: technical.MACD{
+				DIF:  float64Ptr(-12.9561),
+				DEA:  float64Ptr(-8.4392),
+				HIST: float64Ptr(-9.0337),
+			},
+		},
+		Volume: technical.VolumeMetrics{
+			VolumeMA5:    float64Ptr(2_460_314.4),
+			VolumeMA20:   float64Ptr(2_442_862.4),
+			VolumeVsMA5:  float64Ptr(1.2592),
+			VolumeVsMA20: float64Ptr(1.2682),
+			AmountMA5:    float64Ptr(3_094_450_873.4),
+			AmountMA20:   float64Ptr(3_140_884_123.05),
+			AmountVsMA5:  float64Ptr(1.2586),
+			AmountVsMA20: float64Ptr(1.24),
+		},
+		Evidence: []string{
+			"收盘价低于 MA5、MA10、MA20 与 MA60，主要均线呈空头排列。",
+			"MACD 位于负值区间，DIF 低于 DEA，短中期动能偏弱。",
+			"5日、10日和20日收益均为负，60日收益仍为正，存在周期冲突。",
+			"RSI14 为 37.0889，偏弱但尚未进入超卖区域。",
+			"成交量约为 5 日和 20 日均量的 1.26 倍，价跌量增需要后续确认。",
+		},
+		Risk: []string{
+			"短中期弱势与60日正收益存在方向冲突。",
+			"价跌量增可能反映卖压，但单日量能不足以确认趋势延续。",
+		},
+		Confidence: 0.82,
+	}
+}
+
+func float64Ptr(v float64) *float64 {
+	return &v
 }
 
 func envOrDefault(
@@ -215,37 +265,3 @@ func envOrDefault(
 
 	return fallback
 }
-
-func findSkillsDir() (string, error) {
-	if dir := os.Getenv("AEGIS_SKILLS_DIR"); dir != "" {
-		return filepath.Abs(dir)
-	}
-
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	for {
-		goMod := filepath.Join(
-			dir,
-			"go.mod",
-		)
-
-		if _, err := os.Stat(goMod); err == nil {
-			return filepath.Join(
-				dir,
-				"skills",
-			), nil
-		}
-
-		parent := filepath.Dir(dir)
-
-		if parent == dir {
-			return "", os.ErrNotExist
-		}
-
-		dir = parent
-	}
-}
-

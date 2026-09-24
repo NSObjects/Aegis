@@ -2,7 +2,9 @@ package main
 
 import (
 	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/technical"
 	"Aegis/internal/agent/trading"
+	technicalcap "Aegis/internal/capability/technical"
 	"Aegis/internal/config"
 	"Aegis/internal/llm"
 	"Aegis/internal/research"
@@ -12,6 +14,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"path/filepath"
+
+	"github.com/cloudwego/eino/components/tool"
 )
 
 func main() {
@@ -93,6 +98,15 @@ func run(
 		)
 	}
 
+	technicalProfile, err :=
+		appCfg.ModelProfileForAgent("technical")
+	if err != nil {
+		return fmt.Errorf(
+			"resolve technical model profile: %w",
+			err,
+		)
+	}
+
 	tradingProfile, err :=
 		appCfg.ModelProfileForAgent("trading")
 	if err != nil {
@@ -109,6 +123,17 @@ func run(
 	if err != nil {
 		return fmt.Errorf(
 			"create market model: %w",
+			err,
+		)
+	}
+
+	technicalModel, err := models.Get(
+		ctx,
+		technicalProfile,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"create technical model: %w",
 			err,
 		)
 	}
@@ -147,11 +172,50 @@ func run(
 		return err
 	}
 
+	researcher, err := technicalcap.NewScriptResearcher(
+		technicalcap.ScriptResearcherConfig{
+			ScriptPath: filepath.Join(
+				"internal",
+				"capability",
+				"technical",
+				"scripts",
+				"stock_research.py",
+			),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"create technical researcher: %w",
+			err,
+		)
+	}
+
+	researchTool, err := technicalcap.NewTool(researcher)
+	if err != nil {
+		return fmt.Errorf(
+			"create technical research tool: %w",
+			err,
+		)
+	}
+
+	technicalAgent, err := technical.New(
+		ctx,
+		technical.Config{
+			Model: technicalModel,
+			Tools: []tool.BaseTool{
+				researchTool,
+			},
+			MaxIterations: 30,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
 	tradingAgent, err := trading.New(
 		ctx,
 		trading.Config{
 			Model:         tradingModel,
-			Handlers:      rt.Handlers(),
 			MaxIterations: 30,
 		},
 	)
@@ -162,8 +226,9 @@ func run(
 	workflow, err := research.New(
 		ctx,
 		research.Config{
-			MarketAgent:  marketAgent,
-			TradingAgent: tradingAgent,
+			MarketAgent:    marketAgent,
+			TechnicalAgent: technicalAgent,
+			TradingAgent:   tradingAgent,
 		},
 	)
 	if err != nil {

@@ -2,6 +2,7 @@ package research
 
 import (
 	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/technical"
 	"Aegis/internal/agent/trading"
 	"Aegis/internal/decision"
 	"context"
@@ -23,17 +24,32 @@ func (a *fakeMarketAgent) Analyze(
 	_ context.Context,
 	query string,
 	_ ...adk.AgentRunOption,
-) (
-	*market.Context,
-	error,
-) {
+) (*market.Context, error) {
 	a.calls++
 	a.query = query
-
 	if a.err != nil {
 		return nil, a.err
 	}
+	return a.result, nil
+}
 
+type fakeTechnicalAgent struct {
+	input  technical.Input
+	result *technical.Context
+	err    error
+	calls  int
+}
+
+func (a *fakeTechnicalAgent) Analyze(
+	_ context.Context,
+	input technical.Input,
+	_ ...adk.AgentRunOption,
+) (*technical.Context, error) {
+	a.calls++
+	a.input = input
+	if a.err != nil {
+		return nil, a.err
+	}
 	return a.result, nil
 }
 
@@ -48,17 +64,12 @@ func (a *fakeTradingAgent) Analyze(
 	_ context.Context,
 	input trading.Input,
 	_ ...adk.AgentRunOption,
-) (
-	*decision.Decision,
-	error,
-) {
+) (*decision.Decision, error) {
 	a.calls++
 	a.input = input
-
 	if a.err != nil {
 		return nil, a.err
 	}
-
 	return a.result, nil
 }
 
@@ -72,11 +83,26 @@ func validMarketContext() *market.Context {
 	}
 }
 
+func validTechnicalContext() *technical.Context {
+	return &technical.Context{
+		Symbol:        "600519.SH",
+		RequestedAsOf: "20260923",
+		EffectiveAsOf: "20260923",
+		Status:        technical.StatusNormal,
+		Snapshot: &technical.Snapshot{
+			Close: 1251.24,
+		},
+		Evidence:   []string{"收盘价低于主要均线"},
+		Risk:       []string{"短期弱势需确认"},
+		Confidence: 0.82,
+	}
+}
+
 func validDecision() *decision.Decision {
 	return &decision.Decision{
 		Symbol:     "600519.SH",
-		MarketView: "市场分化，个股保持观察",
-		Evidence:   []string{"市场为 MIXED"},
+		MarketView: "市场分化，技术面偏弱",
+		Evidence:   []string{"市场为 MIXED", "技术面偏弱"},
 		Risk:       []string{"广度偏弱"},
 		Action:     decision.ActionWatch,
 		Confidence: 0.66,
@@ -85,110 +111,83 @@ func validDecision() *decision.Decision {
 
 func TestWorkflowRun(t *testing.T) {
 	marketContext := validMarketContext()
+	technicalContext := validTechnicalContext()
 
-	marketAgent := &fakeMarketAgent{
-		result: marketContext,
-	}
-
-	tradingAgent := &fakeTradingAgent{
-		result: validDecision(),
-	}
+	marketAgent := &fakeMarketAgent{result: marketContext}
+	technicalAgent := &fakeTechnicalAgent{result: technicalContext}
+	tradingAgent := &fakeTradingAgent{result: validDecision()}
 
 	workflow, err := New(
 		context.Background(),
 		Config{
-			MarketAgent:  marketAgent,
-			TradingAgent: tradingAgent,
+			MarketAgent:    marketAgent,
+			TechnicalAgent: technicalAgent,
+			TradingAgent:   tradingAgent,
 		},
 	)
 	if err != nil {
-		t.Fatalf(
-			"create workflow: %v",
-			err,
-		)
+		t.Fatalf("create workflow: %v", err)
 	}
 
 	result, err := workflow.Run(
 		context.Background(),
-		Input{
-			Symbol: "600519.SH",
-		},
+		Input{Symbol: "600519.SH"},
 	)
 	if err != nil {
-		t.Fatalf(
-			"run workflow: %v",
-			err,
-		)
+		t.Fatalf("run workflow: %v", err)
 	}
 
 	if result.Symbol != "600519.SH" {
-		t.Fatalf(
-			"unexpected decision symbol: %s",
-			result.Symbol,
-		)
+		t.Fatalf("unexpected decision symbol: %s", result.Symbol)
 	}
-
 	if marketAgent.calls != 1 {
-		t.Fatalf(
-			"market calls = %d, want 1",
-			marketAgent.calls,
-		)
+		t.Fatalf("market calls = %d, want 1", marketAgent.calls)
 	}
-
 	if marketAgent.query != defaultMarketQuery {
+		t.Fatalf("market query = %q, want %q", marketAgent.query, defaultMarketQuery)
+	}
+	if technicalAgent.calls != 1 {
+		t.Fatalf("technical calls = %d, want 1", technicalAgent.calls)
+	}
+	if technicalAgent.input.Symbol != "600519.SH" {
+		t.Fatalf("technical symbol = %q", technicalAgent.input.Symbol)
+	}
+	if technicalAgent.input.RequestedAsOf != marketContext.AsOf {
 		t.Fatalf(
-			"market query = %q, want %q",
-			marketAgent.query,
-			defaultMarketQuery,
+			"technical requested_as_of = %q, want %q",
+			technicalAgent.input.RequestedAsOf,
+			marketContext.AsOf,
 		)
 	}
-
 	if tradingAgent.calls != 1 {
-		t.Fatalf(
-			"trading calls = %d, want 1",
-			tradingAgent.calls,
-		)
+		t.Fatalf("trading calls = %d, want 1", tradingAgent.calls)
 	}
-
-	if tradingAgent.input.Symbol != "600519.SH" {
-		t.Fatalf(
-			"trading symbol = %q",
-			tradingAgent.input.Symbol,
-		)
-	}
-
 	if tradingAgent.input.MarketContext != marketContext {
-		t.Fatal(
-			"market context was not passed to trading agent",
-		)
+		t.Fatal("market context was not passed to trading agent")
+	}
+	if tradingAgent.input.TechnicalContext != technicalContext {
+		t.Fatal("technical context was not passed to trading agent")
 	}
 }
 
-func TestWorkflowRunCustomMarketQuery(
-	t *testing.T,
-) {
-	marketAgent := &fakeMarketAgent{
-		result: validMarketContext(),
-	}
-
-	tradingAgent := &fakeTradingAgent{
-		result: validDecision(),
-	}
+func TestWorkflowRunCustomMarketQuery(t *testing.T) {
+	marketAgent := &fakeMarketAgent{result: validMarketContext()}
+	technicalAgent := &fakeTechnicalAgent{result: validTechnicalContext()}
+	tradingAgent := &fakeTradingAgent{result: validDecision()}
 
 	workflow, err := New(
 		context.Background(),
 		Config{
-			MarketAgent:  marketAgent,
-			TradingAgent: tradingAgent,
+			MarketAgent:    marketAgent,
+			TechnicalAgent: technicalAgent,
+			TradingAgent:   tradingAgent,
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	const query =
-		"分析 2026-09-18 A 股市场环境。"
-
+	const query = "分析 2026-09-18 A 股市场环境。"
 	_, err = workflow.Run(
 		context.Background(),
 		Input{
@@ -199,142 +198,121 @@ func TestWorkflowRunCustomMarketQuery(
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if marketAgent.query != query {
-		t.Fatalf(
-			"market query = %q, want %q",
-			marketAgent.query,
-			query,
-		)
+		t.Fatalf("market query = %q, want %q", marketAgent.query, query)
 	}
 }
 
 func TestWorkflowRunEmptySymbol(t *testing.T) {
-	marketAgent := &fakeMarketAgent{
-		result: validMarketContext(),
-	}
-
-	tradingAgent := &fakeTradingAgent{
-		result: validDecision(),
-	}
+	marketAgent := &fakeMarketAgent{result: validMarketContext()}
+	technicalAgent := &fakeTechnicalAgent{result: validTechnicalContext()}
+	tradingAgent := &fakeTradingAgent{result: validDecision()}
 
 	workflow, err := New(
 		context.Background(),
 		Config{
-			MarketAgent:  marketAgent,
-			TradingAgent: tradingAgent,
+			MarketAgent:    marketAgent,
+			TechnicalAgent: technicalAgent,
+			TradingAgent:   tradingAgent,
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = workflow.Run(
-		context.Background(),
-		Input{},
-	)
+	_, err = workflow.Run(context.Background(), Input{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-
 	if marketAgent.calls != 0 {
-		t.Fatalf(
-			"market calls = %d, want 0",
-			marketAgent.calls,
-		)
+		t.Fatalf("market calls = %d, want 0", marketAgent.calls)
 	}
 }
 
-func TestWorkflowMarketErrorStopsFlow(
-	t *testing.T,
-) {
-	marketAgent := &fakeMarketAgent{
-		err: errors.New("market failed"),
-	}
-
-	tradingAgent := &fakeTradingAgent{
-		result: validDecision(),
-	}
+func TestWorkflowMarketErrorStopsFlow(t *testing.T) {
+	marketAgent := &fakeMarketAgent{err: errors.New("market failed")}
+	technicalAgent := &fakeTechnicalAgent{result: validTechnicalContext()}
+	tradingAgent := &fakeTradingAgent{result: validDecision()}
 
 	workflow, err := New(
 		context.Background(),
 		Config{
-			MarketAgent:  marketAgent,
-			TradingAgent: tradingAgent,
+			MarketAgent:    marketAgent,
+			TechnicalAgent: technicalAgent,
+			TradingAgent:   tradingAgent,
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = workflow.Run(
-		context.Background(),
-		Input{
-			Symbol: "600519.SH",
-		},
-	)
+	_, err = workflow.Run(context.Background(), Input{Symbol: "600519.SH"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-
-	if !strings.Contains(
-		err.Error(),
-		"market research",
-	) {
-		t.Fatalf(
-			"unexpected error: %v",
-			err,
-		)
+	if !strings.Contains(err.Error(), "market research") {
+		t.Fatalf("unexpected error: %v", err)
 	}
-
+	if technicalAgent.calls != 0 {
+		t.Fatalf("technical calls = %d, want 0", technicalAgent.calls)
+	}
 	if tradingAgent.calls != 0 {
-		t.Fatalf(
-			"trading calls = %d, want 0",
-			tradingAgent.calls,
-		)
+		t.Fatalf("trading calls = %d, want 0", tradingAgent.calls)
 	}
 }
 
-func TestWorkflowTradingError(
-	t *testing.T,
-) {
-	marketAgent := &fakeMarketAgent{
-		result: validMarketContext(),
-	}
-
-	tradingAgent := &fakeTradingAgent{
-		err: errors.New("trading failed"),
-	}
+func TestWorkflowTechnicalErrorStopsFlow(t *testing.T) {
+	marketAgent := &fakeMarketAgent{result: validMarketContext()}
+	technicalAgent := &fakeTechnicalAgent{err: errors.New("technical failed")}
+	tradingAgent := &fakeTradingAgent{result: validDecision()}
 
 	workflow, err := New(
 		context.Background(),
 		Config{
-			MarketAgent:  marketAgent,
-			TradingAgent: tradingAgent,
+			MarketAgent:    marketAgent,
+			TechnicalAgent: technicalAgent,
+			TradingAgent:   tradingAgent,
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = workflow.Run(
-		context.Background(),
-		Input{
-			Symbol: "600519.SH",
-		},
-	)
+	_, err = workflow.Run(context.Background(), Input{Symbol: "600519.SH"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
+	if !strings.Contains(err.Error(), "technical research") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tradingAgent.calls != 0 {
+		t.Fatalf("trading calls = %d, want 0", tradingAgent.calls)
+	}
+}
 
-	if !strings.Contains(
-		err.Error(),
-		"trading research",
-	) {
-		t.Fatalf(
-			"unexpected error: %v",
-			err,
-		)
+func TestWorkflowTradingError(t *testing.T) {
+	marketAgent := &fakeMarketAgent{result: validMarketContext()}
+	technicalAgent := &fakeTechnicalAgent{result: validTechnicalContext()}
+	tradingAgent := &fakeTradingAgent{err: errors.New("trading failed")}
+
+	workflow, err := New(
+		context.Background(),
+		Config{
+			MarketAgent:    marketAgent,
+			TechnicalAgent: technicalAgent,
+			TradingAgent:   tradingAgent,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = workflow.Run(context.Background(), Input{Symbol: "600519.SH"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "trading research") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -343,11 +321,23 @@ func TestNewRequiresAgents(t *testing.T) {
 		_, err := New(
 			context.Background(),
 			Config{
-				TradingAgent:
-					&fakeTradingAgent{},
+				TechnicalAgent: &fakeTechnicalAgent{},
+				TradingAgent:   &fakeTradingAgent{},
 			},
 		)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
 
+	t.Run("technical agent", func(t *testing.T) {
+		_, err := New(
+			context.Background(),
+			Config{
+				MarketAgent:  &fakeMarketAgent{},
+				TradingAgent: &fakeTradingAgent{},
+			},
+		)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -357,11 +347,10 @@ func TestNewRequiresAgents(t *testing.T) {
 		_, err := New(
 			context.Background(),
 			Config{
-				MarketAgent:
-					&fakeMarketAgent{},
+				MarketAgent:    &fakeMarketAgent{},
+				TechnicalAgent: &fakeTechnicalAgent{},
 			},
 		)
-
 		if err == nil {
 			t.Fatal("expected error")
 		}

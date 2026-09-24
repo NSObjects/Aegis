@@ -2,7 +2,9 @@ package research
 
 import (
 	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/technical"
 	"Aegis/internal/agent/trading"
+	technicalcap "Aegis/internal/capability/technical"
 	"Aegis/internal/config"
 	"Aegis/internal/llm"
 	"Aegis/internal/runtime"
@@ -12,6 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/cloudwego/eino/components/tool"
 )
 
 func TestWorkflow_Run_Integration(t *testing.T) {
@@ -34,6 +38,11 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 	defer cancel()
 
 	skillsDir, err := findSkillsDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repoRoot, err := findRepoRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,60 +78,44 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 
 	models := llm.NewManager(appCfg.Models)
 
-	marketProfile, err :=
-		appCfg.ModelProfileForAgent("market")
+	marketProfile, err := appCfg.ModelProfileForAgent("market")
 	if err != nil {
-		t.Fatalf(
-			"resolve market model profile: %v",
-			err,
-		)
+		t.Fatalf("resolve market model profile: %v", err)
 	}
 
-	tradingProfile, err :=
-		appCfg.ModelProfileForAgent("trading")
+	technicalProfile, err := appCfg.ModelProfileForAgent("technical")
 	if err != nil {
-		t.Fatalf(
-			"resolve trading model profile: %v",
-			err,
-		)
+		t.Fatalf("resolve technical model profile: %v", err)
+	}
+
+	tradingProfile, err := appCfg.ModelProfileForAgent("trading")
+	if err != nil {
+		t.Fatalf("resolve trading model profile: %v", err)
 	}
 
 	if marketProfile != "default" {
-		t.Fatalf(
-			"market model profile = %q, want %q",
-			marketProfile,
-			"default",
-		)
+		t.Fatalf("market model profile = %q, want %q", marketProfile, "default")
 	}
-
+	if technicalProfile != "default" {
+		t.Fatalf("technical model profile = %q, want %q", technicalProfile, "default")
+	}
 	if tradingProfile != "strong" {
-		t.Fatalf(
-			"trading model profile = %q, want %q",
-			tradingProfile,
-			"strong",
-		)
+		t.Fatalf("trading model profile = %q, want %q", tradingProfile, "strong")
 	}
 
-	marketModel, err := models.Get(
-		ctx,
-		marketProfile,
-	)
+	marketModel, err := models.Get(ctx, marketProfile)
 	if err != nil {
-		t.Fatalf(
-			"create market model: %v",
-			err,
-		)
+		t.Fatalf("create market model: %v", err)
 	}
 
-	tradingModel, err := models.Get(
-		ctx,
-		tradingProfile,
-	)
+	technicalModel, err := models.Get(ctx, technicalProfile)
 	if err != nil {
-		t.Fatalf(
-			"create trading model: %v",
-			err,
-		)
+		t.Fatalf("create technical model: %v", err)
+	}
+
+	tradingModel, err := models.Get(ctx, tradingProfile)
+	if err != nil {
+		t.Fatalf("create trading model: %v", err)
 	}
 
 	rt, err := runtime.New(
@@ -133,10 +126,7 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Fatalf(
-			"create runtime: %v",
-			err,
-		)
+		t.Fatalf("create runtime: %v", err)
 	}
 
 	marketAgent, err := market.New(
@@ -148,39 +138,65 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Fatalf(
-			"create market agent: %v",
-			err,
-		)
+		t.Fatalf("create market agent: %v", err)
+	}
+
+	researcher, err := technicalcap.NewScriptResearcher(
+		technicalcap.ScriptResearcherConfig{
+			ScriptPath: filepath.Join(
+				repoRoot,
+				"internal",
+				"capability",
+				"technical",
+				"scripts",
+				"stock_research.py",
+			),
+		},
+	)
+	if err != nil {
+		t.Fatalf("create technical researcher: %v", err)
+	}
+
+	researchTool, err := technicalcap.NewTool(researcher)
+	if err != nil {
+		t.Fatalf("create technical research tool: %v", err)
+	}
+
+	technicalAgent, err := technical.New(
+		ctx,
+		technical.Config{
+			Model: technicalModel,
+			Tools: []tool.BaseTool{
+				researchTool,
+			},
+			MaxIterations: 30,
+		},
+	)
+	if err != nil {
+		t.Fatalf("create technical agent: %v", err)
 	}
 
 	tradingAgent, err := trading.New(
 		ctx,
 		trading.Config{
 			Model:         tradingModel,
-			Handlers:      rt.Handlers(),
 			MaxIterations: 30,
 		},
 	)
 	if err != nil {
-		t.Fatalf(
-			"create trading agent: %v",
-			err,
-		)
+		t.Fatalf("create trading agent: %v", err)
 	}
 
 	workflow, err := New(
 		ctx,
 		Config{
-			MarketAgent:  marketAgent,
-			TradingAgent: tradingAgent,
+			MarketAgent:    marketAgent,
+			TechnicalAgent: technicalAgent,
+			TradingAgent:   tradingAgent,
 		},
 	)
 	if err != nil {
-		t.Fatalf(
-			"create research workflow: %v",
-			err,
-		)
+		t.Fatalf("create research workflow: %v", err)
 	}
 
 	result, err := workflow.Run(
@@ -190,18 +206,12 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Fatalf(
-			"run research workflow: %v",
-			err,
-		)
+		t.Fatalf("run research workflow: %v", err)
 	}
 
 	if result == nil {
-		t.Fatal(
-			"research workflow returned nil decision",
-		)
+		t.Fatal("research workflow returned nil decision")
 	}
-
 	if result.Symbol != "600519.SH" {
 		t.Fatalf(
 			"decision symbol = %q, want %q",
@@ -210,22 +220,12 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 		)
 	}
 
-	data, err := json.MarshalIndent(
-		result,
-		"",
-		"  ",
-	)
+	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		t.Fatalf(
-			"marshal research decision: %v",
-			err,
-		)
+		t.Fatalf("marshal research decision: %v", err)
 	}
 
-	t.Logf(
-		"research decision:\n%s",
-		string(data),
-	)
+	t.Logf("research decision:\n%s", string(data))
 }
 
 func envOrDefault(
@@ -235,7 +235,6 @@ func envOrDefault(
 	if value := os.Getenv(name); value != "" {
 		return value
 	}
-
 	return fallback
 }
 
@@ -244,29 +243,30 @@ func findSkillsDir() (string, error) {
 		return filepath.Abs(dir)
 	}
 
+	root, err := findRepoRoot()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(root, "skills"), nil
+}
+
+func findRepoRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 
 	for {
-		goMod := filepath.Join(
-			dir,
-			"go.mod",
-		)
-
+		goMod := filepath.Join(dir, "go.mod")
 		if _, err := os.Stat(goMod); err == nil {
-			return filepath.Join(
-				dir,
-				"skills",
-			), nil
+			return dir, nil
 		}
 
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			return "", os.ErrNotExist
 		}
-
 		dir = parent
 	}
 }

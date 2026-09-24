@@ -2,6 +2,7 @@ package research
 
 import (
 	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/technical"
 	"Aegis/internal/agent/trading"
 	"Aegis/internal/decision"
 	"context"
@@ -14,8 +15,9 @@ import (
 )
 
 const (
-	marketNodeKey  = "market"
-	tradingNodeKey = "trading"
+	marketNodeKey    = "market"
+	technicalNodeKey = "technical"
+	tradingNodeKey   = "trading"
 
 	defaultMarketQuery = "分析当前 A 股市场环境。"
 )
@@ -33,6 +35,14 @@ type marketAnalyzer interface {
 	) (*market.Context, error)
 }
 
+type technicalAnalyzer interface {
+	Analyze(
+		ctx context.Context,
+		input technical.Input,
+		opts ...adk.AgentRunOption,
+	) (*technical.Context, error)
+}
+
 type tradingAnalyzer interface {
 	Analyze(
 		ctx context.Context,
@@ -42,8 +52,9 @@ type tradingAnalyzer interface {
 }
 
 type Config struct {
-	MarketAgent  marketAnalyzer
-	TradingAgent tradingAnalyzer
+	MarketAgent    marketAnalyzer
+	TechnicalAgent technicalAnalyzer
+	TradingAgent   tradingAnalyzer
 }
 
 type Workflow struct {
@@ -55,6 +66,12 @@ type marketResult struct {
 	MarketContext *market.Context
 }
 
+type technicalResult struct {
+	Symbol           string
+	MarketContext    *market.Context
+	TechnicalContext *technical.Context
+}
+
 func New(
 	ctx context.Context,
 	cfg Config,
@@ -62,6 +79,12 @@ func New(
 	if cfg.MarketAgent == nil {
 		return nil, errors.New(
 			"research market agent is required",
+		)
+	}
+
+	if cfg.TechnicalAgent == nil {
+		return nil, errors.New(
+			"research technical agent is required",
 		)
 	}
 
@@ -117,12 +140,12 @@ func New(
 		},
 	)
 
-	tradingNode := compose.InvokableLambda(
+	technicalNode := compose.InvokableLambda(
 		func(
 			ctx context.Context,
 			input *marketResult,
 		) (
-			*decision.Decision,
+			*technicalResult,
 			error,
 		) {
 			if input == nil {
@@ -131,13 +154,58 @@ func New(
 				)
 			}
 
+			if err := market.Validate(input.MarketContext); err != nil {
+				return nil, fmt.Errorf(
+					"invalid market context before technical research: %w",
+					err,
+				)
+			}
+
+			technicalContext, err :=
+				cfg.TechnicalAgent.Analyze(
+					ctx,
+					technical.Input{
+						Symbol: input.Symbol,
+						RequestedAsOf:
+							input.MarketContext.AsOf,
+					},
+				)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"technical research: %w",
+					err,
+				)
+			}
+
+			return &technicalResult{
+				Symbol:           input.Symbol,
+				MarketContext:    input.MarketContext,
+				TechnicalContext: technicalContext,
+			}, nil
+		},
+	)
+
+	tradingNode := compose.InvokableLambda(
+		func(
+			ctx context.Context,
+			input *technicalResult,
+		) (
+			*decision.Decision,
+			error,
+		) {
+			if input == nil {
+				return nil, errors.New(
+					"technical research result is nil",
+				)
+			}
+
 			result, err :=
 				cfg.TradingAgent.Analyze(
 					ctx,
 					trading.Input{
-						Symbol: input.Symbol,
-						MarketContext:
-							input.MarketContext,
+						Symbol:           input.Symbol,
+						MarketContext:    input.MarketContext,
+						TechnicalContext: input.TechnicalContext,
 					},
 				)
 			if err != nil {
@@ -157,6 +225,16 @@ func New(
 	); err != nil {
 		return nil, fmt.Errorf(
 			"add market graph node: %w",
+			err,
+		)
+	}
+
+	if err := graph.AddLambdaNode(
+		technicalNodeKey,
+		technicalNode,
+	); err != nil {
+		return nil, fmt.Errorf(
+			"add technical graph node: %w",
 			err,
 		)
 	}
@@ -183,10 +261,20 @@ func New(
 
 	if err := graph.AddEdge(
 		marketNodeKey,
+		technicalNodeKey,
+	); err != nil {
+		return nil, fmt.Errorf(
+			"connect market to technical: %w",
+			err,
+		)
+	}
+
+	if err := graph.AddEdge(
+		technicalNodeKey,
 		tradingNodeKey,
 	); err != nil {
 		return nil, fmt.Errorf(
-			"connect market to trading: %w",
+			"connect technical to trading: %w",
 			err,
 		)
 	}
