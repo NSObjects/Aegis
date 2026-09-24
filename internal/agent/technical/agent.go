@@ -9,11 +9,15 @@ import (
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 )
 
 type Config struct {
 	Model model.BaseModel[*schema.AgenticMessage]
+
+	Tools []tool.BaseTool
 
 	Handlers []adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage]
 
@@ -51,7 +55,12 @@ func New(
 			Description: "Researches symbol-specific price action and technical state, then produces structured technical context.",
 			Instruction: instruction,
 			Model:       cfg.Model,
-			Handlers:    cfg.Handlers,
+			ToolsConfig: adk.ToolsConfig{
+				ToolsNodeConfig: compose.ToolsNodeConfig{
+					Tools: cfg.Tools,
+				},
+			},
+			Handlers: cfg.Handlers,
 
 			MaxIterations: maxIterations,
 		},
