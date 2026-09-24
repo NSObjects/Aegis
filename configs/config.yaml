@@ -11,15 +11,6 @@ models:
     model: deepseek-chat
     api_key_env: DEEPSEEK_API_KEY
 
-  claude:
-    provider: claude
-    model: claude-sonnet-4-6
-    api_key_env: ANTHROPIC_API_KEY
-    max_tokens: 8192
-
 agents:
   trading:
     model: strong
-
-  reflection:
-    model: claude
