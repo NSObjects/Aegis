@@ -69,7 +69,7 @@ Offline Evolution
 | `internal/runtime` | 已实现 | 创建共享 local backend 并装配 middleware |
 | `internal/agent/market` | 已实现 | 真实市场环境研究，输出 `MarketContext` |
 | `internal/agent/trading` | 已实现（待 V2.6 收窄职责） | 当前消费 `MarketContext` 并自行补个股研究；目标是只综合各 Domain Context |
-| `internal/agent/technical` | V2.6 进行中 | TechnicalContext + Validate + Technical Agent 单测已本地通过；已增加真实 integration test，待验证第一套 Technical Capability |
+| `internal/agent/technical` | V2.6 进行中 | TechnicalContext + Validate + Technical Agent 单测与真实 integration 已通过；下一步验证确定性 Capability 调用路径后接 Graph |
 | `internal/research` | 已实现 V2.5 | 当前 Graph：Market Agent → Trading Agent；V2.6 将升级为 Market → Technical → Trading |
 | `internal/decision` | 已实现 | WATCH / AVOID / CANDIDATE 输出契约 |
 
@@ -189,6 +189,20 @@ Agent 业务层不感知 DSML。
 ## 真实链路验证
 
 已实际跑通：
+
+```text
+Technical Agent
+  ↓
+Runtime / tushare-data Skill
+  ↓
+真实行情与技术数据
+  ↓
+TechnicalContext
+  ↓
+Validate
+```
+
+以及 V2.5 主链路：
 
 ```text
 Market Agent
