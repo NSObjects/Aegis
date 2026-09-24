@@ -1,3 +1,6 @@
+> **状态说明（2026-09-24）**  
+> 本文保留为设计与演进记录，不作为当前实现状态的权威来源。当前代码结构、已实现能力与运行方式请以 [docs/README.md](README.md) 和 [08-演进路线与现状.md](08-演进路线与现状.md) 为准。文中出现的 legacy skillruntime、MCP、mock tools、多 Provider 等内容可能描述的是历史方案或未来方向。
+
 # Aegis 的 Agent 设计与组装
 
 本文说明 Aegis 中一个 Agent 如何被定义、组装、运行与校验：先给出通用组装原则与依赖注入边界，再以 **Market Agent** 为主线给出包结构、`Context` 契约、`Validate` 规则、Prompt 正文、Runner 选型与组装代码，最后给出 **Trading Agent** 的 V1 输出契约。
