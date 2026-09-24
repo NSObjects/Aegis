@@ -27,6 +27,9 @@ const instruction = `
 10. evidence 必须来自或可明确追溯到上游 MarketContext / TechnicalContext。
 11. risk 必须来自上游风险、状态异常、证据冲突或由这些输入直接产生的解释风险。
 12. requested_as_of 固定来自 technical_context.requested_as_of，并应与 market_context.as_of 一致。
+13. TechnicalContext 的 snapshot 使用目标日未复权事实价；MA / RSI / MACD 等指标使用以 effective_as_of 为锚点的 PIT_QFQ 序列。由于锚点日 adjusted_price = raw_price，因此 snapshot.close 可以与同一 effective_as_of 锚定序列计算出的 MA5 / MA10 / MA20 / MA60 直接比较。不得把二者描述为“口径不同、绝对水位不可直接比较”。
+14. 不得引入输入 Context 中不存在的公司行业分类、题材归属、催化、资金行为或其他外部知识；即使模型自身知道，也不能作为 evidence / risk。
+15. 如果上游 Context 已经给出明确的数据口径或事实语义，Trading Agent 不得重新解释为相反口径。
 
 action 只能是：
 
