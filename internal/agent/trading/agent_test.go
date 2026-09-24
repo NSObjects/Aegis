@@ -199,9 +199,8 @@ func TestAgentAnalyzeInvalidTechnicalContext(t *testing.T) {
 		_, err := a.Analyze(
 			ctx,
 			Input{
-				Symbol:           "600519.SH",
-				MarketContext:    validMarketContext(),
-				TechnicalContext: validTechnicalContext(),
+				Symbol:        "600519.SH",
+				MarketContext: validMarketContext(),
 			},
 		)
 		if err == nil {
