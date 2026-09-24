@@ -144,12 +144,19 @@ MA60
 
 ```text
 RSI14
+├── 使用 Wilder smoothing
+├── 初始 avg_gain / avg_loss = 前 14 个 price delta 的算术平均
+└── 后续 = (前值 × 13 + 当前 gain/loss) / 14
 
 MACD
+├── EMA12 / EMA26 使用递推 EMA
+├── EMA 初值 = 序列第一个有效价格
 ├── DIF  = EMA12 - EMA26
 ├── DEA  = EMA9(DIF)
 └── HIST = 2 × (DIF - DEA)
 ```
+
+收益率、MA、RSI、MACD 均基于同一条以 effective_as_of 锚定的 PIT_QFQ close 序列。snapshot.change_percent 仍保持 Tushare 原始日线事实口径，不用技术收益率字段覆盖。
 
 量能：
 
