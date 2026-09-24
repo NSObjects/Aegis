@@ -176,6 +176,7 @@ go run ./cmd/aegis \
 ## 文档说明
 
 - `docs/08-演进路线与现状.md`：当前实现与下一阶段。
+- `docs/09-Trading数据口径.md`：V2.6 Trading Agent 个股研究数据语义与指标口径。
 - `docs/01-*.md` ~ `docs/07-*.md`：保留的设计/演进记录，其中部分内容描述历史实现，不作为当前代码状态的权威来源。
 - `docs/research/tradingagents/`：外部项目研究与架构取舍记录。
 
