@@ -222,7 +222,7 @@ risk
 confidence
 ```
 
-确切 Go 结构在实现 Technical Agent 时确定，先保持字段职责稳定。
+当前 Go 契约已落在 `internal/agent/technical/context.go`，结构字段以该文件为实现事实来源。
 
 Technical Agent 的 evidence / risk 是对技术事实的解释；确定性数值本身应保留结构化字段，不能只埋在自然语言里。
 
