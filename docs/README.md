@@ -69,7 +69,7 @@ Offline Evolution
 | `internal/runtime` | 已实现 | 创建共享 local backend 并装配 middleware |
 | `internal/agent/market` | 已实现 | 真实市场环境研究，输出 `MarketContext` |
 | `internal/agent/trading` | 已实现（待 V2.6 收窄职责） | 当前消费 `MarketContext` 并自行补个股研究；目标是只综合各 Domain Context |
-| `internal/agent/technical` | V2.6 进行中 | 已定义 TechnicalContext + Validate，并实现 Technical Agent + 单测；真实 Capability / integration 尚未接入 |
+| `internal/agent/technical` | V2.6 进行中 | TechnicalContext + Validate + Technical Agent 单测已本地通过；已增加真实 integration test，待验证第一套 Technical Capability |
 | `internal/research` | 已实现 V2.5 | 当前 Graph：Market Agent → Trading Agent；V2.6 将升级为 Market → Technical → Trading |
 | `internal/decision` | 已实现 | WATCH / AVOID / CANDIDATE 输出契约 |
 
