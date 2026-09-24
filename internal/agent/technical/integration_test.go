@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -286,8 +287,25 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 	}
 
 	t.Log("tool trace:")
+
+	foundResearchTool := false
 	for _, entry := range trace {
 		t.Log(entry)
+
+		if strings.HasPrefix(
+			entry,
+			technicalcap.ToolName+" ",
+		) {
+			foundResearchTool = true
+		}
+	}
+
+	if !foundResearchTool {
+		t.Fatalf(
+			"expected %s tool call, trace=%v",
+			technicalcap.ToolName,
+			trace,
+		)
 	}
 }
 
