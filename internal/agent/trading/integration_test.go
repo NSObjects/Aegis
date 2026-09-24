@@ -37,6 +37,11 @@ func TestTradingAgent_Analyze_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	requireStockResearchScript(
+		t,
+		skillsDir,
+	)
+
 	appCfg := config.Config{
 		DefaultModel: "default",
 		Models: map[string]config.ModelConfig{
@@ -245,5 +250,36 @@ func findSkillsDir() (string, error) {
 		}
 
 		dir = parent
+	}
+}
+
+
+func requireStockResearchScript(
+	t *testing.T,
+	skillsDir string,
+) {
+	t.Helper()
+
+	path := filepath.Join(
+		skillsDir,
+		"tushare-data",
+		"scripts",
+		"stock_research.py",
+	)
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf(
+			"stock research script is required at %s: %v",
+			path,
+			err,
+		)
+	}
+
+	if info.IsDir() {
+		t.Fatalf(
+			"stock research script path is a directory: %s",
+			path,
+		)
 	}
 }
