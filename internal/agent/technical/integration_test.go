@@ -39,7 +39,7 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 	)
 	defer cancel()
 
-	skillsDir, err := findSkillsDir()
+	repoRoot, err := findRepoRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +91,10 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 	researcher, err := technicalcap.NewScriptResearcher(
 		technicalcap.ScriptResearcherConfig{
 			ScriptPath: filepath.Join(
-				skillsDir,
-				"tushare-data",
+				repoRoot,
+				"internal",
+				"capability",
+				"technical",
 				"scripts",
 				"stock_research.py",
 			),
@@ -320,11 +322,7 @@ func envOrDefault(
 	return fallback
 }
 
-func findSkillsDir() (string, error) {
-	if dir := os.Getenv("AEGIS_SKILLS_DIR"); dir != "" {
-		return filepath.Abs(dir)
-	}
-
+func findRepoRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -337,10 +335,7 @@ func findSkillsDir() (string, error) {
 		)
 
 		if _, err := os.Stat(goMod); err == nil {
-			return filepath.Join(
-				dir,
-				"skills",
-			), nil
+			return dir, nil
 		}
 
 		parent := filepath.Dir(dir)
