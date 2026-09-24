@@ -2,7 +2,7 @@
 
 > 当前实现状态更新时间：2026-09-24
 
-Aegis 当前已经完成一条可运行的 A 股研究主链路：
+Aegis 当前已经完成一条可运行的 V2.5 A 股研究主链路：
 
 ```text
 Config
@@ -25,6 +25,24 @@ Trading Agent
 Decision
 ```
 
+这只是**当前已实现链路**，不是最终职责划分。
+
+V2.6 起，架构目标明确调整为职责型 Multi-Agent：
+
+```text
+Market Agent      → MarketContext
+Technical Agent   → TechnicalContext
+News/Event Agent  → EventContext
+Fundamental Agent → FundamentalContext
+Capital Flow Agent→ CapitalFlowContext
+                         ↓
+                    Trading Agent
+                         ↓
+                      Decision
+```
+
+其中 Trading Agent 是综合判断者，不应长期承担行情抓取、技术指标计算、新闻爬取、财务研究等职责。
+
 ## 当前权威代码
 
 | 模块 | 状态 | 说明 |
@@ -35,8 +53,9 @@ Decision
 | `internal/middleware` | 已实现 | Context / Skill / Filesystem |
 | `internal/runtime` | 已实现 | 创建共享 local backend 并装配 middleware |
 | `internal/agent/market` | 已实现 | 真实市场环境研究，输出 `MarketContext` |
-| `internal/agent/trading` | 已实现 | 消费 `MarketContext` + 个股数据，输出 `Decision` |
-| `internal/research` | 已实现 | Eino Graph：Market Agent → Trading Agent |
+| `internal/agent/trading` | 已实现（待 V2.6 收窄职责） | 当前消费 `MarketContext` 并自行补个股研究；目标是只综合各 Domain Context |
+| `internal/agent/technical` | V2.6 下一步 | 个股行情、PIT、技术指标与 TechnicalContext |
+| `internal/research` | 已实现 V2.5 | 当前 Graph：Market Agent → Trading Agent；V2.6 将升级为 Market → Technical → Trading |
 | `internal/decision` | 已实现 | WATCH / AVOID / CANDIDATE 输出契约 |
 
 ## 当前明确不包含
@@ -64,6 +83,24 @@ Runtime
 ```
 
 Model 不属于 Runtime。不同 Agent 通过配置选择 profile，再由 `llm.Manager` 获取模型实例。
+
+## Multi-Agent 架构边界
+
+后续新增 Agent / Tool / 数据源前，必须先阅读：
+
+- `docs/10-多Agent架构与职责边界.md`
+
+核心规则：
+
+```text
+Agent       = 研究职责
+Context     = Agent 间结构化契约
+Capability  = Agent 需要的能力
+Provider    = 能力的具体来源
+Graph       = Agent 协作关系
+```
+
+Skill / MCP / API / Crawler / DB / Tushare 都不是 Agent 职责分类。
 
 ## Skill
 
@@ -175,9 +212,20 @@ go run ./cmd/aegis \
 
 ## 文档说明
 
-- `docs/08-演进路线与现状.md`：当前实现与下一阶段。
-- `docs/09-Trading数据口径.md`：V2.6 Trading Agent 个股研究数据语义与指标口径。
+- `docs/10-多Agent架构与职责边界.md`：**最高优先级架构约束**，定义 Agent / Context / Capability / Provider / Graph 边界。
+- `docs/08-演进路线与现状.md`：当前实现、已知过渡状态与下一阶段。
+- `docs/09-Technical数据口径.md`：Technical Agent / TechnicalContext 的 A 股技术数据语义。
 - `docs/01-*.md` ~ `docs/07-*.md`：保留的设计/演进记录，其中部分内容描述历史实现，不作为当前代码状态的权威来源。
 - `docs/research/tradingagents/`：外部项目研究与架构取舍记录。
 
-当前代码状态以本文件和 `docs/08-演进路线与现状.md` 为准。
+发生冲突时，优先级为：
+
+```text
+10-多Agent架构与职责边界
+  ↓
+README / 08-演进路线与现状
+  ↓
+09-Technical数据口径
+  ↓
+历史设计文档
+```
