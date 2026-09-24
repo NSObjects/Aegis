@@ -48,9 +48,15 @@ Trading Team
 Risk / Portfolio Team
 ├── Risk Analyst
 └── Portfolio Manager
+
+Offline Evolution
+├── Strategy Team
+└── Backtest / Validation Team
 ```
 
-当前不会一次性实现这些角色。V2.6 只先完成 Technical Agent，并继续验证 typed Context + Graph 协作。
+其中 Strategy Team 负责提出和升级策略，Backtest / Validation Team 独立验证，形成版本化 ApprovedStrategy，再供在线决策流程选择使用。
+
+当前不会一次性实现这些角色。V2.6 只先完成 Technical Agent，并继续验证 typed Context + Graph 协作。策略/回测部门属于长期并行演进方向，尚未实现。
 
 ## 当前权威代码
 
@@ -109,6 +115,16 @@ Context     = Role / Team 间结构化交接物
 Capability  = Agent 完成职责所需能力
 Provider    = Capability 的具体来源
 Graph       = 公司的工作流
+```
+
+长期有两条主要工作流：
+
+```text
+Online Decision Loop
+→ Analyst / Research / Trading / Risk
+
+Offline Evolution Loop
+→ Strategy / Backtest / Validation / ApprovedStrategy
 ```
 
 Skill / MCP / API / Crawler / DB / Tushare 都不是 Agent 职责分类。
