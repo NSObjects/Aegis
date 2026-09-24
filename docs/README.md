@@ -54,7 +54,7 @@ Capital Flow Agent→ CapitalFlowContext
 | `internal/runtime` | 已实现 | 创建共享 local backend 并装配 middleware |
 | `internal/agent/market` | 已实现 | 真实市场环境研究，输出 `MarketContext` |
 | `internal/agent/trading` | 已实现（待 V2.6 收窄职责） | 当前消费 `MarketContext` 并自行补个股研究；目标是只综合各 Domain Context |
-| `internal/agent/technical` | V2.6 下一步 | 个股行情、PIT、技术指标与 TechnicalContext |
+| `internal/agent/technical` | V2.6 进行中 | 已定义 TechnicalContext + Validate；Technical Agent 尚未实现 |
 | `internal/research` | 已实现 V2.5 | 当前 Graph：Market Agent → Trading Agent；V2.6 将升级为 Market → Technical → Trading |
 | `internal/decision` | 已实现 | WATCH / AVOID / CANDIDATE 输出契约 |
 
