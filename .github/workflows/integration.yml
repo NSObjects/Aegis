@@ -13,6 +13,11 @@ on:
         required: true
         default: true
         type: boolean
+      run_research:
+        description: "Run the V2.6 hosted MarketContext → Technical → Trading pipeline"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -106,5 +111,56 @@ jobs:
         run: |
           go test ./internal/agent/technical \
             -run '^TestTechnicalAgent_Analyze_Integration$' \
+            -v \
+            -count=1
+
+  research:
+    name: V2.6 Research Pipeline
+    if: ${{ inputs.run_research }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      AEGIS_INTEGRATION: "1"
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      DEEPSEEK_STRONG_MODEL: ${{ vars.DEEPSEEK_STRONG_MODEL }}
+      TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Verify integration secrets
+        shell: bash
+        run: |
+          test -n "$DEEPSEEK_API_KEY" || {
+            echo "::error::Repository secret DEEPSEEK_API_KEY is required"
+            exit 1
+          }
+          test -n "$TUSHARE_TOKEN" || {
+            echo "::error::Repository secret TUSHARE_TOKEN is required"
+            exit 1
+          }
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pandas tushare
+
+      - name: Run V2.6 research pipeline integration
+        run: |
+          go test ./internal/research \
+            -run '^TestWorkflow_Run_HostedIntegration$' \
             -v \
             -count=1
