@@ -13,11 +13,6 @@ type Provider string
 
 const (
 	ProviderDeepSeek Provider = "deepseek"
-	ProviderOpenAI   Provider = "openai"
-	ProviderClaude   Provider = "claude"
-	ProviderQwen     Provider = "qwen"
-	ProviderGemini   Provider = "gemini"
-	ProviderArk      Provider = "ark"
 )
 
 type ModelConfig struct {
@@ -26,8 +21,6 @@ type ModelConfig struct {
 
 	APIKeyEnv string `yaml:"api_key_env"`
 	BaseURL   string `yaml:"base_url,omitempty"`
-
-	MaxTokens *int `yaml:"max_tokens,omitempty"`
 }
 
 type AgentConfig struct {
