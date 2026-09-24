@@ -58,6 +58,7 @@ func Validate(v *Context) error {
 				"risk is required for %s status",
 				v.Status,
 			)
+		}
 
 	default:
 		return fmt.Errorf(
