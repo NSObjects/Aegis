@@ -6,9 +6,6 @@ require (
 	github.com/cloudwego/eino v0.9.19
 	github.com/cloudwego/eino-ext/adk/backend/local v0.2.6
 	github.com/cloudwego/eino-ext/components/model/agenticdeepseek v0.1.1
-	github.com/cloudwego/eino-ext/components/model/agenticopenai v0.2.2
-	github.com/cloudwego/eino-ext/components/tool/mcp/officialmcp v0.1.1
-	github.com/cloudwego/eino-ext/devops v0.1.9
 )
 
 require (
@@ -34,7 +31,7 @@ require (
 	github.com/klippa-app/go-pdfium v1.19.3 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matoous/go-nanoid v1.5.1 // indirect
-	github.com/meguminnnnnnnnn/go-openai v0.1.2 // indirect
+	github.com/meguminnnnnnn/go-openai v0.1.2 // indirect
 	github.com/modelcontextprotocol/go-sdk v1.8.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
