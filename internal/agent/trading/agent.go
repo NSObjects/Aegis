@@ -2,6 +2,7 @@ package trading
 
 import (
 	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/technical"
 	"Aegis/internal/decision"
 	"context"
 	"encoding/json"
@@ -23,8 +24,9 @@ type Config struct {
 }
 
 type Input struct {
-	Symbol        string
-	MarketContext *market.Context
+	Symbol           string
+	MarketContext    *market.Context
+	TechnicalContext *technical.Context
 }
 
 type Agent struct {
@@ -105,6 +107,29 @@ func (a *Agent) Analyze(
 		)
 	}
 
+	if err := technical.Validate(input.TechnicalContext); err != nil {
+		return nil, fmt.Errorf(
+			"invalid technical context: %w",
+			err,
+		)
+	}
+
+	if input.TechnicalContext.Symbol != symbol {
+		return nil, fmt.Errorf(
+			"technical context symbol %q does not match trading symbol %q",
+			input.TechnicalContext.Symbol,
+			symbol,
+		)
+	}
+
+	if input.TechnicalContext.RequestedAsOf != input.MarketContext.AsOf {
+		return nil, fmt.Errorf(
+			"technical requested_as_of %q does not match market as_of %q",
+			input.TechnicalContext.RequestedAsOf,
+			input.MarketContext.AsOf,
+		)
+	}
+
 	marketJSON, err := json.Marshal(input.MarketContext)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -113,10 +138,19 @@ func (a *Agent) Analyze(
 		)
 	}
 
+	technicalJSON, err := json.Marshal(input.TechnicalContext)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"marshal technical context: %w",
+			err,
+		)
+	}
+
 	query := fmt.Sprintf(
-		"研究标的：%s\n\n上游 market_context：\n%s\n\n请基于该市场环境，并自主获取与 as_of 对齐的标的数据，输出最终 Decision。",
+		"研究标的：%s\n\n上游 market_context：\n%s\n\n上游 technical_context：\n%s\n\n请仅基于以上结构化研究上下文综合判断，并输出最终 Decision。",
 		symbol,
 		string(marketJSON),
+		string(technicalJSON),
 	)
 
 	iter := a.runner.Query(
