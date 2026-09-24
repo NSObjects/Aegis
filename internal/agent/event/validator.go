@@ -23,11 +23,14 @@ func Validate(v *Context) error {
 	if strings.TrimSpace(v.WindowEnd) == "" {
 		return errors.New("window_end is required")
 	}
+	if len(v.Coverage) == 0 {
+		return errors.New("coverage is required")
+	}
 
-	if !v.Coverage.Announcements &&
-		!v.Coverage.News &&
-		!v.Coverage.Policy {
-		return errors.New("at least one event source must be covered")
+	for i := range v.Coverage {
+		if err := validateCoverage(&v.Coverage[i]); err != nil {
+			return fmt.Errorf("coverage[%d]: %w", i, err)
+		}
 	}
 
 	switch v.Status {
@@ -44,6 +47,10 @@ func Validate(v *Context) error {
 		}
 		if len(v.Evidence) == 0 {
 			return errors.New("evidence is required for NO_EVENT status")
+		}
+	case StatusPartial:
+		if len(v.Risk) == 0 {
+			return errors.New("risk is required for PARTIAL status")
 		}
 	case StatusNoData:
 		if len(v.Risk) == 0 {
@@ -69,6 +76,43 @@ func Validate(v *Context) error {
 	return nil
 }
 
+func validateCoverage(v *SourceCoverage) error {
+	if v == nil {
+		return errors.New("coverage is nil")
+	}
+	if strings.TrimSpace(v.SourceID) == "" {
+		return errors.New("source_id is required")
+	}
+	if strings.TrimSpace(v.SourceName) == "" {
+		return errors.New("source_name is required")
+	}
+
+	switch v.Kind {
+	case SourceOfficialDisclosure,
+		SourceFinancialNews,
+		SourceGeneralNews,
+		SourceSocialMedia,
+		SourceWebSearch:
+	default:
+		return fmt.Errorf("invalid source kind: %q", v.Kind)
+	}
+
+	switch v.Status {
+	case CoverageCovered,
+		CoverageEmpty,
+		CoverageFailed,
+		CoverageUnavailable:
+	default:
+		return fmt.Errorf("invalid coverage status: %q", v.Status)
+	}
+
+	if v.ItemCount < 0 {
+		return errors.New("item_count must not be negative")
+	}
+
+	return nil
+}
+
 func validateItem(v *Item) error {
 	if v == nil {
 		return errors.New("event item is nil")
@@ -83,9 +127,6 @@ func validateItem(v *Item) error {
 	if strings.TrimSpace(v.PublishedAt) == "" {
 		return errors.New("published_at is required")
 	}
-	if strings.TrimSpace(v.Source) == "" {
-		return errors.New("source is required")
-	}
 	if strings.TrimSpace(v.Title) == "" {
 		return errors.New("title is required")
 	}
@@ -94,6 +135,9 @@ func validateItem(v *Item) error {
 	}
 	if strings.TrimSpace(v.Interpretation) == "" {
 		return errors.New("interpretation is required")
+	}
+	if len(v.Sources) == 0 {
+		return errors.New("at least one source is required")
 	}
 
 	switch v.Impact {
