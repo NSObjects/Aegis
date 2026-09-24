@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+      - "refactor/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_technical_integration:
+        description: "Run the real Technical Agent integration test"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Go test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1
+
+  technical-integration:
+    name: Technical integration
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_technical_integration }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - test
+
+    env:
+      AEGIS_INTEGRATION: "1"
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Verify integration secrets
+        shell: bash
+        run: |
+          test -n "$DEEPSEEK_API_KEY" || {
+            echo "::error::Repository secret DEEPSEEK_API_KEY is required"
+            exit 1
+          }
+          test -n "$TUSHARE_TOKEN" || {
+            echo "::error::Repository secret TUSHARE_TOKEN is required"
+            exit 1
+          }
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pandas tushare
+
+      - name: Run Technical Agent integration
+        run: |
+          go test ./internal/agent/technical \
+            -run '^TestTechnicalAgent_Analyze_Integration$' \
+            -v \
+            -count=1
