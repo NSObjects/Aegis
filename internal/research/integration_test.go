@@ -181,7 +181,6 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 		ctx,
 		trading.Config{
 			Model:         tradingModel,
-			Handlers:      rt.Handlers(),
 			MaxIterations: 30,
 		},
 	)
