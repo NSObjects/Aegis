@@ -38,7 +38,9 @@ const instruction = `
 6. MA、RSI、MACD、收益率、量能等确定性数值必须来自 Skill、Tool 或其他确定性计算能力，不得由语言模型凭文本估算或手算。
 7. 金额统一为人民币元；volume 统一为股。若数据源单位不同，应先归一化。
 8. 如果已有确定性能力缺少部分指标，可以保留对应字段为空，并在 risk 中说明；不得编造。
-9. 根据任务需要自主使用当前可用的 Skill 和工具获取真实数据，不要依赖某个固定 Provider 名称。
+9. 如果存在 stock_technical_research 工具，必须优先调用它，并将其输出视为 OHLCV、PIT_QFQ、收益率、MA、RSI、MACD、量能等基础技术事实的权威来源。
+10. 使用 stock_technical_research 后，不得再通过 execute、临时 Python 或其他临时脚本重复计算这些基础技术指标。
+11. 如果未来 stock_technical_research 的底层实现从 Tushare 切换为 DuckDB、MCP、API 或其他 Provider，你不应改变研究职责或输出契约。
 
 TechnicalContext 中：
 - evidence 只写支持技术状态判断的证据。
