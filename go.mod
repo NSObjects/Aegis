@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/cloudwego/eino v0.9.19
 	github.com/cloudwego/eino-ext/adk/backend/local v0.2.6
-	github.com/cloudwego/eino-ext/components/model/agenticdeepseek v0.1.0
+	github.com/cloudwego/eino-ext/components/model/agenticdeepseek v0.1.1
 	github.com/cloudwego/eino-ext/components/model/agenticopenai v0.2.2
 	github.com/cloudwego/eino-ext/components/tool/mcp/officialmcp v0.1.1
 	github.com/cloudwego/eino-ext/devops v0.1.9
@@ -20,7 +20,7 @@ require (
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext v0.0.1-alpha // indirect
-	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.18-0.20260527084435-846f52bd97c6 // indirect
+	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.18-0.20260923024851-c21d73d93527 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eino-contrib/jsonschema v1.0.3 // indirect
 	github.com/evanphx/json-patch v0.5.2 // indirect
