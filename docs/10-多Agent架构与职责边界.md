@@ -1222,14 +1222,38 @@ Trading Team
 Risk / Portfolio Team
 ```
 
-所以当前下一步仍然是：
+V2.6 当前实现状态：
 
 ```text
-1. 完成 Technical Agent
-2. Technical Agent 独立测试
-3. 接第一套真实 Technical Capability
-4. Graph 升级为 Market → Technical → Trading
-5. Trading Agent 只消费 MarketContext + TechnicalContext
+Technical Agent                         ✅
+TechnicalContext                       ✅
+stock_technical_research Capability    ✅
+Technical 独立真实 integration          ✅
+Market → Technical → Trading Graph     ✅
+Trading 只消费结构化 Context            ✅
+Trading research capability isolation ✅
+Trading 独立 integration               ✅（测试已升级）
+Research Workflow real E2E             ⏳
 ```
+
+V2.6 最后的验收动作不是继续增加 Agent，而是在具备本地 `skills/` 的真实环境中运行：
+
+```text
+Market Agent
+  ↓
+MarketContext
+  ↓
+Technical Agent
+  ↓
+TechnicalContext
+  ↓
+Trading Agent
+  ↓
+Decision
+```
+
+该 E2E 通过后，V2.6 即可收口。
+
+之后再进入下一个真实研究维度；按当前组织模型，优先候选是 News/Event Analyst，但只有在其 Context、Capability 和独立测试需求明确后才开始实现。
 
 不要因为长期目标是“虚拟投资公司”，就跳过中间可验证阶段。
