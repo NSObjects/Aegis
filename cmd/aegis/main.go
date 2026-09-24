@@ -205,7 +205,6 @@ func run(
 			Tools: []tool.BaseTool{
 				researchTool,
 			},
-			Handlers:      rt.Handlers(),
 			MaxIterations: 30,
 		},
 	)
