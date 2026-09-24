@@ -18,8 +18,6 @@ import (
 type Config struct {
 	Model model.BaseModel[*schema.AgenticMessage]
 
-	Handlers []adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage]
-
 	MaxIterations int
 }
 
@@ -55,7 +53,6 @@ func New(
 			Description: "Researches a single symbol using market context and symbol-specific evidence, then produces a structured decision.",
 			Instruction: instruction,
 			Model:       cfg.Model,
-			Handlers:    cfg.Handlers,
 
 			MaxIterations: maxIterations,
 		},
