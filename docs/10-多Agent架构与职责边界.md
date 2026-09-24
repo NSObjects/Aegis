@@ -1234,7 +1234,7 @@ Trading 只消费结构化 Context            ✅
 Trading research capability isolation ✅
 Trading 独立 integration               ✅
 Hosted V2.6 Research Pipeline          ✅（测试已落代码）
-Full Market Agent E2E                  ⏳
+Full Market Agent E2E                  ✅
 ```
 
 V2.6 最后的验收动作不是继续增加 Agent，而是在具备本地 `skills/` 的真实环境中运行：
@@ -1253,7 +1253,7 @@ Trading Agent
 Decision
 ```
 
-Hosted integration 通过即可证明 V2.6 新增职责拆分与 Graph 交接成立；完整 Market Agent E2E 通过后，可以完成系统级收口。
+Hosted integration 用于持续验证 V2.6 新增职责拆分与 Graph 交接；完整 Market Agent E2E 已真实通过，因此 V2.6 可以完成系统级收口。
 
 之后再进入下一个真实研究维度；按当前组织模型，优先候选是 News/Event Analyst，但只有在其 Context、Capability 和独立测试需求明确后才开始实现。
 
