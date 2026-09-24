@@ -5,6 +5,7 @@ type Status string
 const (
 	StatusNormal  Status = "NORMAL"
 	StatusNoEvent Status = "NO_EVENT"
+	StatusPartial Status = "PARTIAL"
 	StatusNoData  Status = "NO_DATA"
 )
 
@@ -36,22 +37,50 @@ const (
 	MaterialityHigh   Materiality = "HIGH"
 )
 
-type Coverage struct {
-	Announcements bool `json:"announcements"`
-	News          bool `json:"news"`
-	Policy        bool `json:"policy"`
+type SourceKind string
+
+const (
+	SourceOfficialDisclosure SourceKind = "OFFICIAL_DISCLOSURE"
+	SourceFinancialNews       SourceKind = "FINANCIAL_NEWS"
+	SourceGeneralNews         SourceKind = "GENERAL_NEWS"
+	SourceSocialMedia         SourceKind = "SOCIAL_MEDIA"
+	SourceWebSearch           SourceKind = "WEB_SEARCH"
+)
+
+type CoverageStatus string
+
+const (
+	CoverageCovered     CoverageStatus = "COVERED"
+	CoverageEmpty       CoverageStatus = "EMPTY"
+	CoverageFailed      CoverageStatus = "FAILED"
+	CoverageUnavailable CoverageStatus = "UNAVAILABLE"
+)
+
+type SourceCoverage struct {
+	SourceID   string         `json:"source_id"`
+	SourceName string         `json:"source_name"`
+	Kind       SourceKind     `json:"kind"`
+	Status     CoverageStatus `json:"status"`
+	ItemCount  int            `json:"item_count"`
+	Note       string         `json:"note,omitempty"`
+}
+
+type SourceRef struct {
+	SourceID    string `json:"source_id"`
+	SourceName  string `json:"source_name"`
+	PublishedAt string `json:"published_at,omitempty"`
+	URL         string `json:"url,omitempty"`
 }
 
 type Item struct {
 	Type           Type        `json:"type"`
 	PublishedAt    string      `json:"published_at"`
-	Source         string      `json:"source"`
 	Title          string      `json:"title"`
-	URL            string      `json:"url,omitempty"`
 	Fact           string      `json:"fact"`
 	Interpretation string      `json:"interpretation"`
 	Impact         Impact      `json:"impact"`
 	Materiality    Materiality `json:"materiality"`
+	Sources        []SourceRef `json:"sources"`
 }
 
 type Context struct {
@@ -61,8 +90,8 @@ type Context struct {
 	WindowEnd     string `json:"window_end"`
 	Status        Status `json:"status"`
 
-	Coverage Coverage `json:"coverage"`
-	Events   []Item   `json:"events"`
+	Coverage []SourceCoverage `json:"coverage"`
+	Events   []Item           `json:"events"`
 
 	Evidence   []string `json:"evidence"`
 	Risk       []string `json:"risk"`
