@@ -169,7 +169,6 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 			Tools: []tool.BaseTool{
 				researchTool,
 			},
-			Handlers:      rt.Handlers(),
 			MaxIterations: 30,
 		},
 	)
