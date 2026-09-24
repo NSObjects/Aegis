@@ -727,8 +727,6 @@ Research / Trading Pipeline
 
 ## 11. Context 是组织交接物
 
-## 11. Context 是组织交接物
-
 Aegis 不把 Agent 之间的主要通信建立在长篇自然语言 report 上。
 
 优先：
