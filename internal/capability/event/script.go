@@ -13,21 +13,45 @@ import (
 	"strings"
 )
 
-const defaultLookbackDays = 7
-
-type ScriptResearcherConfig struct {
+type ScriptSourceConfig struct {
+	ID         string
+	Name       string
+	Kind       SourceKind
 	Python     string
 	ScriptPath string
 }
 
-type ScriptResearcher struct {
+type ScriptSource struct {
+	id         string
+	name       string
+	kind       SourceKind
 	python     string
 	scriptPath string
 }
 
-func NewScriptResearcher(
-	cfg ScriptResearcherConfig,
-) (*ScriptResearcher, error) {
+func NewScriptSource(
+	cfg ScriptSourceConfig,
+) (*ScriptSource, error) {
+	id := strings.TrimSpace(cfg.ID)
+	if id == "" {
+		return nil, errors.New(
+			"event script source id is required",
+		)
+	}
+
+	name := strings.TrimSpace(cfg.Name)
+	if name == "" {
+		return nil, errors.New(
+			"event script source name is required",
+		)
+	}
+
+	if cfg.Kind == "" {
+		return nil, errors.New(
+			"event script source kind is required",
+		)
+	}
+
 	python := strings.TrimSpace(cfg.Python)
 	if python == "" {
 		python = "python3"
@@ -36,14 +60,14 @@ func NewScriptResearcher(
 	scriptPath := strings.TrimSpace(cfg.ScriptPath)
 	if scriptPath == "" {
 		return nil, errors.New(
-			"event research script path is required",
+			"event source script path is required",
 		)
 	}
 
 	absolutePath, err := filepath.Abs(scriptPath)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"resolve event research script path: %w",
+			"resolve event source script path: %w",
 			err,
 		)
 	}
@@ -51,7 +75,7 @@ func NewScriptResearcher(
 	info, err := os.Stat(absolutePath)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"stat event research script %q: %w",
+			"stat event source script %q: %w",
 			absolutePath,
 			err,
 		)
@@ -59,38 +83,74 @@ func NewScriptResearcher(
 
 	if info.IsDir() {
 		return nil, fmt.Errorf(
-			"event research script path is a directory: %s",
+			"event source script path is a directory: %s",
 			absolutePath,
 		)
 	}
 
-	return &ScriptResearcher{
+	return &ScriptSource{
+		id:         id,
+		name:       name,
+		kind:       cfg.Kind,
 		python:     python,
 		scriptPath: absolutePath,
 	}, nil
 }
 
-func (r *ScriptResearcher) Research(
+func (s *ScriptSource) ID() string {
+	if s == nil {
+		return ""
+	}
+	return s.id
+}
+
+func (s *ScriptSource) Name() string {
+	if s == nil {
+		return ""
+	}
+	return s.name
+}
+
+func (s *ScriptSource) Kind() SourceKind {
+	if s == nil {
+		return ""
+	}
+	return s.kind
+}
+
+type scriptSourcePayload struct {
+	EntityName string             `json:"entity_name"`
+	Items      []scriptSourceItem `json:"items"`
+}
+
+type scriptSourceItem struct {
+	PublishedAt string `json:"published_at"`
+	Title       string `json:"title"`
+	URL         string `json:"url,omitempty"`
+	Snippet     string `json:"snippet,omitempty"`
+}
+
+func (s *ScriptSource) Fetch(
 	ctx context.Context,
 	req Request,
-) (map[string]any, error) {
-	if r == nil {
-		return nil, errors.New(
-			"event script researcher is nil",
+) (SourceResult, error) {
+	if s == nil {
+		return SourceResult{}, errors.New(
+			"event script source is nil",
 		)
 	}
 
 	symbol := strings.TrimSpace(req.Symbol)
 	if symbol == "" {
-		return nil, errors.New(
-			"event research symbol is required",
+		return SourceResult{}, errors.New(
+			"event source symbol is required",
 		)
 	}
 
 	asOf := strings.TrimSpace(req.AsOf)
 	if asOf == "" {
-		return nil, errors.New(
-			"event research as_of is required",
+		return SourceResult{}, errors.New(
+			"event source as_of is required",
 		)
 	}
 
@@ -101,8 +161,8 @@ func (r *ScriptResearcher) Research(
 
 	cmd := exec.CommandContext(
 		ctx,
-		r.python,
-		r.scriptPath,
+		s.python,
+		s.scriptPath,
 		"--symbol",
 		symbol,
 		"--as-of",
@@ -116,21 +176,62 @@ func (r *ScriptResearcher) Research(
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf(
-			"run event research script: %w: stderr=%s",
+		return SourceResult{}, fmt.Errorf(
+			"run event source script: %w: stderr=%s",
 			err,
 			strings.TrimSpace(stderr.String()),
 		)
 	}
 
-	var result map[string]any
-	if err := json.Unmarshal(output, &result); err != nil {
-		return nil, fmt.Errorf(
-			"decode event research script output: %w: output=%q",
+	var payload scriptSourcePayload
+	if err := json.Unmarshal(
+		output,
+		&payload,
+	); err != nil {
+		return SourceResult{}, fmt.Errorf(
+			"decode event source script output: %w: output=%q",
 			err,
 			strings.TrimSpace(string(output)),
 		)
 	}
 
-	return result, nil
+	items := make([]RawItem, 0, len(payload.Items))
+	for _, item := range payload.Items {
+		title := strings.TrimSpace(item.Title)
+		if title == "" {
+			continue
+		}
+
+		items = append(
+			items,
+			RawItem{
+				SourceID:    s.id,
+				SourceName:  s.name,
+				Kind:        s.kind,
+				PublishedAt: strings.TrimSpace(item.PublishedAt),
+				Title:       title,
+				URL:         strings.TrimSpace(item.URL),
+				Snippet:     strings.TrimSpace(item.Snippet),
+			},
+		)
+	}
+
+	status := CoverageCovered
+	if len(items) == 0 {
+		status = CoverageEmpty
+	}
+
+	return SourceResult{
+		EntityName: strings.TrimSpace(
+			payload.EntityName,
+		),
+		Coverage: Coverage{
+			SourceID:   s.id,
+			SourceName: s.name,
+			Kind:       s.kind,
+			Status:     status,
+			ItemCount:  len(items),
+		},
+		Items: items,
+	}, nil
 }
