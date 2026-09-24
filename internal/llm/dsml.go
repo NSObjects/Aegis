@@ -162,9 +162,7 @@ func parseDSMLText(
 			normalized[last:match[0]],
 		)
 
-		body := normalized[
-			match[2]:match[3]
-		]
+		body := normalized[match[2]:match[3]]
 
 		invokes := dsmlInvokePattern.FindAllStringSubmatch(
 			body,
