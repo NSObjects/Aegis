@@ -49,7 +49,6 @@ Decision
 - scenario mock
 - 旧 MarketContext / 旧 Market Prompt
 - OpenAI / Claude / Qwen / Gemini / Ark provider adapter
-- JetBrains `.idea` 项目文件
 
 当前唯一实际支持的模型供应商是 **DeepSeek**。
 
