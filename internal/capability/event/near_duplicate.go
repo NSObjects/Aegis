@@ -3,6 +3,7 @@ package event
 import (
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -11,6 +12,7 @@ const (
 	DefaultNearDuplicateShingleRunes  = 8
 	DefaultNearDuplicateContainment   = 0.82
 	DefaultNearDuplicateJaccard       = 0.55
+	DefaultNearDuplicateMaxTimeDelta  = 7 * 24 * time.Hour
 )
 
 type EvidenceRelationKind string
@@ -31,6 +33,8 @@ type EvidenceRelation struct {
 	Jaccard              float64
 	ContainmentThreshold float64
 	JaccardThreshold     float64
+	TimeDeltaSeconds     float64
+	MaxTimeDeltaSeconds  float64
 }
 
 type NearDuplicateMatcher struct {
@@ -38,6 +42,7 @@ type NearDuplicateMatcher struct {
 	ShingleRunes         int
 	MinContainment       float64
 	MinJaccard           float64
+	MaxTimeDelta         time.Duration
 }
 
 type nearDuplicatePrepared struct {
@@ -114,6 +119,21 @@ func (m NearDuplicateMatcher) matchPrepared(
 		return EvidenceRelation{}, false
 	}
 
+	maxTimeDelta := m.MaxTimeDelta
+	if maxTimeDelta <= 0 {
+		maxTimeDelta =
+			DefaultNearDuplicateMaxTimeDelta
+	}
+	timeDelta, hasTimeDelta :=
+		nearDuplicateTimeDelta(
+			left.Document,
+			right.Document,
+		)
+	if hasTimeDelta &&
+		timeDelta > maxTimeDelta {
+		return EvidenceRelation{}, false
+	}
+
 	minRunes := m.MinRunes
 	if minRunes <= 0 {
 		minRunes = DefaultNearDuplicateMinRunes
@@ -164,6 +184,8 @@ func (m NearDuplicateMatcher) matchPrepared(
 		Jaccard:              jaccard,
 		ContainmentThreshold: minContainment,
 		JaccardThreshold:     minJaccard,
+		TimeDeltaSeconds:     timeDelta.Seconds(),
+		MaxTimeDeltaSeconds:  maxTimeDelta.Seconds(),
 	}
 	if containment < minContainment ||
 		jaccard < minJaccard {
@@ -242,6 +264,23 @@ func orderedDocumentIDs(
 		left, right = right, left
 	}
 	return left, right
+}
+
+func nearDuplicateTimeDelta(
+	left CanonicalDocument,
+	right CanonicalDocument,
+) (time.Duration, bool) {
+	leftTime := corroborationDocumentTime(left)
+	rightTime := corroborationDocumentTime(right)
+	if leftTime.IsZero() || rightTime.IsZero() {
+		return 0, false
+	}
+
+	delta := leftTime.Sub(rightTime)
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta, true
 }
 
 func sortEvidenceRelations(
