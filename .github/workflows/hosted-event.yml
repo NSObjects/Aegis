@@ -76,13 +76,7 @@ jobs:
           AEGIS_HOSTED_EVENT: "1"
         run: |
           go test ./internal/agent/event \
-            -run '^(TestLiveEventHostedIntegration|TestLiveEventClaimContradictionHostedIntegration)
-
-      - name: Hosted model verification skipped
-        if: steps.hosted-secret.outputs.available != 'true'
-        run: |
-          echo "Hosted DeepSeek verification did not run because DEEPSEEK_API_KEY is unavailable."
- \
+            -run '^(TestLiveEventHostedIntegration|TestLiveEventClaimContradictionHostedIntegration)$' \
             -count=1 \
             -v
 
