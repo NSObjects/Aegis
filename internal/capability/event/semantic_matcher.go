@@ -31,6 +31,7 @@ type semanticEvidenceDocument struct {
 }
 
 type semanticEvidenceResponse struct {
+	Type    string                  `json:"type,omitempty"`
 	Matches []SemanticEvidenceMatch `json:"matches"`
 }
 
@@ -114,6 +115,14 @@ func (m *AgenticSemanticEvidenceMatcher) Match(
 			raw,
 		)
 	}
+	if parsed.Type != "" &&
+		parsed.Type != "json_object" {
+		return nil, fmt.Errorf(
+			"invalid semantic evidence matcher JSON: unsupported type %q",
+			parsed.Type,
+		)
+	}
+
 	var trailing any
 	if err := decoder.Decode(&trailing);
 		err != io.EOF {
