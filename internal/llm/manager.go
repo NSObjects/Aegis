@@ -60,6 +60,31 @@ func (m *Manager) Get(
 	return instance, nil
 }
 
+func (m *Manager) GetToolCalling(
+	ctx context.Context,
+	profile string,
+) (
+	model.ToolCallingChatModel,
+	error,
+) {
+	base, err := m.Get(ctx, profile)
+	if err != nil {
+		return nil, err
+	}
+
+	adapter, err := NewAgenticToolCallingAdapter(
+		base,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"adapt model profile %q for tool calling: %w",
+			profile,
+			err,
+		)
+	}
+	return adapter, nil
+}
+
 func New(
 	ctx context.Context,
 	cfg config.ModelConfig,
