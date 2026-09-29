@@ -3,8 +3,8 @@ package event
 import "context"
 
 // Retriever is the smallest capability contract for one concrete retrieval
-// implementation. Routing across multiple retrievers is intentionally deferred
-// until a second real implementation exists.
+// implementation. Multi-source orchestration belongs to AcquisitionPlanRunner;
+// TaskRunner and Retriever remain leaf-level contracts.
 type Retriever interface {
 	ID() string
 	Method() AcquisitionMethod
