@@ -343,30 +343,8 @@ func TestCninfoPDFEnrichmentBoundsTextAndKeepsIdentity(
 		},
 	)
 
-	err := (CninfoAnnouncementRetriever{
-		PDFExtractor: PDFTextExtractorFunc(
-			func(
-				context.Context,
-				[]byte,
-			) (PDFTextExtraction, error) {
-				return PDFTextExtraction{
-					Text: "ABCDE",
-				}, nil
-			},
-		),
-		MaxTextChars: 3,
-	}).enrichPDFBodies(
-		context.Background(),
-		client,
-		task,
-		[]RawDocument{*document},
-	)
-	if err != nil {
-		t.Fatalf("enrichPDFBodies() error = %v", err)
-	}
-
 	documents := []RawDocument{*document}
-	err = (CninfoAnnouncementRetriever{
+	err := (CninfoAnnouncementRetriever{
 		PDFExtractor: PDFTextExtractorFunc(
 			func(
 				context.Context,
