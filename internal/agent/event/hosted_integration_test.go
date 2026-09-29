@@ -461,3 +461,187 @@ func hasHostedCaptureFailureRisk(
 	}
 	return false
 }
+
+
+func TestLiveEventProvidersHostedIntegration(
+	t *testing.T,
+) {
+	if os.Getenv(
+		"AEGIS_HOSTED_EVENT_PROVIDERS",
+	) != "1" {
+		t.Skip(
+			"set AEGIS_HOSTED_EVENT_PROVIDERS=1 to run hosted provider integration",
+		)
+	}
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		2*time.Minute,
+	)
+	defer cancel()
+
+	symbol := strings.ToUpper(
+		strings.TrimSpace(
+			os.Getenv(
+				"AEGIS_HOSTED_EVENT_SYMBOL",
+			),
+		),
+	)
+	if symbol == "" {
+		symbol = "600519.SH"
+	}
+	lookback := hostedEventLookback(t)
+	cutoff := time.Now().UTC()
+
+	storeRoot := t.TempDir()
+	store, err :=
+		capevent.NewFileEvidenceSnapshotStore(
+			storeRoot,
+		)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	maxCLSDays :=
+		int(lookback/(24*time.Hour)) + 2
+	if maxCLSDays < 2 {
+		maxCLSDays = 2
+	}
+
+	root := capevent.ResearchTask{
+		ID:              "hosted-provider-capture",
+		Symbol:          symbol,
+		Objective:       "hosted provider verification",
+		InformationNeed: capevent.NeedEventEvidence,
+		AsOf:            cutoff,
+		TimeRange: capevent.TimeRange{
+			Start: cutoff.Add(-lookback),
+			End:   cutoff,
+		},
+		Requirements: capevent.ResearchRequirements{
+			PITSafe: false,
+		},
+	}
+	output, err := (capevent.AcquisitionPlanRunner{
+		SnapshotStore: store,
+	}).Run(
+		ctx,
+		root,
+		capevent.AcquisitionPlan{
+			Steps: []capevent.AcquisitionStep{
+				{
+					ID: "hosted_cninfo",
+					Scope: capevent.
+						AcquisitionScopeDirect,
+					Task: capevent.ResearchTask{
+						Symbol: symbol,
+						InformationNeed:
+							capevent.NeedOfficialDisclosure,
+					},
+					Retriever:
+						&capevent.CninfoAnnouncementRetriever{},
+				},
+				{
+					ID: "hosted_cls",
+					Scope: capevent.
+						AcquisitionScopeDirect,
+					Task: capevent.ResearchTask{
+						InformationNeed:
+							capevent.NeedBreakingNews,
+					},
+					Retriever:
+						&capevent.ClsNewsRetriever{
+							MaxDays: maxCLSDays,
+						},
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"run hosted provider capture: %v",
+			err,
+		)
+	}
+
+	statuses := make(
+		map[string]capevent.AcquisitionAttemptStatus,
+		len(output.Steps),
+	)
+	for _, step := range output.Steps {
+		statuses[step.StepID] =
+			step.Run.Attempt.Status
+		switch step.Run.Attempt.Status {
+		case capevent.AcquisitionSucceeded,
+			capevent.AcquisitionPartial:
+		default:
+			t.Fatalf(
+				"hosted provider %s status=%s error=%q",
+				step.StepID,
+				step.Run.Attempt.Status,
+				step.Run.Attempt.ErrorMessage,
+			)
+		}
+	}
+
+	resolver :=
+		&capevent.CninfoEvidenceTargetResolver{}
+	target, err := resolver.Resolve(
+		ctx,
+		capevent.ResearchTask{
+			Symbol: symbol,
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"resolve hosted Cninfo target: %v",
+			err,
+		)
+	}
+	if target.Symbol != symbol ||
+		strings.TrimSpace(target.Name) == "" {
+		t.Fatalf(
+			"hosted target = %+v",
+			target,
+		)
+	}
+
+	snapshotCount, err := hostedSnapshotFileCount(
+		storeRoot,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshotCount == 0 {
+		t.Fatalf(
+			"hosted providers produced no persisted snapshots; statuses=%v",
+			statuses,
+		)
+	}
+
+	diagnostic := struct {
+		Symbol        string                                     `json:"symbol"`
+		TargetName    string                                     `json:"target_name"`
+		CninfoStatus  capevent.AcquisitionAttemptStatus          `json:"cninfo_status"`
+		CLSStatus     capevent.AcquisitionAttemptStatus          `json:"cls_status"`
+		SnapshotCount int                                        `json:"snapshot_file_count"`
+	}{
+		Symbol:        symbol,
+		TargetName:    target.Name,
+		CninfoStatus:  statuses["hosted_cninfo"],
+		CLSStatus:     statuses["hosted_cls"],
+		SnapshotCount: snapshotCount,
+	}
+	data, err := json.MarshalIndent(
+		diagnostic,
+		"",
+		"  ",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf(
+		"hosted provider diagnostic:\n%s",
+		string(data),
+	)
+}
