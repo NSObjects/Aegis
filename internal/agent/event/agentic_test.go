@@ -176,7 +176,18 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 			MaterialityInput{
 				EventID: "event_1",
 				Type:    EventContract,
-				Facts:   facts,
+				Facts: facts,
+				Contradictions: []ClaimContradiction{
+					{
+						ID:   "conflict_test",
+						Type: ContradictionValue,
+						FactIDs: []string{
+							facts[0].ID,
+							"fact_other",
+						},
+						Rationale: "same metric has incompatible values",
+					},
+				},
 				EvidenceSupport: capevent.EvidenceSupport{
 					DocumentCount:            1,
 					IndependentEvidenceCount: 1,
@@ -246,10 +257,120 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 		!strings.Contains(
 			materialityPayload,
 			`"start_byte":0`,
+		) ||
+		!strings.Contains(
+			materialityPayload,
+			`"type":"VALUE_CONFLICT"`,
+		) ||
+		!strings.Contains(
+			materialityPayload,
+			`"conflict_test"`,
 		) {
 		t.Fatalf(
 			"materiality payload lacks evidence support: %s",
 			materialityPayload,
+		)
+	}
+}
+
+func TestAgenticClaimContradictionDetector(
+	t *testing.T,
+) {
+	model := &eventModel{
+		responses: []*schema.AgenticMessage{
+			assistantJSON(
+				`{"contradictions":[{"type":"VALUE_CONFLICT","fact_ids":["fact_b","fact_a"],"rationale":"same reporting period has incompatible revenue values"}]}`,
+			),
+		},
+	}
+	detector := &AgenticClaimContradictionDetector{
+		Model: model,
+	}
+	result, err := detector.DetectContradictions(
+		context.Background(),
+		capevent.ResearchTask{
+			Symbol: "600519.SH",
+			AsOf: time.Date(
+				2026, 9, 29, 15, 0, 0, 0,
+				time.UTC,
+			),
+		},
+		[]Fact{
+			{
+				ID:      "fact_a",
+				Summary: "2026H1 revenue was 100.",
+				Groundings: []EvidenceGrounding{
+					{
+						DocumentID: "doc_a",
+						Quote:      "revenue was 100",
+						StartByte:  0,
+						EndByte:    len("revenue was 100"),
+					},
+				},
+			},
+			{
+				ID:      "fact_b",
+				Summary: "2026H1 revenue was 120.",
+				Groundings: []EvidenceGrounding{
+					{
+						DocumentID: "doc_b",
+						Quote:      "revenue was 120",
+						StartByte:  0,
+						EndByte:    len("revenue was 120"),
+					},
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Contradictions) != 1 ||
+		result.Contradictions[0].Type !=
+			ContradictionValue {
+		t.Fatalf(
+			"contradictions = %+v",
+			result.Contradictions,
+		)
+	}
+	payload := eventAgenticTestText(
+		model.inputs[0][1],
+	)
+	if !strings.Contains(
+		payload,
+		`"quote":"revenue was 100"`,
+	) ||
+		!strings.Contains(
+			payload,
+			`"quote":"revenue was 120"`,
+	) {
+		t.Fatalf(
+			"detector payload lacks grounded facts: %s",
+			payload,
+		)
+	}
+}
+
+func TestAgenticClaimContradictionDetectorSkipsSingleFact(
+	t *testing.T,
+) {
+	model := &eventModel{}
+	result, err := (&AgenticClaimContradictionDetector{
+		Model: model,
+	}).DetectContradictions(
+		context.Background(),
+		capevent.ResearchTask{},
+		[]Fact{{ID: "fact_a"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Contradictions) != 0 ||
+		len(model.inputs) != 0 {
+		t.Fatalf(
+			"result=%+v model_calls=%d",
+			result,
+			len(model.inputs),
 		)
 	}
 }
