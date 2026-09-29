@@ -13,6 +13,13 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+type deepSeekResponseMode string
+
+const (
+	deepSeekResponseJSON deepSeekResponseMode = "json"
+	deepSeekResponseTool deepSeekResponseMode = "tool"
+)
+
 func newDeepSeek(
 	ctx context.Context,
 	cfg config.ModelConfig,
@@ -20,7 +27,43 @@ func newDeepSeek(
 	model.BaseModel[*schema.AgenticMessage],
 	error,
 ) {
+	return newDeepSeekForMode(
+		ctx,
+		cfg,
+		deepSeekResponseJSON,
+	)
+}
+
+func newDeepSeekToolCalling(
+	ctx context.Context,
+	cfg config.ModelConfig,
+) (
+	model.BaseModel[*schema.AgenticMessage],
+	error,
+) {
+	return newDeepSeekForMode(
+		ctx,
+		cfg,
+		deepSeekResponseTool,
+	)
+}
+
+func newDeepSeekForMode(
+	ctx context.Context,
+	cfg config.ModelConfig,
+	mode deepSeekResponseMode,
+) (
+	model.BaseModel[*schema.AgenticMessage],
+	error,
+) {
 	apiKey, err := apiKey(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	responseFormat, err := deepSeekResponseFormat(
+		mode,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +75,7 @@ func newDeepSeek(
 			BaseURL: cfg.BaseURL,
 			Model:   cfg.Model,
 
-			ResponseFormatType: agenticdeepseek.ResponseFormatTypeJSONObject,
+			ResponseFormatType: responseFormat,
 		},
 	)
 	if err != nil {
@@ -40,6 +83,27 @@ func newDeepSeek(
 	}
 
 	return newDSMLNormalizingModel(base), nil
+}
+
+func deepSeekResponseFormat(
+	mode deepSeekResponseMode,
+) (
+	agenticdeepseek.ResponseFormatType,
+	error,
+) {
+	switch mode {
+	case deepSeekResponseJSON:
+		return agenticdeepseek.
+			ResponseFormatTypeJSONObject, nil
+	case deepSeekResponseTool:
+		return agenticdeepseek.
+			ResponseFormatTypeText, nil
+	default:
+		return "", fmt.Errorf(
+			"unsupported DeepSeek response mode %q",
+			mode,
+		)
+	}
 }
 
 func apiKey(
