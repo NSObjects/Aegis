@@ -117,6 +117,13 @@ func (r *roundTestRetriever) Retrieve(
 		[]event.RawDocument(nil),
 		r.docs...,
 	)
+	for index := range documents {
+		if documents[index].AvailableAt == nil &&
+			documents[index].PublishedAt != nil {
+			availableAt := *documents[index].PublishedAt
+			documents[index].AvailableAt = &availableAt
+		}
+	}
 	return documents, r.err
 }
 
