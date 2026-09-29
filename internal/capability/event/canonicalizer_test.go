@@ -88,7 +88,7 @@ func TestCanonicalizer(t *testing.T) {
 		}
 	})
 
-	t.Run("merges the same document across acquisition attempts", func(t *testing.T) {
+	t.Run("merges the same URL across acquisition attempts even when content differs", func(t *testing.T) {
 		task := ResearchTask{
 			ID:   "task-1",
 			AsOf: asOf,
@@ -102,7 +102,7 @@ func TestCanonicalizer(t *testing.T) {
 				ID:          "raw-api",
 				AttemptID:   "attempt-api",
 				Title:       "贵州茅台公告",
-				Content:     "same official disclosure",
+				Content:     "full official disclosure",
 				URL:         "https://example.com/disclosure/1",
 				Publisher:   "上海证券交易所",
 				SourceType:  SourceOfficial,
@@ -113,9 +113,9 @@ func TestCanonicalizer(t *testing.T) {
 				ID:          "raw-search",
 				AttemptID:   "attempt-search",
 				Title:       "贵州茅台公告",
-				Content:     "same official disclosure",
+				Content:     "truncated official disclosure",
 				URL:         "https://example.com/disclosure/1",
-				Publisher:   "上海证券交易所",
+				Publisher:   "SSE",
 				SourceType:  SourceOfficial,
 				IsPrimary:   true,
 				PublishedAt: &before,

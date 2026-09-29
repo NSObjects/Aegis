@@ -98,16 +98,20 @@ func canonicalDocumentFromRaw(raw RawDocument) CanonicalDocument {
 }
 
 func canonicalDocumentKey(doc CanonicalDocument) string {
+	if canonicalURL := strings.ToLower(
+		strings.TrimSpace(doc.Source.URL),
+	); canonicalURL != "" {
+		return "url\x00" + canonicalURL
+	}
+
 	sourceIdentity := strings.ToLower(
 		strings.TrimSpace(doc.Source.Publisher),
 	)
-
 	if doc.ContentHash != "" {
 		return sourceIdentity + "\x00content\x00" + doc.ContentHash
 	}
 
 	return sourceIdentity +
-		"\x00url\x00" + strings.ToLower(strings.TrimSpace(doc.Source.URL)) +
 		"\x00title\x00" + strings.ToLower(strings.TrimSpace(doc.Title))
 }
 

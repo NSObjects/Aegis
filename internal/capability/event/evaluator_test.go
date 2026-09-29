@@ -101,6 +101,36 @@ func TestTaskEvaluator(t *testing.T) {
 		}
 	})
 
+	t.Run("syndicated identical content does not count as independent sources", func(t *testing.T) {
+		stronger := task
+		stronger.Requirements.MinDocuments = 2
+		stronger.Requirements.MinIndependentSources = 2
+
+		first := doc
+		first.ContentHash = "same-content"
+
+		second := doc
+		second.ID = "doc-2"
+		second.ContentHash = "same-content"
+		second.Source.Publisher = "转载媒体"
+		second.Source.URL = "https://mirror.example.com/article/1"
+		second.Source.SourceType = SourceMainstreamMedia
+		second.Source.IsPrimary = false
+
+		result := (TaskEvaluator{}).Evaluate(
+			stronger,
+			[]CanonicalDocument{first, second},
+			nil,
+		)
+
+		if result.Status != TaskPartial {
+			t.Fatalf("status = %q, want %q", result.Status, TaskPartial)
+		}
+		if !hasGap(result.Gaps, GapInsufficientIndependentSources) {
+			t.Fatalf("gaps = %v, want syndicated-content gap", result.Gaps)
+		}
+	})
+
 	t.Run("unsatisfied when no usable document exists", func(t *testing.T) {
 		result := (TaskEvaluator{}).Evaluate(task, nil, nil)
 

@@ -51,7 +51,7 @@ func (TaskEvaluator) Evaluate(
 		result.Gaps = append(
 			result.Gaps,
 			ResearchGap{
-				Type:        GapInsufficientDocuments,
+				Type: GapInsufficientDocuments,
 				Description: fmt.Sprintf(
 					"collected %d canonical documents; require at least %d",
 					len(documents),
@@ -135,22 +135,40 @@ func (TaskEvaluator) Evaluate(
 func countIndependentSources(
 	documents []CanonicalDocument,
 ) int {
-	sources := make(map[string]struct{})
+	seenSources := make(map[string]struct{})
+	seenContent := make(map[string]struct{})
+	count := 0
 
 	for _, document := range documents {
-		key := strings.ToLower(
+		contentKey := strings.TrimSpace(document.ContentHash)
+		_, duplicateContent := seenContent[contentKey]
+		if contentKey != "" {
+			seenContent[contentKey] = struct{}{}
+		}
+
+		sourceKey := strings.ToLower(
 			strings.TrimSpace(document.Source.Publisher),
 		)
-		if key == "" {
-			key = sourceHost(document.Source.URL)
+		if sourceKey == "" {
+			sourceKey = sourceHost(document.Source.URL)
 		}
-		if key == "" {
+		if sourceKey == "" {
 			continue
 		}
-		sources[key] = struct{}{}
+
+		if _, exists := seenSources[sourceKey]; exists {
+			continue
+		}
+		seenSources[sourceKey] = struct{}{}
+
+		if contentKey != "" && duplicateContent {
+			continue
+		}
+
+		count++
 	}
 
-	return len(sources)
+	return count
 }
 
 func sourceHost(rawURL string) string {
