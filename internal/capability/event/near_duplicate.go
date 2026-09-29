@@ -51,14 +51,6 @@ func (m NearDuplicateMatcher) Match(
 		return EvidenceRelation{}, false
 	}
 
-	leftSource := corroborationSourceKey(left.Source)
-	rightSource := corroborationSourceKey(right.Source)
-	if leftSource == "" ||
-		rightSource == "" ||
-		leftSource == rightSource {
-		return EvidenceRelation{}, false
-	}
-
 	if left.ContentHash != "" &&
 		left.ContentHash == right.ContentHash {
 		return EvidenceRelation{
@@ -71,6 +63,14 @@ func (m NearDuplicateMatcher) Match(
 			Containment:     1,
 			Jaccard:         1,
 		}, true
+	}
+
+	leftSource := corroborationSourceKey(left.Source)
+	rightSource := corroborationSourceKey(right.Source)
+	if leftSource == "" ||
+		rightSource == "" ||
+		leftSource == rightSource {
+		return EvidenceRelation{}, false
 	}
 
 	minRunes := m.MinRunes
