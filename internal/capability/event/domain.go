@@ -118,6 +118,9 @@ type RawDocument struct {
 	IsPrimary     bool
 
 	PublishedAt *time.Time
+	UpdatedAt   *time.Time
+	FirstSeenAt *time.Time
+	AvailableAt *time.Time
 	RetrievedAt time.Time
 
 	RawMetadata map[string]any
@@ -132,16 +135,39 @@ type DocumentSource struct {
 	IsPrimary    bool
 }
 
+type DocumentVersion struct {
+	ID                string
+	LogicalDocumentID string
+
+	Title       string
+	Content     string
+	ContentHash string
+
+	PublishedAt *time.Time
+	UpdatedAt   *time.Time
+	FirstSeenAt *time.Time
+	AvailableAt *time.Time
+	SnapshotAt  time.Time
+
+	RawDocumentIDs []string
+	AttemptIDs     []string
+}
+
 type CanonicalDocument struct {
-	ID string
+	ID        string
+	VersionID string
 
 	Title   string
 	Content string
 
-	Source      DocumentSource
-	PublishedAt *time.Time
-	ContentHash string
+	Source       DocumentSource
+	PublishedAt  *time.Time
+	UpdatedAt    *time.Time
+	FirstSeenAt  *time.Time
+	AvailableAt  *time.Time
+	ContentHash  string
 
+	Versions       []DocumentVersion
 	RawDocumentIDs []string
 	AttemptIDs     []string
 }
@@ -149,7 +175,14 @@ type CanonicalDocument struct {
 type RejectionReason string
 
 const (
-	RejectionFuturePublishedAt  RejectionReason = "future_published_at"
+	RejectionFuturePublishedAt RejectionReason = "future_published_at"
+	RejectionFutureUpdatedAt   RejectionReason = "future_updated_at"
+	RejectionMissingAvailableAt RejectionReason = "missing_available_at"
+	RejectionFutureAvailableAt  RejectionReason = "future_available_at"
+
+	// RejectionMissingPublishedAt is retained for compatibility with callers
+	// that persist old rejection values. PIT-safe canonicalization no longer
+	// requires PublishedAt when an explicit AvailableAt is known.
 	RejectionMissingPublishedAt RejectionReason = "missing_published_at"
 )
 
