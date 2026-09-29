@@ -52,7 +52,7 @@ func NewAgent(
 func (a *Agent) Analyze(
 	ctx context.Context,
 	input Input,
-	_ ...adk.AgentRunOption,
+	opts ...adk.AgentRunOption,
 ) (*Context, error) {
 	if a == nil {
 		return nil, errors.New(
@@ -115,6 +115,7 @@ func (a *Agent) Analyze(
 		[]adk.Message{
 			schema.UserMessage(query),
 		},
+		opts...,
 	)
 
 	for {
