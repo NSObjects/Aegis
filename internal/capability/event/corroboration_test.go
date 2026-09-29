@@ -75,12 +75,11 @@ func TestEvidenceCorroboratorSameSourceDoesNotInflateIndependence(
 		documents,
 	)
 
-	if len(result.Clusters) != 1 ||
-		result.Clusters[0].Kind !=
-			EvidenceClusterSameSource {
+	if len(result.Clusters) != 2 {
 		t.Fatalf(
-			"corroboration = %+v",
-			result,
+			"clusters = %d, want 2: %+v",
+			len(result.Clusters),
+			result.Clusters,
 		)
 	}
 	if result.IndependentSourceCount != 1 {
@@ -126,7 +125,7 @@ func TestEvidenceCorroboratorDifferentSourcesAndContentRemainIndependent(
 	}
 }
 
-func TestEvidenceCorroboratorUsesTransitiveEvidenceGroups(
+func TestEvidenceCorroboratorReprintDoesNotEraseIndependentFollowup(
 	t *testing.T,
 ) {
 	documents := []CanonicalDocument{
@@ -151,24 +150,30 @@ func TestEvidenceCorroboratorUsesTransitiveEvidenceGroups(
 		documents,
 	)
 
-	if len(result.Clusters) != 1 {
+	if len(result.Clusters) != 2 {
 		t.Fatalf(
-			"clusters = %d, want 1: %+v",
+			"clusters = %d, want 2: %+v",
 			len(result.Clusters),
 			result.Clusters,
 		)
 	}
-	if result.Clusters[0].Kind != EvidenceClusterMixed {
+	if result.IndependentSourceCount != 2 {
 		t.Fatalf(
-			"kind = %q, want %q",
-			result.Clusters[0].Kind,
-			EvidenceClusterMixed,
+			"independent sources = %d, want 2",
+			result.IndependentSourceCount,
 		)
 	}
-	if result.IndependentSourceCount != 1 {
+
+	hasReprint := false
+	for _, cluster := range result.Clusters {
+		if cluster.Kind == EvidenceClusterExactReprint {
+			hasReprint = true
+		}
+	}
+	if !hasReprint {
 		t.Fatalf(
-			"independent sources = %d, want 1",
-			result.IndependentSourceCount,
+			"clusters = %+v, want exact-reprint cluster",
+			result.Clusters,
 		)
 	}
 }
