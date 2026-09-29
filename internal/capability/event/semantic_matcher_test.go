@@ -120,6 +120,22 @@ func TestAgenticSemanticEvidenceMatcherRejectsInvalidOutput(
 			),
 			want: "invalid semantic evidence matcher JSON",
 		},
+		{
+			name: "unknown field",
+			response: agenticTextMessage(
+				schema.AgenticRoleTypeAssistant,
+				`{"matches":[],"unexpected":true}`,
+			),
+			want: "unknown field",
+		},
+		{
+			name: "trailing json",
+			response: agenticTextMessage(
+				schema.AgenticRoleTypeAssistant,
+				`{"matches":[]} {"matches":[]}`,
+			),
+			want: "multiple JSON values",
+		},
 	}
 
 	for _, test := range tests {
