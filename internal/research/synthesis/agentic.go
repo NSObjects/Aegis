@@ -1,6 +1,9 @@
 package synthesis
 
 import (
+	"Aegis/internal/agent/event"
+	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/technical"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,10 +20,10 @@ type AgenticSynthesizer struct {
 }
 
 type modelInput struct {
-	Symbol    string `json:"symbol"`
-	Market    any    `json:"market"`
-	Technical any    `json:"technical"`
-	Event     any    `json:"event"`
+	Symbol    string             `json:"symbol"`
+	Market    *market.Context    `json:"market"`
+	Technical *technical.Context `json:"technical"`
+	Event     *event.Context     `json:"event"`
 }
 
 func (s *AgenticSynthesizer) Synthesize(
