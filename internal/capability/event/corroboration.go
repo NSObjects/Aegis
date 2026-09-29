@@ -49,31 +49,19 @@ func (EvidenceCorroborator) Corroborate(
 		parent[index] = index
 	}
 
-	sourceOwner := make(map[string]int)
 	contentOwner := make(map[string]int)
-
 	for index, document := range documents {
-		sourceKey := corroborationSourceKey(
-			document.Source,
-		)
-		if sourceKey != "" {
-			if owner, ok := sourceOwner[sourceKey]; ok {
-				corroborationUnion(parent, index, owner)
-			} else {
-				sourceOwner[sourceKey] = index
-			}
-		}
-
 		contentKey := strings.TrimSpace(
 			document.ContentHash,
 		)
-		if contentKey != "" {
-			if owner, ok := contentOwner[contentKey]; ok {
-				corroborationUnion(parent, index, owner)
-			} else {
-				contentOwner[contentKey] = index
-			}
+		if contentKey == "" {
+			continue
 		}
+		if owner, ok := contentOwner[contentKey]; ok {
+			corroborationUnion(parent, index, owner)
+			continue
+		}
+		contentOwner[contentKey] = index
 	}
 
 	membersByRoot := make(map[int][]int)
@@ -90,17 +78,31 @@ func (EvidenceCorroborator) Corroborate(
 		0,
 		len(membersByRoot),
 	)
-	independentSourceCount := 0
+	creditedSources := make(map[string]struct{})
 
 	for _, members := range membersByRoot {
 		cluster := buildEvidenceCluster(
 			documents,
 			members,
 		)
-		if cluster.IndependentSourceCount > 0 {
-			independentSourceCount++
-		}
 		clusters = append(clusters, cluster)
+
+		if cluster.OriginDocumentID == "" {
+			continue
+		}
+		for _, index := range members {
+			if strings.TrimSpace(documents[index].ID) !=
+				cluster.OriginDocumentID {
+				continue
+			}
+			sourceKey := corroborationSourceKey(
+				documents[index].Source,
+			)
+			if sourceKey != "" {
+				creditedSources[sourceKey] = struct{}{}
+			}
+			break
+		}
 	}
 
 	sort.SliceStable(
@@ -113,7 +115,7 @@ func (EvidenceCorroborator) Corroborate(
 
 	return CorroborationResult{
 		Clusters:               clusters,
-		IndependentSourceCount: independentSourceCount,
+		IndependentSourceCount: len(creditedSources),
 	}
 }
 
@@ -123,8 +125,6 @@ func buildEvidenceCluster(
 ) EvidenceCluster {
 	documentIDs := make([]string, 0, len(members))
 	sourceSet := make(map[string]struct{})
-	contentSet := make(map[string]struct{})
-	sourceDocumentCount := make(map[string]int)
 
 	originIndex := members[0]
 	for _, index := range members {
@@ -142,14 +142,6 @@ func buildEvidenceCluster(
 		)
 		if sourceKey != "" {
 			sourceSet[sourceKey] = struct{}{}
-			sourceDocumentCount[sourceKey]++
-		}
-
-		contentKey := strings.TrimSpace(
-			document.ContentHash,
-		)
-		if contentKey != "" {
-			contentSet[contentKey] = struct{}{}
 		}
 
 		if corroborationDocumentLess(
@@ -174,12 +166,12 @@ func buildEvidenceCluster(
 	kind, reason := corroborationClusterSemantics(
 		len(members),
 		len(sourceSet),
-		len(contentSet),
-		sourceDocumentCount,
 	)
 
 	independent := 0
-	if len(sourceSet) > 0 {
+	if corroborationSourceKey(
+		documents[originIndex].Source,
+	) != "" {
 		independent = 1
 	}
 
@@ -199,37 +191,22 @@ func buildEvidenceCluster(
 func corroborationClusterSemantics(
 	memberCount int,
 	sourceCount int,
-	contentCount int,
-	sourceDocumentCount map[string]int,
 ) (EvidenceClusterKind, string) {
 	if memberCount <= 1 {
 		return EvidenceClusterSingle,
 			"single canonical document"
 	}
 
-	hasSameSource := false
-	for _, count := range sourceDocumentCount {
-		if count > 1 {
-			hasSameSource = true
-			break
-		}
-	}
-	hasExactReprint := contentCount > 0 &&
-		contentCount < memberCount
-
 	switch {
-	case hasSameSource && hasExactReprint:
-		return EvidenceClusterMixed,
-			"documents are connected by same-source provenance and exact-content reprints"
-	case hasExactReprint:
+	case sourceCount > 1:
 		return EvidenceClusterExactReprint,
-			"documents share an exact non-empty content hash across sources"
-	case hasSameSource || sourceCount == 1:
+			"documents from multiple source identities share an exact non-empty content hash"
+	case sourceCount == 1:
 		return EvidenceClusterSameSource,
-			"documents resolve to the same source identity"
+			"same-source documents share an exact non-empty content hash"
 	default:
 		return EvidenceClusterMixed,
-			"documents are transitively connected by deterministic corroboration rules"
+			"documents with unresolved source identity share an exact non-empty content hash"
 	}
 }
 
@@ -317,6 +294,16 @@ func corroborationDocumentLess(
 	left CanonicalDocument,
 	right CanonicalDocument,
 ) bool {
+	leftKnown := corroborationSourceKey(
+		left.Source,
+	) != ""
+	rightKnown := corroborationSourceKey(
+		right.Source,
+	) != ""
+	if leftKnown != rightKnown {
+		return leftKnown
+	}
+
 	leftPrimary := left.Source.IsPrimary
 	rightPrimary := right.Source.IsPrimary
 	if leftPrimary != rightPrimary {
