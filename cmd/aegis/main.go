@@ -357,11 +357,11 @@ func run(
 						ResearchRoundExecutorConfig{
 						Compiler: planning.Compiler{
 							Channels: planning.ChannelBindings{
-								OfficialDisclosure:
+								OfficialDisclosureProviders:
 									[]eventcap.Retriever{
 										officialSnapshots,
 									},
-								BreakingNews:
+								BreakingNewsProviders:
 									[]eventcap.Retriever{
 										breakingSnapshots,
 									},
