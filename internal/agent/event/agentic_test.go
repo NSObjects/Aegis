@@ -74,7 +74,7 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 	model := &eventModel{
 		responses: []*schema.AgenticMessage{
 			assistantJSON(
-				`{"facts":[{"type":"CONTRACT","occurred_at":"2026-09-29T09:00:00Z","headline":"合同事件","summary":"公司披露签订合同。","entities":["目标公司"],"evidence_document_ids":["doc_1"],"confidence":0.95}],"confidence":0.94}`,
+				`{"facts":[{"type":"CONTRACT","occurred_at":"2026-09-29T09:00:00Z","headline":"合同事件","summary":"公司披露签订合同。","entities":["目标公司"],"evidence_quotes":[{"document_id":"doc_1","quote":"公司披露签订合同。"}],"confidence":0.95}],"confidence":0.94}`,
 			),
 			assistantJSON(
 				`{"clusters":[{"fact_ids":["fact_placeholder"]}]}`,
