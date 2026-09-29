@@ -26,7 +26,19 @@ func (r fakeRetriever) Retrieve(
 	_ context.Context,
 	_ ResearchTask,
 ) ([]RawDocument, error) {
-	return r.docs, r.err
+	documents := append(
+		[]RawDocument(nil),
+		r.docs...,
+	)
+	for index := range documents {
+		if documents[index].AvailableAt == nil &&
+			documents[index].PublishedAt != nil {
+			documents[index].AvailableAt = cloneTime(
+				documents[index].PublishedAt,
+			)
+		}
+	}
+	return documents, r.err
 }
 
 func TestTaskRunner(t *testing.T) {

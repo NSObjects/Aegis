@@ -48,7 +48,19 @@ func (r countingRetriever) Retrieve(
 	if r.callCount != nil {
 		*r.callCount++
 	}
-	return r.docs, r.err
+	documents := append(
+		[]RawDocument(nil),
+		r.docs...,
+	)
+	for index := range documents {
+		if documents[index].AvailableAt == nil &&
+			documents[index].PublishedAt != nil {
+			documents[index].AvailableAt = cloneTime(
+				documents[index].PublishedAt,
+			)
+		}
+	}
+	return documents, r.err
 }
 
 func TestAcquisitionPlanRunnerWithCninfoAndCLS(t *testing.T) {
@@ -56,7 +68,7 @@ func TestAcquisitionPlanRunnerWithCninfoAndCLS(t *testing.T) {
 	asOf := time.Date(
 		2026, 9, 29, 15, 0, 0, 0, location,
 	)
-	retrievedAt := asOf.Add(time.Hour)
+	retrievedAt := asOf.Add(-time.Minute)
 	cninfoPublishedAt := time.Date(
 		2026, 9, 29, 10, 0, 0, 0, location,
 	)

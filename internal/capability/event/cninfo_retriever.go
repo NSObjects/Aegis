@@ -348,6 +348,8 @@ func cninfoRawDocument(
 		EvidenceKind: EvidenceDisclosure,
 		IsPrimary:    true,
 		PublishedAt: publishedAt,
+		FirstSeenAt: cloneTime(&retrievedAt),
+		AvailableAt: cloneTime(publishedAt),
 		RetrievedAt: retrievedAt,
 		RawMetadata: map[string]any{
 			"provider":        "cninfo",

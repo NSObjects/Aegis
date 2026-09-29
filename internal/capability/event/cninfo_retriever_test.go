@@ -267,6 +267,39 @@ func TestCninfoAnnouncementRetrieverRunsThroughTaskRunner(t *testing.T) {
 			before,
 		)
 	}
+	if raw.AvailableAt == nil ||
+		!raw.AvailableAt.Equal(before) {
+		t.Fatalf(
+			"available_at = %v, want publication time %s",
+			raw.AvailableAt,
+			before,
+		)
+	}
+	if raw.FirstSeenAt == nil ||
+		!raw.FirstSeenAt.Equal(retrievedAt) {
+		t.Fatalf(
+			"first_seen_at = %v, want retrieval time %s",
+			raw.FirstSeenAt,
+			retrievedAt,
+		)
+	}
+	canonical := output.Canonicalization.Documents[0]
+	if canonical.AvailableAt == nil ||
+		!canonical.AvailableAt.Equal(before) {
+		t.Fatalf(
+			"canonical available_at = %v, want %s",
+			canonical.AvailableAt,
+			before,
+		)
+	}
+	if len(canonical.Versions) != 1 ||
+		canonical.VersionID == "" {
+		t.Fatalf(
+			"canonical versions = %+v, active=%q",
+			canonical.Versions,
+			canonical.VersionID,
+		)
+	}
 	if raw.RawMetadata["instrument_id"] != "600519.SH" {
 		t.Fatalf(
 			"instrument_id metadata = %v",

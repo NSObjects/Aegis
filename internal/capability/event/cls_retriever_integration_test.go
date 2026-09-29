@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestLiveCLSNewsRetriever(t *testing.T) {
+func TestLiveCLSHistoricalSnapshotBoundary(t *testing.T) {
 	if os.Getenv("AEGIS_LIVE_CLS") != "1" {
 		t.Skip("set AEGIS_LIVE_CLS=1 to run live CLS integration test")
 	}
@@ -56,13 +56,34 @@ func TestLiveCLSNewsRetriever(t *testing.T) {
 	if len(output.RawDocuments) == 0 {
 		t.Fatal("live CLS important feed returned no documents")
 	}
-	if len(output.Canonicalization.Documents) == 0 {
-		t.Fatal("live CLS returned no PIT-safe canonical documents")
-	}
-	if output.Result.Status != TaskSatisfied {
+	if len(output.Canonicalization.Documents) != 0 {
 		t.Fatalf(
-			"task status = %q; gaps=%v",
+			"canonical documents = %d, want 0: current CLS bodies must not be replayed into a historical as_of without stored snapshots",
+			len(output.Canonicalization.Documents),
+		)
+	}
+	if len(output.Canonicalization.Rejected) !=
+		len(output.RawDocuments) {
+		t.Fatalf(
+			"rejected documents = %d, raw documents = %d; want every current body rejected for historical replay",
+			len(output.Canonicalization.Rejected),
+			len(output.RawDocuments),
+		)
+	}
+	for _, rejected := range output.Canonicalization.Rejected {
+		if rejected.Reason != RejectionFutureAvailableAt {
+			t.Fatalf(
+				"rejection reason = %q, want %q",
+				rejected.Reason,
+				RejectionFutureAvailableAt,
+			)
+		}
+	}
+	if output.Result.Status != TaskUnsatisfied {
+		t.Fatalf(
+			"task status = %q, want %q; gaps=%v",
 			output.Result.Status,
+			TaskUnsatisfied,
 			output.Result.Gaps,
 		)
 	}

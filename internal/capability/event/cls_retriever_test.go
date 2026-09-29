@@ -48,7 +48,7 @@ func TestCLSNewsRetrieverRunsThroughTaskRunner(t *testing.T) {
 	after := time.Date(
 		2026, 9, 29, 16, 0, 0, 0, location,
 	)
-	retrievedAt := asOf.Add(time.Hour)
+	retrievedAt := asOf.Add(-time.Minute)
 
 	client := httpDoerFunc(
 		func(req *http.Request) (*http.Response, error) {
@@ -235,10 +235,134 @@ func TestCLSNewsRetrieverRunsThroughTaskRunner(t *testing.T) {
 			before,
 		)
 	}
+	if raw.AvailableAt == nil ||
+		!raw.AvailableAt.Equal(retrievedAt) {
+		t.Fatalf(
+			"available_at = %v, want retrieval time %s",
+			raw.AvailableAt,
+			retrievedAt,
+		)
+	}
+	if raw.FirstSeenAt == nil ||
+		!raw.FirstSeenAt.Equal(retrievedAt) {
+		t.Fatalf(
+			"first_seen_at = %v, want retrieval time %s",
+			raw.FirstSeenAt,
+			retrievedAt,
+		)
+	}
 	if raw.RawMetadata["category"] != "important" {
 		t.Fatalf(
 			"category metadata = %v",
 			raw.RawMetadata["category"],
+		)
+	}
+}
+
+
+func TestCLSHistoricalBodyRequiresHistoricalSnapshot(
+	t *testing.T,
+) {
+	location := clsShanghaiLocation
+	asOf := time.Date(
+		2026, 9, 29, 15, 0, 0, 0, location,
+	)
+	publishedAt := asOf.Add(-4 * time.Hour)
+	retrievedAt := asOf.Add(time.Hour)
+
+	client := httpDoerFunc(
+		func(*http.Request) (*http.Response, error) {
+			return jsonHTTPResponse(
+				http.StatusOK,
+				map[string]any{
+					"errno": 0,
+					"data": map[string]any{
+						"roll_data": []map[string]any{
+							{
+								"id":      "2450099",
+								"title":   "历史快讯",
+								"content": "今天重新抓取到的当前正文",
+								"ctime":   publishedAt.Unix(),
+							},
+						},
+					},
+				},
+			), nil
+		},
+	)
+
+	output, err := (TaskRunner{
+		Now: func() time.Time {
+			return retrievedAt
+		},
+	}).Run(
+		context.Background(),
+		ResearchTask{
+			ID:              "task-cls-historical-snapshot",
+			InformationNeed: NeedBreakingNews,
+			AsOf:            asOf,
+			TimeRange: TimeRange{
+				Start: clsStartOfDay(asOf),
+				End:   asOf,
+			},
+			Requirements: ResearchRequirements{
+				PITSafe:      true,
+				MinDocuments: 1,
+			},
+		},
+		ClsNewsRetriever{
+			Client: client,
+			Now: func() time.Time {
+				return retrievedAt
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if len(output.RawDocuments) != 1 {
+		t.Fatalf(
+			"raw documents = %d, want 1",
+			len(output.RawDocuments),
+		)
+	}
+	raw := output.RawDocuments[0]
+	if raw.PublishedAt == nil ||
+		!raw.PublishedAt.Equal(publishedAt) {
+		t.Fatalf(
+			"published_at = %v, want %s",
+			raw.PublishedAt,
+			publishedAt,
+		)
+	}
+	if raw.AvailableAt == nil ||
+		!raw.AvailableAt.Equal(retrievedAt) {
+		t.Fatalf(
+			"available_at = %v, want retrieval time %s",
+			raw.AvailableAt,
+			retrievedAt,
+		)
+	}
+	if len(output.Canonicalization.Documents) != 0 {
+		t.Fatalf(
+			"canonical documents = %d, want 0",
+			len(output.Canonicalization.Documents),
+		)
+	}
+	if len(output.Canonicalization.Rejected) != 1 ||
+		output.Canonicalization.Rejected[0].Reason !=
+			RejectionFutureAvailableAt {
+		t.Fatalf(
+			"rejected = %+v, want future-availability rejection",
+			output.Canonicalization.Rejected,
+		)
+	}
+	if output.Result.Status != TaskUnsatisfied {
+		t.Fatalf(
+			"status = %q, want %q",
+			output.Result.Status,
+			TaskUnsatisfied,
 		)
 	}
 }
