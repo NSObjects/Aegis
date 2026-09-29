@@ -820,6 +820,8 @@ func TestLiveEventProvidersHostedIntegration(
 		CanonicalDocuments  int                       `json:"canonical_document_count"`
 		EvidenceClusters    int                       `json:"evidence_cluster_count"`
 		IndependentSources  int                       `json:"independent_source_count"`
+		ExactRelations      int                       `json:"exact_reprint_relation_count"`
+		NearRelations       int                       `json:"near_reprint_relation_count"`
 	}{
 		Symbol:              symbol,
 		TargetName:          target.Name,
@@ -837,6 +839,24 @@ func TestLiveEventProvidersHostedIntegration(
 		CanonicalDocuments:  len(output.Canonicalization.Documents),
 		EvidenceClusters:    len(output.Corroboration.Clusters),
 		IndependentSources:  output.Corroboration.IndependentSourceCount,
+		ExactRelations: func() int {
+			count := 0
+			for _, relation := range output.Corroboration.Relations {
+				if relation.Kind == capevent.EvidenceRelationExactReprint {
+					count++
+				}
+			}
+			return count
+		}(),
+		NearRelations: func() int {
+			count := 0
+			for _, relation := range output.Corroboration.Relations {
+				if relation.Kind == capevent.EvidenceRelationNearReprint {
+					count++
+				}
+			}
+			return count
+		}(),
 	}
 	data, err := json.MarshalIndent(
 		diagnostic,
