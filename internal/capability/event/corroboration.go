@@ -15,6 +15,7 @@ const (
 	EvidenceClusterSingle       EvidenceClusterKind = "single"
 	EvidenceClusterSameSource   EvidenceClusterKind = "same_source"
 	EvidenceClusterExactReprint EvidenceClusterKind = "exact_reprint"
+	EvidenceClusterNearReprint  EvidenceClusterKind = "near_reprint"
 	EvidenceClusterMixed        EvidenceClusterKind = "mixed"
 )
 
@@ -30,17 +31,21 @@ type EvidenceCluster struct {
 
 type CorroborationResult struct {
 	Clusters               []EvidenceCluster
+	Relations              []EvidenceRelation
 	IndependentSourceCount int
 }
 
-type EvidenceCorroborator struct{}
+type EvidenceCorroborator struct {
+	NearDuplicateMatcher NearDuplicateMatcher
+}
 
-func (EvidenceCorroborator) Corroborate(
+func (c EvidenceCorroborator) Corroborate(
 	documents []CanonicalDocument,
 ) CorroborationResult {
 	if len(documents) == 0 {
 		return CorroborationResult{
-			Clusters: make([]EvidenceCluster, 0),
+			Clusters:  make([]EvidenceCluster, 0),
+			Relations: make([]EvidenceRelation, 0),
 		}
 	}
 
@@ -49,20 +54,34 @@ func (EvidenceCorroborator) Corroborate(
 		parent[index] = index
 	}
 
-	contentOwner := make(map[string]int)
-	for index, document := range documents {
-		contentKey := strings.TrimSpace(
-			document.ContentHash,
-		)
-		if contentKey == "" {
-			continue
+	relations := make(
+		[]EvidenceRelation,
+		0,
+	)
+	for left := 0; left < len(documents); left++ {
+		for right := left + 1;
+			right < len(documents);
+			right++ {
+			relation, matched :=
+				c.NearDuplicateMatcher.Match(
+					documents[left],
+					documents[right],
+				)
+			if !matched {
+				continue
+			}
+			relations = append(
+				relations,
+				relation,
+			)
+			corroborationUnion(
+				parent,
+				left,
+				right,
+			)
 		}
-		if owner, ok := contentOwner[contentKey]; ok {
-			corroborationUnion(parent, index, owner)
-			continue
-		}
-		contentOwner[contentKey] = index
 	}
+	sortEvidenceRelations(relations)
 
 	membersByRoot := make(map[int][]int)
 	for index := range documents {
@@ -84,6 +103,7 @@ func (EvidenceCorroborator) Corroborate(
 		cluster := buildEvidenceCluster(
 			documents,
 			members,
+			relations,
 		)
 		clusters = append(clusters, cluster)
 
@@ -115,13 +135,14 @@ func (EvidenceCorroborator) Corroborate(
 
 	return CorroborationResult{
 		Clusters:               clusters,
+		Relations:              relations,
 		IndependentSourceCount: len(creditedSources),
 	}
 }
-
 func buildEvidenceCluster(
 	documents []CanonicalDocument,
 	members []int,
+	relations []EvidenceRelation,
 ) EvidenceCluster {
 	documentIDs := make([]string, 0, len(members))
 	sourceSet := make(map[string]struct{})
@@ -164,8 +185,9 @@ func buildEvidenceCluster(
 	sort.Strings(sourceKeys)
 
 	kind, reason := corroborationClusterSemantics(
-		len(members),
+		documentIDs,
 		len(sourceSet),
+		relations,
 	)
 
 	independent := 0
@@ -189,27 +211,62 @@ func buildEvidenceCluster(
 }
 
 func corroborationClusterSemantics(
-	memberCount int,
+	documentIDs []string,
 	sourceCount int,
+	relations []EvidenceRelation,
 ) (EvidenceClusterKind, string) {
-	if memberCount <= 1 {
+	if len(documentIDs) <= 1 {
 		return EvidenceClusterSingle,
 			"single canonical document"
 	}
 
+	memberSet := make(
+		map[string]struct{},
+		len(documentIDs),
+	)
+	for _, documentID := range documentIDs {
+		memberSet[documentID] = struct{}{}
+	}
+
+	hasExact := false
+	hasNear := false
+	for _, relation := range relations {
+		if _, ok := memberSet[
+			relation.LeftDocumentID,
+		]; !ok {
+			continue
+		}
+		if _, ok := memberSet[
+			relation.RightDocumentID,
+		]; !ok {
+			continue
+		}
+		switch relation.Kind {
+		case EvidenceRelationNearReprint:
+			hasNear = true
+		case EvidenceRelationExactReprint:
+			hasExact = true
+		}
+	}
+
 	switch {
-	case sourceCount > 1:
+	case hasNear && hasExact:
+		return EvidenceClusterNearReprint,
+			"documents are connected by exact and deterministic near-reprint relations"
+	case hasNear:
+		return EvidenceClusterNearReprint,
+			"documents are connected by deterministic near-reprint relations"
+	case hasExact && sourceCount > 1:
 		return EvidenceClusterExactReprint,
 			"documents from multiple source identities share an exact non-empty content hash"
-	case sourceCount == 1:
+	case hasExact && sourceCount == 1:
 		return EvidenceClusterSameSource,
 			"same-source documents share an exact non-empty content hash"
 	default:
 		return EvidenceClusterMixed,
-			"documents with unresolved source identity share an exact non-empty content hash"
+			"documents are connected by deterministic corroboration relations"
 	}
 }
-
 func corroborationClusterID(
 	documentIDs []string,
 ) string {
