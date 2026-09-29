@@ -68,16 +68,31 @@ func init() {
 	)
 }
 
+type ResearchRoundArtifact struct {
+	Round            int
+	RootTask         event.ResearchTask
+	Canonicalization event.CanonicalizationResult
+	Result           event.ResearchTaskResult
+	Attempts         []event.AcquisitionAttempt
+}
+
+type ResearchRoundObserver func(
+	ctx context.Context,
+	artifact ResearchRoundArtifact,
+)
+
 type ResearchRoundExecutorConfig struct {
-	ResolveRootTask RootTaskResolver
-	Compiler        Compiler
-	Runner          event.AcquisitionPlanRunner
+	ResolveRootTask    RootTaskResolver
+	Compiler           Compiler
+	Runner             event.AcquisitionPlanRunner
+	OnRoundCompleted   ResearchRoundObserver
 }
 
 type ResearchRoundExecutor struct {
-	resolveRootTask RootTaskResolver
-	compiler        Compiler
-	runner          event.AcquisitionPlanRunner
+	resolveRootTask   RootTaskResolver
+	compiler          Compiler
+	runner            event.AcquisitionPlanRunner
+	onRoundCompleted  ResearchRoundObserver
 }
 
 var _ adk.Agent = (*ResearchRoundExecutor)(nil)
@@ -92,9 +107,10 @@ func NewResearchRoundExecutor(
 	}
 
 	return &ResearchRoundExecutor{
-		resolveRootTask: cfg.ResolveRootTask,
-		compiler:        cfg.Compiler,
-		runner:          cfg.Runner,
+		resolveRootTask:  cfg.ResolveRootTask,
+		compiler:         cfg.Compiler,
+		runner:           cfg.Runner,
+		onRoundCompleted: cfg.OnRoundCompleted,
 	}, nil
 }
 
@@ -280,6 +296,22 @@ func (e *ResearchRoundExecutor) executeRound(
 		roundOutput,
 		currentAttempts,
 	)
+
+	if e.onRoundCompleted != nil {
+		e.onRoundCompleted(
+			ctx,
+			ResearchRoundArtifact{
+				Round:            state.Round,
+				RootTask:         state.RootTask,
+				Canonicalization: canonicalization,
+				Result:           result,
+				Attempts: append(
+					[]event.AcquisitionAttempt(nil),
+					state.Attempts...,
+				),
+			},
+		)
+	}
 
 	encoded, err := json.Marshal(roundResult)
 	if err != nil {

@@ -388,6 +388,7 @@ func TestPlanExecuteAgentReplansRemainingEvidenceAndAccumulatesRounds(
 	}
 	selector := &roundTestSelector{}
 	resolverCalls := 0
+	artifacts := make([]ResearchRoundArtifact, 0, 2)
 
 	agent, err := NewPlanExecuteAgent(
 		context.Background(),
@@ -415,6 +416,15 @@ func TestPlanExecuteAgentReplansRemainingEvidenceAndAccumulatesRounds(
 					Now: func() time.Time {
 						return asOf.Add(time.Minute)
 					},
+				},
+				OnRoundCompleted: func(
+					_ context.Context,
+					artifact ResearchRoundArtifact,
+				) {
+					artifacts = append(
+						artifacts,
+						artifact,
+					)
 				},
 			},
 			MaxIterations: 4,
@@ -451,6 +461,38 @@ func TestPlanExecuteAgentReplansRemainingEvidenceAndAccumulatesRounds(
 		t.Fatalf(
 			"replanner calls = %d, want 2",
 			len(replannerModel.state.inputs),
+		)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf(
+			"round artifacts = %d, want 2",
+			len(artifacts),
+		)
+	}
+	if artifacts[0].Round != 1 ||
+		artifacts[0].Result.Status !=
+			event.TaskPartial ||
+		len(artifacts[0].Canonicalization.Documents) != 1 {
+		t.Fatalf(
+			"round 1 artifact = %+v",
+			artifacts[0],
+		)
+	}
+	if artifacts[1].Round != 2 ||
+		artifacts[1].Result.Status !=
+			event.TaskSatisfied ||
+		len(artifacts[1].Canonicalization.Documents) != 2 ||
+		len(artifacts[1].Attempts) != 2 {
+		t.Fatalf(
+			"round 2 artifact = %+v",
+			artifacts[1],
+		)
+	}
+	if artifacts[1].RootTask.ID !=
+		"root-event-research" {
+		t.Fatalf(
+			"artifact root task = %+v",
+			artifacts[1].RootTask,
 		)
 	}
 
