@@ -1,11 +1,14 @@
 package trading
 
 import (
+	"Aegis/internal/agent/event"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/decision"
+	"Aegis/internal/research/synthesis"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/cloudwego/eino/components/model"
@@ -15,16 +18,26 @@ import (
 type fakeModel struct {
 	output string
 	err    error
+	calls  int
+	inputs [][]*schema.AgenticMessage
 }
 
 func (m *fakeModel) Generate(
 	_ context.Context,
-	_ []*schema.AgenticMessage,
+	input []*schema.AgenticMessage,
 	_ ...model.Option,
 ) (
 	*schema.AgenticMessage,
 	error,
 ) {
+	m.calls++
+	m.inputs = append(
+		m.inputs,
+		append(
+			[]*schema.AgenticMessage(nil),
+			input...,
+		),
+	)
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -403,6 +416,155 @@ func TestAssistantTextIgnoresToolCallMessage(t *testing.T) {
 		t.Fatalf(
 			"assistantText() = %q, want empty for tool-call message",
 			got,
+		)
+	}
+}
+
+
+func validResearchArtifact() *synthesis.Artifact {
+	return &synthesis.Artifact{
+		Symbol:    "600519.SH",
+		Market:    validMarketContext(),
+		Technical: validTechnicalContext(),
+		Event: &event.Context{
+			Symbol:        "600519.SH",
+			RequestedAsOf: "2026-09-23T15:00:00+08:00",
+			Status:        event.StatusNoEvent,
+			Confidence:    0.88,
+		},
+		Synthesis: synthesis.Synthesis{
+			Summary: "市场与技术信号偏谨慎，事件层未提取出有效事件。",
+			Agreements: []synthesis.Agreement{
+				{
+					Claim: "市场和技术上下文均未形成强确认。",
+					References: []synthesis.Reference{
+						{Domain: synthesis.DomainMarket},
+						{Domain: synthesis.DomainTechnical},
+					},
+				},
+			},
+			Risks: []string{
+				"技术趋势仍需确认",
+			},
+			Confidence: 0.74,
+		},
+	}
+}
+
+func TestAgentAnalyzeArtifact(t *testing.T) {
+	model := &fakeModel{
+		output: `{
+			"symbol": "600519.SH",
+			"market_view": "跨域研究结论偏谨慎",
+			"evidence": [
+				"ResearchArtifact synthesis 指出市场与技术尚未形成强确认"
+			],
+			"risk": [
+				"技术趋势仍需确认"
+			],
+			"action": "WATCH",
+			"confidence": 0.67
+		}`,
+	}
+	a, err := New(
+		context.Background(),
+		Config{Model: model},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := a.AnalyzeArtifact(
+		context.Background(),
+		validResearchArtifact(),
+	)
+	if err != nil {
+		t.Fatalf(
+			"AnalyzeArtifact() error = %v",
+			err,
+		)
+	}
+	if result.Action != decision.ActionWatch ||
+		result.Symbol != "600519.SH" {
+		t.Fatalf(
+			"decision = %+v",
+			result,
+		)
+	}
+	if model.calls != 1 {
+		t.Fatalf(
+			"model calls = %d, want 1",
+			model.calls,
+		)
+	}
+
+	var userText string
+	for _, message := range model.inputs[0] {
+		if message == nil ||
+			message.Role !=
+				schema.AgenticRoleTypeUser {
+			continue
+		}
+		for _, block := range message.ContentBlocks {
+			if block != nil &&
+				block.UserInputText != nil {
+				userText +=
+					block.UserInputText.Text
+			}
+		}
+	}
+	if !strings.Contains(
+		userText,
+		"research_artifact",
+	) ||
+		!strings.Contains(
+			userText,
+			`"synthesis"`,
+		) {
+		t.Fatalf(
+			"artifact trading input = %s",
+			userText,
+		)
+	}
+}
+
+func TestAgentAnalyzeArtifactRejectsInvalidArtifactBeforeModel(
+	t *testing.T,
+) {
+	model := &fakeModel{
+		output: `{
+			"symbol":"600519.SH",
+			"market_view":"unused",
+			"evidence":["unused"],
+			"risk":[],
+			"action":"WATCH",
+			"confidence":0.5
+		}`,
+	}
+	a, err := New(
+		context.Background(),
+		Config{Model: model},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	artifact := validResearchArtifact()
+	artifact.Event.Symbol = "000001.SZ"
+
+	_, err = a.AnalyzeArtifact(
+		context.Background(),
+		artifact,
+	)
+	if err == nil {
+		t.Fatal(
+			"expected invalid research artifact error",
+		)
+	}
+	if model.calls != 0 {
+		t.Fatalf(
+			"model calls = %d, want 0",
+			model.calls,
 		)
 	}
 }
