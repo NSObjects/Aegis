@@ -293,10 +293,19 @@ func TestLiveAgentCapturesThenResearchesFrozenSnapshots(
 		)
 	}
 	if result.RequestedAsOf !=
+		cutoff.UTC().Format(time.RFC3339) {
+		t.Fatalf(
+			"requested_as_of = %q, want request cutoff %q",
+			result.RequestedAsOf,
+			cutoff.UTC().Format(time.RFC3339),
+		)
+	}
+	if result.EvidenceAsOf !=
 		capturedAt.UTC().Format(time.RFC3339) {
 		t.Fatalf(
-			"requested_as_of = %q",
-			result.RequestedAsOf,
+			"evidence_as_of = %q, want capture completion %q",
+			result.EvidenceAsOf,
+			capturedAt.UTC().Format(time.RFC3339),
 		)
 	}
 	if !input.Task.AsOf.Equal(cutoff) {
