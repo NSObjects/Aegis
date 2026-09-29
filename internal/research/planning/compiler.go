@@ -8,9 +8,15 @@ import (
 )
 
 type ChannelBindings struct {
-	OfficialDisclosure []event.Retriever
-	BreakingNews       []event.Retriever
-	Selector           event.EvidenceSelector
+	// Singular bindings are retained for compatibility with existing
+	// single-provider callers. Provider slices are the V2.7.18 fan-out path.
+	OfficialDisclosure event.Retriever
+	BreakingNews       event.Retriever
+
+	OfficialDisclosureProviders []event.Retriever
+	BreakingNewsProviders       []event.Retriever
+
+	Selector event.EvidenceSelector
 }
 
 type Compiler struct {
@@ -63,9 +69,10 @@ func (c Compiler) Compile(
 				)
 			}
 
-			retrievers, err := validateChannelRetrievers(
+			retrievers, err := resolveChannelRetrievers(
 				"official disclosure",
 				c.Channels.OfficialDisclosure,
+				c.Channels.OfficialDisclosureProviders,
 			)
 			if err != nil {
 				return event.AcquisitionPlan{}, fmt.Errorf(
@@ -97,9 +104,10 @@ func (c Compiler) Compile(
 		case event.NeedBreakingNews:
 			hasCandidate = true
 
-			retrievers, err := validateChannelRetrievers(
+			retrievers, err := resolveChannelRetrievers(
 				"breaking news",
 				c.Channels.BreakingNews,
+				c.Channels.BreakingNewsProviders,
 			)
 			if err != nil {
 				return event.AcquisitionPlan{}, fmt.Errorf(
@@ -150,10 +158,27 @@ func (c Compiler) Compile(
 	return compiled, nil
 }
 
-func validateChannelRetrievers(
+func resolveChannelRetrievers(
 	channel string,
-	retrievers []event.Retriever,
+	single event.Retriever,
+	providers []event.Retriever,
 ) ([]event.Retriever, error) {
+	retrievers := make(
+		[]event.Retriever,
+		0,
+		len(providers)+1,
+	)
+	if single != nil {
+		retrievers = append(
+			retrievers,
+			single,
+		)
+	}
+	retrievers = append(
+		retrievers,
+		providers...,
+	)
+
 	if len(retrievers) == 0 {
 		return nil, fmt.Errorf(
 			"%s channel requires at least one retriever binding",
