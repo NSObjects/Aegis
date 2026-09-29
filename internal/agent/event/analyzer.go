@@ -106,7 +106,11 @@ func (a Analyzer) Analyze(
 		)
 	}
 
-	if input.ResearchStatus != capevent.TaskSatisfied {
+	switch input.ResearchStatus {
+	case capevent.TaskSatisfied:
+		// Continue into event understanding.
+	case capevent.TaskPartial,
+		capevent.TaskUnsatisfied:
 		result := &Context{
 			Symbol:        task.Symbol,
 			RequestedAsOf: task.AsOf.UTC().Format(time.RFC3339),
@@ -123,6 +127,11 @@ func (a Analyzer) Analyze(
 			return nil, err
 		}
 		return result, nil
+	default:
+		return nil, fmt.Errorf(
+			"event analyzer has invalid upstream research status %q",
+			input.ResearchStatus,
+		)
 	}
 
 	documentByID, err := validateAnalyzerDocuments(
