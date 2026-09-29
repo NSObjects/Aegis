@@ -246,9 +246,15 @@ func TestNewsEventAgentTwoRoundResearchProducesNormalContext(
 								len(documents),
 							)
 						}
-						ids := []string{
-							documents[0].ID,
-							documents[1].ID,
+						quotes := []EvidenceQuote{
+							{
+								DocumentID: documents[0].ID,
+								Quote:      documents[0].Content,
+							},
+							{
+								DocumentID: documents[1].ID,
+								Quote:      documents[1].Content,
+							},
 						}
 						return FactExtractionResult{
 							Confidence: 0.95,
@@ -258,7 +264,7 @@ func TestNewsEventAgentTwoRoundResearchProducesNormalContext(
 									OccurredAt: "2026-09-29T14:00:00Z",
 									Headline:   "合同事件",
 									Summary:    "公司披露合同，媒体进行了独立确认。",
-									EvidenceDocumentIDs: ids,
+									EvidenceQuotes: quotes,
 									Confidence: 0.94,
 								},
 							},
