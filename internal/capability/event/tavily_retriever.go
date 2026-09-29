@@ -398,12 +398,12 @@ func tavilyTargetQuery(
 	if name != "" {
 		name = strings.ReplaceAll(
 			name,
-			""",
+			string(rune(34)),
 			"",
 		)
 		parts = append(
 			parts,
-			"""+name+""",
+			string(rune(34))+name+string(rune(34)),
 		)
 	}
 
