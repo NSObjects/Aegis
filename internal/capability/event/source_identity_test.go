@@ -188,6 +188,35 @@ func TestDomainSourceIdentityResolverUnknownDomainStaysConservative(
 	}
 }
 
+func TestDomainSourceIdentityResolverIsIdempotent(
+	t *testing.T,
+) {
+	resolver := DefaultSourceIdentityResolver()
+	first := resolver.Resolve(
+		RawDocument{
+			URL:          "https://news.sse.com.cn/disclosure/1",
+			Publisher:    "news.sse.com.cn",
+			SourceType:   SourceOther,
+			EvidenceKind: EvidenceOther,
+		},
+	)
+	resolved := ApplySourceIdentity(
+		RawDocument{
+			URL: "https://news.sse.com.cn/disclosure/1",
+		},
+		first,
+	)
+	second := resolver.Resolve(resolved)
+
+	if second != first {
+		t.Fatalf(
+			"second resolution = %+v, want %+v",
+			second,
+			first,
+		)
+	}
+}
+
 func TestDomainSourceIdentityResolverDoesNotDowngradeSpecificProviderSemantics(
 	t *testing.T,
 ) {
