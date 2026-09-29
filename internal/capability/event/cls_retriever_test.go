@@ -131,8 +131,14 @@ func TestCLSNewsRetrieverRunsThroughTaskRunner(t *testing.T) {
 			),
 		},
 		Requirements: ResearchRequirements{
-			PITSafe:               true,
-			RequiredSourceTypes:   []SourceType{SourceIndustryMedia},
+			PITSafe:             true,
+			RequiredSourceTypes: []SourceType{SourceIndustryMedia},
+			RequiredAuthorities: []EvidenceAuthority{
+				AuthorityMedia,
+			},
+			RequiredEvidenceKinds: []EvidenceKind{
+				EvidenceNewsReport,
+			},
 			MinDocuments:          1,
 			MinIndependentSources: 1,
 		},
@@ -211,6 +217,12 @@ func TestCLSNewsRetrieverRunsThroughTaskRunner(t *testing.T) {
 	}
 	if raw.SourceType != SourceIndustryMedia {
 		t.Fatalf("source type = %q", raw.SourceType)
+	}
+	if raw.Authority != AuthorityMedia {
+		t.Fatalf("authority = %q", raw.Authority)
+	}
+	if raw.EvidenceKind != EvidenceNewsReport {
+		t.Fatalf("evidence kind = %q", raw.EvidenceKind)
 	}
 	if raw.IsPrimary {
 		t.Fatal("CLS media evidence must not be primary")

@@ -85,10 +85,12 @@ func canonicalDocumentFromRaw(raw RawDocument) CanonicalDocument {
 		Title:   strings.TrimSpace(raw.Title),
 		Content: content,
 		Source: DocumentSource{
-			Publisher:  publisher,
-			URL:        normalizeDocumentURL(raw.URL),
-			SourceType: raw.SourceType,
-			IsPrimary:  raw.IsPrimary,
+			Publisher:    publisher,
+			URL:          normalizeDocumentURL(raw.URL),
+			SourceType:   raw.SourceType,
+			Authority:    raw.Authority,
+			EvidenceKind: raw.EvidenceKind,
+			IsPrimary:    raw.IsPrimary,
 		},
 		PublishedAt:    cloneTime(raw.PublishedAt),
 		ContentHash:    contentHash(content),
@@ -179,6 +181,12 @@ func mergeCanonicalDocument(
 	}
 	if dst.Source.SourceType == "" {
 		dst.Source.SourceType = src.Source.SourceType
+	}
+	if dst.Source.Authority == "" {
+		dst.Source.Authority = src.Source.Authority
+	}
+	if dst.Source.EvidenceKind == "" {
+		dst.Source.EvidenceKind = src.Source.EvidenceKind
 	}
 	dst.Source.IsPrimary = dst.Source.IsPrimary || src.Source.IsPrimary
 

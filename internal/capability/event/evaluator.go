@@ -82,10 +82,18 @@ func (TaskEvaluator) Evaluate(
 	}
 
 	observedSourceTypes := make(map[SourceType]struct{})
+	observedAuthorities := make(map[EvidenceAuthority]struct{})
+	observedEvidenceKinds := make(map[EvidenceKind]struct{})
 	hasPrimary := false
 	for _, document := range documents {
 		if document.Source.SourceType != "" {
 			observedSourceTypes[document.Source.SourceType] = struct{}{}
+		}
+		if document.Source.Authority != "" {
+			observedAuthorities[document.Source.Authority] = struct{}{}
+		}
+		if document.Source.EvidenceKind != "" {
+			observedEvidenceKinds[document.Source.EvidenceKind] = struct{}{}
 		}
 		if document.Source.IsPrimary {
 			hasPrimary = true
@@ -106,6 +114,42 @@ func (TaskEvaluator) Evaluate(
 					requiredType,
 				),
 				SourceType: requiredType,
+			},
+		)
+	}
+
+	for _, requiredAuthority := range task.Requirements.RequiredAuthorities {
+		if _, ok := observedAuthorities[requiredAuthority]; ok {
+			continue
+		}
+
+		result.Gaps = append(
+			result.Gaps,
+			ResearchGap{
+				Type: GapMissingRequiredAuthority,
+				Description: fmt.Sprintf(
+					"required evidence authority %q is missing",
+					requiredAuthority,
+				),
+				Authority: requiredAuthority,
+			},
+		)
+	}
+
+	for _, requiredKind := range task.Requirements.RequiredEvidenceKinds {
+		if _, ok := observedEvidenceKinds[requiredKind]; ok {
+			continue
+		}
+
+		result.Gaps = append(
+			result.Gaps,
+			ResearchGap{
+				Type: GapMissingRequiredEvidenceKind,
+				Description: fmt.Sprintf(
+					"required evidence kind %q is missing",
+					requiredKind,
+				),
+				EvidenceKind: requiredKind,
 			},
 		)
 	}

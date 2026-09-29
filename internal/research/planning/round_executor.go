@@ -33,11 +33,13 @@ type ResearchRoundAttempt struct {
 }
 
 type ResearchRoundGap struct {
-	Type        event.ResearchGapType `json:"type"`
-	Description string                `json:"description"`
-	Required    int                   `json:"required,omitempty"`
-	Observed    int                   `json:"observed,omitempty"`
-	SourceType  event.SourceType      `json:"source_type,omitempty"`
+	Type         event.ResearchGapType   `json:"type"`
+	Description  string                  `json:"description"`
+	Required     int                     `json:"required,omitempty"`
+	Observed     int                     `json:"observed,omitempty"`
+	SourceType   event.SourceType        `json:"source_type,omitempty"`
+	Authority    event.EvidenceAuthority `json:"authority,omitempty"`
+	EvidenceKind event.EvidenceKind      `json:"evidence_kind,omitempty"`
 }
 
 type ResearchRoundResult struct {
@@ -424,7 +426,9 @@ func buildResearchRoundResult(
 				Description: gap.Description,
 				Required:    gap.Required,
 				Observed:    gap.Observed,
-				SourceType:  gap.SourceType,
+				SourceType:   gap.SourceType,
+				Authority:    gap.Authority,
+				EvidenceKind: gap.EvidenceKind,
 			},
 		)
 	}

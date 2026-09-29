@@ -300,9 +300,11 @@ func clsRawDocument(
 	document := &RawDocument{
 		Title:       title,
 		Content:     content,
-		Publisher:   clsPublisher,
-		SourceType:  SourceIndustryMedia,
-		IsPrimary:   false,
+		Publisher:    clsPublisher,
+		SourceType:   SourceIndustryMedia,
+		Authority:    AuthorityMedia,
+		EvidenceKind: EvidenceNewsReport,
+		IsPrimary:    false,
 		PublishedAt: publishedAt,
 		RetrievedAt: retrievedAt,
 		RawMetadata: map[string]any{
