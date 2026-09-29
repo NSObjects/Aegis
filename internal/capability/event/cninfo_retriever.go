@@ -70,17 +70,17 @@ func (r CninfoAnnouncementRetriever) Retrieve(
 		return nil, err
 	}
 
+	start, end, err := cninfoEffectiveQueryRange(task)
+	if err != nil {
+		return nil, err
+	}
+
 	client := r.Client
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
 	}
 
 	stock, err := r.resolveStock(ctx, client, symbol)
-	if err != nil {
-		return nil, err
-	}
-
-	start, end, err := cninfoEffectiveQueryRange(task)
 	if err != nil {
 		return nil, err
 	}
@@ -366,8 +366,8 @@ func cninfoRawDocument(
 					stock.Name,
 				),
 			),
-			"file_type": cleanCninfoText(
-				fmt.Sprint(item["adjunctType"]),
+			"file_type": firstCninfoValue(
+				item["adjunctType"],
 			),
 			"file_size_kb": item["adjunctSize"],
 			"source_url":   cninfoAnnouncementURL,
@@ -564,14 +564,14 @@ func firstCninfoValue(values ...any) string {
 
 func cninfoExchange(symbol string) string {
 	switch {
+	case strings.HasPrefix(symbol, "92"),
+		strings.HasPrefix(symbol, "4"),
+		strings.HasPrefix(symbol, "8"):
+		return "BSE"
 	case strings.HasPrefix(symbol, "6"),
 		strings.HasPrefix(symbol, "9"),
 		strings.HasPrefix(symbol, "5"):
 		return "SSE"
-	case strings.HasPrefix(symbol, "4"),
-		strings.HasPrefix(symbol, "8"),
-		strings.HasPrefix(symbol, "92"):
-		return "BSE"
 	default:
 		return "SZSE"
 	}
