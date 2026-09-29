@@ -763,3 +763,156 @@ func TestAcquisitionPlanRunnerCanonicalizesAcrossSteps(
 		)
 	}
 }
+
+func TestAcquisitionPlanRunnerReturnsSelectorError(t *testing.T) {
+	publishedAt := time.Date(
+		2026, 9, 29, 10, 0, 0, 0, time.UTC,
+	)
+
+	output, err := (AcquisitionPlanRunner{}).Run(
+		context.Background(),
+		ResearchTask{
+			ID: "task-selector-error",
+		},
+		AcquisitionPlan{
+			Steps: []AcquisitionStep{
+				{
+					ID:    "candidate",
+					Scope: AcquisitionScopeCandidate,
+					Retriever: fakeRetriever{
+						id:     "candidate_api",
+						method: AcquisitionAPI,
+						docs: []RawDocument{
+							{
+								ID:          "candidate-selector-error",
+								Title:       "candidate",
+								URL:         "https://media.example/selector-error",
+								Publisher:   "media",
+								SourceType:  SourceIndustryMedia,
+								PublishedAt: &publishedAt,
+							},
+						},
+					},
+				},
+			},
+			Selector: fakeEvidenceSelector{
+				selectFn: func(
+					_ context.Context,
+					_ ResearchTask,
+					_ []RawDocument,
+				) ([]EvidenceSelectionDecision, error) {
+					return nil, errors.New("selector unavailable")
+				},
+			},
+		},
+	)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"selector unavailable",
+		) {
+		t.Fatalf(
+			"error = %v, want selector failure",
+			err,
+		)
+	}
+	if len(output.Steps) != 1 {
+		t.Fatalf(
+			"steps = %d, want 1",
+			len(output.Steps),
+		)
+	}
+	if len(output.AcceptedRawDocuments) != 0 {
+		t.Fatalf(
+			"accepted raw documents = %d, want 0",
+			len(output.AcceptedRawDocuments),
+		)
+	}
+}
+
+func TestAcquisitionPlanRunnerExecutesRemainingStepsAfterStructuralError(
+	t *testing.T,
+) {
+	publishedAt := time.Date(
+		2026, 9, 29, 10, 0, 0, 0, time.UTC,
+	)
+	firstCalls := 0
+	secondCalls := 0
+
+	output, err := (AcquisitionPlanRunner{}).Run(
+		context.Background(),
+		ResearchTask{
+			ID: "task-structural-error",
+		},
+		AcquisitionPlan{
+			Steps: []AcquisitionStep{
+				{
+					ID:    "invalid-pit-step",
+					Scope: AcquisitionScopeDirect,
+					Task: ResearchTask{
+						Requirements: ResearchRequirements{
+							PITSafe: true,
+						},
+					},
+					Retriever: countingRetriever{
+						id:     "first_api",
+						method: AcquisitionAPI,
+						docs: []RawDocument{
+							{
+								ID:          "first",
+								Title:       "first",
+								Publisher:   "first",
+								PublishedAt: &publishedAt,
+							},
+						},
+						callCount: &firstCalls,
+					},
+				},
+				{
+					ID:    "valid-step",
+					Scope: AcquisitionScopeDirect,
+					Retriever: countingRetriever{
+						id:     "second_api",
+						method: AcquisitionAPI,
+						docs: []RawDocument{
+							{
+								ID:          "second",
+								Title:       "second",
+								URL:         "https://example.com/second",
+								Publisher:   "second",
+								PublishedAt: &publishedAt,
+							},
+						},
+						callCount: &secondCalls,
+					},
+				},
+			},
+		},
+	)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"as_of is required",
+		) {
+		t.Fatalf(
+			"error = %v, want structural PIT error",
+			err,
+		)
+	}
+	if firstCalls != 1 || secondCalls != 1 {
+		t.Fatalf(
+			"calls first=%d second=%d, want 1/1",
+			firstCalls,
+			secondCalls,
+		)
+	}
+	if len(output.Steps) != 2 {
+		t.Fatalf(
+			"steps = %d, want 2",
+			len(output.Steps),
+		)
+	}
+	if output.Steps[0].ErrorMessage == "" {
+		t.Fatal("structural step error should be preserved")
+	}
+}
