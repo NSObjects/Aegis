@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -25,7 +26,10 @@ func (Canonicalizer) Canonicalize(
 		Documents: make([]CanonicalDocument, 0, len(rawDocuments)),
 		Rejected:  make([]RejectedDocument, 0),
 	}
-	indexByKey := make(map[string]int, len(rawDocuments))
+	indexByLogicalKey := make(
+		map[string]int,
+		len(rawDocuments),
+	)
 
 	for _, raw := range rawDocuments {
 		raw.ID = strings.TrimSpace(raw.ID)
@@ -35,18 +39,12 @@ func (Canonicalizer) Canonicalize(
 			)
 		}
 
+		availableAt := effectiveAvailableAt(raw)
+
 		if task.Requirements.PITSafe {
-			if raw.PublishedAt == nil {
-				result.Rejected = append(
-					result.Rejected,
-					RejectedDocument{
-						RawDocumentID: raw.ID,
-						Reason:        RejectionMissingPublishedAt,
-					},
-				)
-				continue
-			}
-			if raw.PublishedAt.After(task.AsOf) {
+			switch {
+			case raw.PublishedAt != nil &&
+				raw.PublishedAt.After(task.AsOf):
 				result.Rejected = append(
 					result.Rejected,
 					RejectedDocument{
@@ -55,13 +53,54 @@ func (Canonicalizer) Canonicalize(
 					},
 				)
 				continue
+
+			case raw.UpdatedAt != nil &&
+				raw.UpdatedAt.After(task.AsOf):
+				result.Rejected = append(
+					result.Rejected,
+					RejectedDocument{
+						RawDocumentID: raw.ID,
+						Reason:        RejectionFutureUpdatedAt,
+					},
+				)
+				continue
+
+			case availableAt == nil:
+				result.Rejected = append(
+					result.Rejected,
+					RejectedDocument{
+						RawDocumentID: raw.ID,
+						Reason:        RejectionMissingAvailableAt,
+					},
+				)
+				continue
+
+			case availableAt.After(task.AsOf):
+				result.Rejected = append(
+					result.Rejected,
+					RejectedDocument{
+						RawDocumentID: raw.ID,
+						Reason:        RejectionFutureAvailableAt,
+					},
+				)
+				continue
 			}
 		}
 
-		doc := canonicalDocumentFromRaw(raw)
-		key := canonicalDocumentKey(doc)
+		logicalKey := canonicalLogicalDocumentKey(raw)
+		if logicalKey == "" {
+			return CanonicalizationResult{}, errors.New(
+				"event canonical document identity is required",
+			)
+		}
 
-		if index, ok := indexByKey[key]; ok {
+		doc := canonicalDocumentFromRaw(
+			raw,
+			logicalKey,
+			availableAt,
+		)
+
+		if index, ok := indexByLogicalKey[logicalKey]; ok {
 			mergeCanonicalDocument(
 				&result.Documents[index],
 				doc,
@@ -69,21 +108,40 @@ func (Canonicalizer) Canonicalize(
 			continue
 		}
 
-		doc.ID = canonicalDocumentID(key)
-		result.Documents = append(result.Documents, doc)
-		indexByKey[key] = len(result.Documents) - 1
+		result.Documents = append(
+			result.Documents,
+			doc,
+		)
+		indexByLogicalKey[logicalKey] =
+			len(result.Documents) - 1
+	}
+
+	for index := range result.Documents {
+		finalizeCanonicalDocument(
+			&result.Documents[index],
+		)
 	}
 
 	return result, nil
 }
 
-func canonicalDocumentFromRaw(raw RawDocument) CanonicalDocument {
-	content := strings.TrimSpace(raw.Content)
+func canonicalDocumentFromRaw(
+	raw RawDocument,
+	logicalKey string,
+	availableAt *time.Time,
+) CanonicalDocument {
 	publisher := strings.TrimSpace(raw.Publisher)
+	logicalID := canonicalDocumentID(logicalKey)
 
-	return CanonicalDocument{
-		Title:   strings.TrimSpace(raw.Title),
-		Content: content,
+	version := documentVersionFromRaw(
+		raw,
+		logicalID,
+		logicalKey,
+		availableAt,
+	)
+
+	doc := CanonicalDocument{
+		ID: logicalID,
 		Source: DocumentSource{
 			Publisher:    publisher,
 			URL:          normalizeDocumentURL(raw.URL),
@@ -92,34 +150,154 @@ func canonicalDocumentFromRaw(raw RawDocument) CanonicalDocument {
 			EvidenceKind: raw.EvidenceKind,
 			IsPrimary:    raw.IsPrimary,
 		},
-		PublishedAt:    cloneTime(raw.PublishedAt),
-		ContentHash:    contentHash(content),
-		RawDocumentIDs: appendUnique(nil, raw.ID),
-		AttemptIDs:     appendUnique(nil, strings.TrimSpace(raw.AttemptID)),
+		Versions: []DocumentVersion{version},
 	}
+	mergeCanonicalReferences(
+		&doc,
+		version,
+	)
+	applyActiveVersion(
+		&doc,
+		version,
+	)
+	return doc
 }
 
-func canonicalDocumentKey(doc CanonicalDocument) string {
+func documentVersionFromRaw(
+	raw RawDocument,
+	logicalID string,
+	logicalKey string,
+	availableAt *time.Time,
+) DocumentVersion {
+	content := strings.TrimSpace(raw.Content)
+	firstSeenAt := cloneTime(raw.FirstSeenAt)
+	if firstSeenAt == nil &&
+		!raw.RetrievedAt.IsZero() {
+		value := raw.RetrievedAt
+		firstSeenAt = &value
+	}
+
+	version := DocumentVersion{
+		LogicalDocumentID: logicalID,
+		Title:             strings.TrimSpace(raw.Title),
+		Content:           content,
+		ContentHash:       contentHash(content),
+		PublishedAt:       cloneTime(raw.PublishedAt),
+		UpdatedAt:         cloneTime(raw.UpdatedAt),
+		FirstSeenAt:       firstSeenAt,
+		AvailableAt:       cloneTime(availableAt),
+		SnapshotAt:        raw.RetrievedAt,
+		RawDocumentIDs:    appendUnique(nil, raw.ID),
+		AttemptIDs: appendUnique(
+			nil,
+			strings.TrimSpace(raw.AttemptID),
+		),
+	}
+	version.ID = documentVersionID(
+		logicalKey,
+		version,
+	)
+	return version
+}
+
+func canonicalLogicalDocumentKey(
+	raw RawDocument,
+) string {
 	if canonicalURL := strings.ToLower(
-		strings.TrimSpace(doc.Source.URL),
+		strings.TrimSpace(
+			normalizeDocumentURL(raw.URL),
+		),
 	); canonicalURL != "" {
 		return "url\x00" + canonicalURL
 	}
 
-	sourceIdentity := strings.ToLower(
-		strings.TrimSpace(doc.Source.Publisher),
+	rawID := strings.ToLower(
+		strings.TrimSpace(raw.ID),
 	)
-	if doc.ContentHash != "" {
-		return sourceIdentity + "\x00content\x00" + doc.ContentHash
+	if rawID != "" {
+		return "raw\x00" + rawID
 	}
 
-	return sourceIdentity +
-		"\x00title\x00" + strings.ToLower(strings.TrimSpace(doc.Title))
+	publisher := strings.ToLower(
+		strings.TrimSpace(raw.Publisher),
+	)
+	title := strings.ToLower(
+		strings.TrimSpace(raw.Title),
+	)
+	if title != "" {
+		return publisher + "\x00title\x00" + title
+	}
+
+	if hash := contentHash(
+		strings.TrimSpace(raw.Content),
+	); hash != "" {
+		return publisher + "\x00content\x00" + hash
+	}
+
+	return ""
 }
 
 func canonicalDocumentID(key string) string {
 	sum := sha256.Sum256([]byte(key))
 	return "doc_" + hex.EncodeToString(sum[:8])
+}
+
+func documentVersionID(
+	logicalKey string,
+	version DocumentVersion,
+) string {
+	versionIdentity := version.ContentHash
+	switch {
+	case versionIdentity != "":
+		versionIdentity = "content\x00" +
+			versionIdentity
+	case version.UpdatedAt != nil:
+		versionIdentity = "updated\x00" +
+			version.UpdatedAt.UTC().
+				Format(time.RFC3339Nano)
+	case version.PublishedAt != nil:
+		versionIdentity = "published\x00" +
+			version.PublishedAt.UTC().
+				Format(time.RFC3339Nano)
+	case version.AvailableAt != nil:
+		versionIdentity = "available\x00" +
+			version.AvailableAt.UTC().
+				Format(time.RFC3339Nano)
+	case !version.SnapshotAt.IsZero():
+		versionIdentity = "snapshot\x00" +
+			version.SnapshotAt.UTC().
+				Format(time.RFC3339Nano)
+	default:
+		versionIdentity = "unknown"
+	}
+
+	sum := sha256.Sum256(
+		[]byte(
+			logicalKey +
+				"\x00version\x00" +
+				versionIdentity,
+		),
+	)
+	return "ver_" + hex.EncodeToString(sum[:8])
+}
+
+func effectiveAvailableAt(
+	raw RawDocument,
+) *time.Time {
+	if raw.AvailableAt == nil {
+		return nil
+	}
+
+	effective := *raw.AvailableAt
+	if raw.PublishedAt != nil &&
+		raw.PublishedAt.After(effective) {
+		effective = *raw.PublishedAt
+	}
+	if raw.UpdatedAt != nil &&
+		raw.UpdatedAt.After(effective) {
+		effective = *raw.UpdatedAt
+	}
+	return &effective
 }
 
 func contentHash(content string) string {
@@ -155,6 +333,74 @@ func mergeCanonicalDocument(
 		return
 	}
 
+	mergeDocumentSource(
+		&dst.Source,
+		src.Source,
+	)
+
+	for _, srcVersion := range src.Versions {
+		versionIndex := -1
+		for index := range dst.Versions {
+			if dst.Versions[index].ID ==
+				srcVersion.ID {
+				versionIndex = index
+				break
+			}
+		}
+
+		if versionIndex >= 0 {
+			mergeDocumentVersion(
+				&dst.Versions[versionIndex],
+				srcVersion,
+			)
+		} else {
+			dst.Versions = append(
+				dst.Versions,
+				srcVersion,
+			)
+		}
+		mergeCanonicalReferences(
+			dst,
+			srcVersion,
+		)
+	}
+}
+
+func mergeDocumentSource(
+	dst *DocumentSource,
+	src DocumentSource,
+) {
+	if dst == nil {
+		return
+	}
+
+	if dst.Publisher == "" {
+		dst.Publisher = src.Publisher
+	}
+	if dst.URL == "" {
+		dst.URL = src.URL
+	}
+	if dst.SourceType == "" {
+		dst.SourceType = src.SourceType
+	}
+	if dst.Authority == "" {
+		dst.Authority = src.Authority
+	}
+	if dst.EvidenceKind == "" {
+		dst.EvidenceKind = src.EvidenceKind
+	}
+	dst.IsPrimary = dst.IsPrimary ||
+		src.IsPrimary
+}
+
+func mergeDocumentVersion(
+	dst *DocumentVersion,
+	src DocumentVersion,
+) {
+	if dst == nil {
+		return
+	}
+
 	dst.RawDocumentIDs = appendUnique(
 		dst.RawDocumentIDs,
 		src.RawDocumentIDs...,
@@ -173,28 +419,155 @@ func mergeCanonicalDocument(
 	if dst.ContentHash == "" {
 		dst.ContentHash = src.ContentHash
 	}
-	if dst.Source.Publisher == "" {
-		dst.Source.Publisher = src.Source.Publisher
-	}
-	if dst.Source.URL == "" {
-		dst.Source.URL = src.Source.URL
-	}
-	if dst.Source.SourceType == "" {
-		dst.Source.SourceType = src.Source.SourceType
-	}
-	if dst.Source.Authority == "" {
-		dst.Source.Authority = src.Source.Authority
-	}
-	if dst.Source.EvidenceKind == "" {
-		dst.Source.EvidenceKind = src.Source.EvidenceKind
-	}
-	dst.Source.IsPrimary = dst.Source.IsPrimary || src.Source.IsPrimary
+
+	dst.PublishedAt = earlierTime(
+		dst.PublishedAt,
+		src.PublishedAt,
+	)
+	dst.UpdatedAt = earlierTime(
+		dst.UpdatedAt,
+		src.UpdatedAt,
+	)
+	dst.FirstSeenAt = earlierTime(
+		dst.FirstSeenAt,
+		src.FirstSeenAt,
+	)
+	dst.AvailableAt = earlierTime(
+		dst.AvailableAt,
+		src.AvailableAt,
+	)
 
 	switch {
-	case dst.PublishedAt == nil:
-		dst.PublishedAt = cloneTime(src.PublishedAt)
-	case src.PublishedAt != nil && src.PublishedAt.Before(*dst.PublishedAt):
-		dst.PublishedAt = cloneTime(src.PublishedAt)
+	case dst.SnapshotAt.IsZero():
+		dst.SnapshotAt = src.SnapshotAt
+	case !src.SnapshotAt.IsZero() &&
+		src.SnapshotAt.Before(dst.SnapshotAt):
+		dst.SnapshotAt = src.SnapshotAt
+	}
+}
+
+func mergeCanonicalReferences(
+	doc *CanonicalDocument,
+	version DocumentVersion,
+) {
+	if doc == nil {
+		return
+	}
+
+	doc.RawDocumentIDs = appendUnique(
+		doc.RawDocumentIDs,
+		version.RawDocumentIDs...,
+	)
+	doc.AttemptIDs = appendUnique(
+		doc.AttemptIDs,
+		version.AttemptIDs...,
+	)
+}
+
+func finalizeCanonicalDocument(
+	doc *CanonicalDocument,
+) {
+	if doc == nil ||
+		len(doc.Versions) == 0 {
+		return
+	}
+
+	sort.SliceStable(
+		doc.Versions,
+		func(i int, j int) bool {
+			return compareDocumentVersions(
+				doc.Versions[i],
+				doc.Versions[j],
+			) < 0
+		},
+	)
+
+	active := doc.Versions[
+		len(doc.Versions)-1
+	]
+	applyActiveVersion(
+		doc,
+		active,
+	)
+}
+
+func compareDocumentVersions(
+	left DocumentVersion,
+	right DocumentVersion,
+) int {
+	leftTime := versionOrderTime(left)
+	rightTime := versionOrderTime(right)
+
+	switch {
+	case leftTime.Before(rightTime):
+		return -1
+	case rightTime.Before(leftTime):
+		return 1
+	case left.ID < right.ID:
+		return -1
+	case left.ID > right.ID:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func versionOrderTime(
+	version DocumentVersion,
+) time.Time {
+	switch {
+	case version.AvailableAt != nil:
+		return *version.AvailableAt
+	case version.UpdatedAt != nil:
+		return *version.UpdatedAt
+	case version.PublishedAt != nil:
+		return *version.PublishedAt
+	case version.FirstSeenAt != nil:
+		return *version.FirstSeenAt
+	default:
+		return version.SnapshotAt
+	}
+}
+
+func applyActiveVersion(
+	doc *CanonicalDocument,
+	version DocumentVersion,
+) {
+	if doc == nil {
+		return
+	}
+
+	doc.VersionID = version.ID
+	doc.Title = version.Title
+	doc.Content = version.Content
+	doc.ContentHash = version.ContentHash
+	doc.PublishedAt = cloneTime(
+		version.PublishedAt,
+	)
+	doc.UpdatedAt = cloneTime(
+		version.UpdatedAt,
+	)
+	doc.FirstSeenAt = cloneTime(
+		version.FirstSeenAt,
+	)
+	doc.AvailableAt = cloneTime(
+		version.AvailableAt,
+	)
+}
+
+func earlierTime(
+	left *time.Time,
+	right *time.Time,
+) *time.Time {
+	switch {
+	case left == nil:
+		return cloneTime(right)
+	case right == nil:
+		return cloneTime(left)
+	case right.Before(*left):
+		return cloneTime(right)
+	default:
+		return cloneTime(left)
 	}
 }
 
@@ -202,7 +575,10 @@ func appendUnique(
 	values []string,
 	candidates ...string,
 ) []string {
-	seen := make(map[string]struct{}, len(values)+len(candidates))
+	seen := make(
+		map[string]struct{},
+		len(values)+len(candidates),
+	)
 	for _, value := range values {
 		if value == "" {
 			continue
@@ -211,7 +587,9 @@ func appendUnique(
 	}
 
 	for _, candidate := range candidates {
-		candidate = strings.TrimSpace(candidate)
+		candidate = strings.TrimSpace(
+			candidate,
+		)
 		if candidate == "" {
 			continue
 		}
@@ -219,7 +597,10 @@ func appendUnique(
 			continue
 		}
 		seen[candidate] = struct{}{}
-		values = append(values, candidate)
+		values = append(
+			values,
+			candidate,
+		)
 	}
 
 	return values
