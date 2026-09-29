@@ -223,6 +223,16 @@ func validateEvent(v *Event) error {
 		)
 	}
 
+	if err := validateContradictions(
+		v.Facts,
+		v.Contradictions,
+	); err != nil {
+		return fmt.Errorf(
+			"contradictions: %w",
+			err,
+		)
+	}
+
 	if err := validateMateriality(
 		v.Materiality,
 	); err != nil {
