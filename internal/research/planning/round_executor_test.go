@@ -73,9 +73,7 @@ func (m *scriptedToolCallingChatModel) Stream(
 		)
 	}
 
-	response := m.state.responses[
-		m.state.index
-	]
+	response := m.state.responses[m.state.index]
 	m.state.index++
 
 	return schema.StreamReaderFromArray(
