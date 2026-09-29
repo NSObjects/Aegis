@@ -64,6 +64,13 @@ func (r ClsNewsRetriever) Retrieve(
 		)
 	}
 
+	if strings.TrimSpace(task.Symbol) != "" {
+		return nil, fmt.Errorf(
+			"CLS news retriever does not support symbol-scoped task %q; broad CLS candidates require relevance selection",
+			task.Symbol,
+		)
+	}
+
 	category, err := normalizeCLSNewsCategory(r.Category)
 	if err != nil {
 		return nil, err
