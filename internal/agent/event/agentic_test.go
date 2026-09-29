@@ -123,7 +123,8 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 		extraction.Facts,
 		map[string]capevent.CanonicalDocument{
 			"doc_1": {
-				ID: "doc_1",
+				ID:      "doc_1",
+				Content: "公司披露签订合同。",
 			},
 		},
 	)
@@ -237,6 +238,14 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 		!strings.Contains(
 			materialityPayload,
 			`"independent_source_count":1`,
+		) ||
+		!strings.Contains(
+			materialityPayload,
+			`"quote":"公司披露签订合同。"`,
+		) ||
+		!strings.Contains(
+			materialityPayload,
+			`"start_byte":0`,
 		) {
 		t.Fatalf(
 			"materiality payload lacks evidence support: %s",
