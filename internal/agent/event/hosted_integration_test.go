@@ -720,6 +720,25 @@ func TestLiveEventProvidersHostedIntegration(
 		)
 	}
 
+	if len(output.Corroboration.Clusters) == 0 {
+		t.Fatal(
+			"hosted corroboration produced no evidence clusters",
+		)
+	}
+	if output.Corroboration.IndependentSourceCount == 0 {
+		t.Fatal(
+			"hosted corroboration produced no independent sources",
+		)
+	}
+	if output.Corroboration.IndependentSourceCount >
+		len(output.Canonicalization.Documents) {
+		t.Fatalf(
+			"hosted independent sources=%d exceeds canonical documents=%d",
+			output.Corroboration.IndependentSourceCount,
+			len(output.Canonicalization.Documents),
+		)
+	}
+
 	if tavilyDocumentCount == 0 {
 		t.Fatalf(
 			"hosted Tavily capture returned no full-content web evidence; status=%s error=%q",
@@ -798,6 +817,9 @@ func TestLiveEventProvidersHostedIntegration(
 		CninfoEnriched      int                       `json:"cninfo_enriched_count"`
 		CninfoBodyRiskCount int                       `json:"cninfo_body_risk_count"`
 		SnapshotCount       int                       `json:"snapshot_file_count"`
+		CanonicalDocuments  int                       `json:"canonical_document_count"`
+		EvidenceClusters    int                       `json:"evidence_cluster_count"`
+		IndependentSources  int                       `json:"independent_source_count"`
 	}{
 		Symbol:              symbol,
 		TargetName:          target.Name,
@@ -812,6 +834,9 @@ func TestLiveEventProvidersHostedIntegration(
 		CninfoEnriched:      cninfoEnrichedCount,
 		CninfoBodyRiskCount: cninfoBodyRiskCount,
 		SnapshotCount:       snapshotCount,
+		CanonicalDocuments:  len(output.Canonicalization.Documents),
+		EvidenceClusters:    len(output.Corroboration.Clusters),
+		IndependentSources:  output.Corroboration.IndependentSourceCount,
 	}
 	data, err := json.MarshalIndent(
 		diagnostic,

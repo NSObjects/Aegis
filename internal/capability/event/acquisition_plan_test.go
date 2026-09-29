@@ -326,6 +326,19 @@ func TestAcquisitionPlanRunnerWithCninfoAndCLS(t *testing.T) {
 			len(output.Canonicalization.Documents),
 		)
 	}
+	if len(output.Corroboration.Clusters) != 2 {
+		t.Fatalf(
+			"corroboration clusters = %d, want 2: %+v",
+			len(output.Corroboration.Clusters),
+			output.Corroboration.Clusters,
+		)
+	}
+	if output.Corroboration.IndependentSourceCount != 2 {
+		t.Fatalf(
+			"independent sources = %d, want 2",
+			output.Corroboration.IndependentSourceCount,
+		)
+	}
 	if len(output.Result.Attempts) != 2 {
 		t.Fatalf(
 			"root attempts = %d, want 2",

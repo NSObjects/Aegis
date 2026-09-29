@@ -47,6 +47,8 @@ type ResearchRoundResult struct {
 	TaskID                     string                   `json:"task_id"`
 	Status                     event.ResearchTaskStatus `json:"status"`
 	DocumentCount              int                      `json:"document_count"`
+	ClusterCount               int                      `json:"cluster_count"`
+	IndependentSourceCount     int                      `json:"independent_source_count"`
 	RoundAcceptedDocumentCount int                      `json:"round_accepted_document_count"`
 	CandidateCount             int                      `json:"candidate_count"`
 	SelectedCount              int                      `json:"selected_count"`
@@ -72,6 +74,7 @@ type ResearchRoundArtifact struct {
 	Round            int
 	RootTask         event.ResearchTask
 	Canonicalization event.CanonicalizationResult
+	Corroboration    event.CorroborationResult
 	Result           event.ResearchTaskResult
 	Attempts         []event.AcquisitionAttempt
 }
@@ -284,7 +287,13 @@ func (e *ResearchRoundExecutor) executeRound(
 		)
 	}
 
-	result := (event.TaskEvaluator{}).Evaluate(
+	corroboration := (event.EvidenceCorroborator{}).Corroborate(
+		canonicalization.Documents,
+	)
+
+	result := (event.TaskEvaluator{
+		Corroboration: &corroboration,
+	}).Evaluate(
 		state.RootTask,
 		canonicalization.Documents,
 		state.Attempts,
@@ -293,6 +302,7 @@ func (e *ResearchRoundExecutor) executeRound(
 	roundResult := buildResearchRoundResult(
 		state.Round,
 		result,
+		corroboration,
 		roundOutput,
 		currentAttempts,
 	)
@@ -304,6 +314,7 @@ func (e *ResearchRoundExecutor) executeRound(
 				Round:            state.Round,
 				RootTask:         state.RootTask,
 				Canonicalization: canonicalization,
+				Corroboration:    corroboration,
 				Result:           result,
 				Attempts: append(
 					[]event.AcquisitionAttempt(nil),
@@ -418,6 +429,7 @@ func stripRawMetadata(
 func buildResearchRoundResult(
 	round int,
 	result event.ResearchTaskResult,
+	corroboration event.CorroborationResult,
 	output event.AcquisitionPlanOutput,
 	currentAttempts []event.AcquisitionAttempt,
 ) ResearchRoundResult {
@@ -477,6 +489,8 @@ func buildResearchRoundResult(
 		TaskID:                     result.TaskID,
 		Status:                     result.Status,
 		DocumentCount:              len(result.Documents),
+		ClusterCount:               len(corroboration.Clusters),
+		IndependentSourceCount:     corroboration.IndependentSourceCount,
 		RoundAcceptedDocumentCount: len(output.AcceptedRawDocuments),
 		CandidateCount:             len(output.CandidateRawDocuments),
 		SelectedCount:              selectedCount,

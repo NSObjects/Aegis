@@ -72,6 +72,7 @@ type AcquisitionPlanOutput struct {
 	AcceptedRawDocuments  []RawDocument
 	Selections            []EvidenceSelectionDecision
 	Canonicalization      CanonicalizationResult
+	Corroboration         CorroborationResult
 	Result                ResearchTaskResult
 }
 
@@ -255,7 +256,14 @@ func (r AcquisitionPlanRunner) Run(
 	}
 	output.Canonicalization = canonicalization
 
-	result := (TaskEvaluator{}).Evaluate(
+	corroboration := (EvidenceCorroborator{}).Corroborate(
+		canonicalization.Documents,
+	)
+	output.Corroboration = corroboration
+
+	result := (TaskEvaluator{
+		Corroboration: &corroboration,
+	}).Evaluate(
 		root,
 		canonicalization.Documents,
 		attempts,
