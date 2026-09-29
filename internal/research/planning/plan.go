@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/cloudwego/eino/adk/prebuilt/planexecute"
+	"github.com/cloudwego/eino/schema"
 )
 
 const executeResearchPlanStep = "execute_research_plan"
@@ -27,6 +28,12 @@ type ResearchPlan struct {
 }
 
 var _ planexecute.Plan = (*ResearchPlan)(nil)
+
+func init() {
+	schema.RegisterName[*ResearchPlan](
+		"_aegis_research_plan",
+	)
+}
 
 func (p *ResearchPlan) FirstStep() string {
 	if p == nil || len(p.Steps) == 0 {
