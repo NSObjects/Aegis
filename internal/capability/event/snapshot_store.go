@@ -8,6 +8,7 @@ import (
 // EvidenceSnapshot is one immutable observation of one logical-document
 // version. Multiple observations may point at the same VersionID.
 type EvidenceSnapshot struct {
+	SchemaVersion     int         `json:"schema_version"`
 	ID                string      `json:"snapshot_id"`
 	LogicalDocumentID string      `json:"logical_document_id"`
 	VersionID         string      `json:"version_id"`
