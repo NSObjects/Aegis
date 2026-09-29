@@ -143,8 +143,14 @@ func TestCninfoAnnouncementRetrieverRunsThroughTaskRunner(t *testing.T) {
 			),
 		},
 		Requirements: ResearchRequirements{
-			PITSafe:               true,
-			RequiredSourceTypes:   []SourceType{SourceOfficial},
+			PITSafe:             true,
+			RequiredSourceTypes: []SourceType{SourceOfficial},
+			RequiredAuthorities: []EvidenceAuthority{
+				AuthorityIssuer,
+			},
+			RequiredEvidenceKinds: []EvidenceKind{
+				EvidenceDisclosure,
+			},
 			MinDocuments:          1,
 			MinIndependentSources: 1,
 			RequirePrimarySource:  true,
@@ -240,6 +246,12 @@ func TestCninfoAnnouncementRetrieverRunsThroughTaskRunner(t *testing.T) {
 	}
 	if raw.SourceType != SourceOfficial {
 		t.Fatalf("source type = %q", raw.SourceType)
+	}
+	if raw.Authority != AuthorityIssuer {
+		t.Fatalf("authority = %q", raw.Authority)
+	}
+	if raw.EvidenceKind != EvidenceDisclosure {
+		t.Fatalf("evidence kind = %q", raw.EvidenceKind)
 	}
 	if !raw.IsPrimary {
 		t.Fatal("Cninfo announcement should be primary evidence")
