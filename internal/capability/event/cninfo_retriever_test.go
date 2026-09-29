@@ -176,6 +176,16 @@ func TestCninfoAnnouncementRetrieverRunsThroughTaskRunner(t *testing.T) {
 			Now: func() time.Time {
 				return retrievedAt
 			},
+			PDFExtractor: PDFTextExtractorFunc(
+				func(
+					context.Context,
+					[]byte,
+				) (PDFTextExtraction, error) {
+					return PDFTextExtraction{
+						Text: "  公司   公告正文\n重大事项  ",
+					}, nil
+				},
+			),
 		},
 	)
 	if err != nil {
