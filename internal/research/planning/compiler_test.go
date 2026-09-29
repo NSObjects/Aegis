@@ -3,7 +3,6 @@ package planning
 import (
 	"Aegis/internal/capability/event"
 	"context"
-	"errors"
 	"strings"
 	"testing"
 )
@@ -219,6 +218,43 @@ func TestCompilerRejectsMissingBindings(t *testing.T) {
 	}
 }
 
+func TestCompilerRequiresSelectorForCandidatePlan(
+	t *testing.T,
+) {
+	_, err := (Compiler{
+		Channels: ChannelBindings{
+			BreakingNews: compilerRetriever{
+				id:     "news",
+				method: event.AcquisitionAPI,
+			},
+		},
+	}).Compile(
+		event.ResearchTask{
+			ID:     "root-task",
+			Symbol: "600519.SH",
+		},
+		&ResearchPlan{
+			Steps: []ResearchPlanStep{
+				{
+					ID:    "news",
+					Need:  event.NeedBreakingNews,
+					Scope: event.AcquisitionScopeCandidate,
+				},
+			},
+		},
+	)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"requires selector binding",
+		) {
+		t.Fatalf(
+			"error = %v, want selector-binding validation",
+			err,
+		)
+	}
+}
+
 func TestCompilerOfficialDisclosureRequiresRootSymbol(
 	t *testing.T,
 ) {
@@ -263,10 +299,7 @@ func TestCompilerRejectsNilPlan(t *testing.T) {
 		nil,
 	)
 	if err == nil ||
-		!errors.Is(
-			err,
-			errors.New("research plan is required"),
-		) && !strings.Contains(
+		!strings.Contains(
 			err.Error(),
 			"research plan is required",
 		) {
