@@ -306,6 +306,8 @@ func clsRawDocument(
 		EvidenceKind: EvidenceNewsReport,
 		IsPrimary:    false,
 		PublishedAt: publishedAt,
+		FirstSeenAt: cloneTime(&retrievedAt),
+		AvailableAt: cloneTime(&retrievedAt),
 		RetrievedAt: retrievedAt,
 		RawMetadata: map[string]any{
 			"provider":   "cls",
