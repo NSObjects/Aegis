@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/cloudwego/eino/schema"
 )
 
 type liveRetriever struct {
