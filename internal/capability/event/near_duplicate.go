@@ -38,21 +38,60 @@ type NearDuplicateMatcher struct {
 	MinJaccard           float64
 }
 
+type nearDuplicatePrepared struct {
+	Document     CanonicalDocument
+	SourceKey    string
+	Normalized   string
+	Shingles     map[string]struct{}
+}
+
 func (m NearDuplicateMatcher) Match(
 	left CanonicalDocument,
 	right CanonicalDocument,
 ) (EvidenceRelation, bool) {
+	return m.matchPrepared(
+		m.prepare(left),
+		m.prepare(right),
+	)
+}
+
+func (m NearDuplicateMatcher) prepare(
+	document CanonicalDocument,
+) nearDuplicatePrepared {
+	shingleRunes := m.ShingleRunes
+	if shingleRunes <= 0 {
+		shingleRunes = DefaultNearDuplicateShingleRunes
+	}
+	normalized := normalizeNearDuplicateText(
+		document.Content,
+	)
+	return nearDuplicatePrepared{
+		Document:   document,
+		SourceKey:  corroborationSourceKey(document.Source),
+		Normalized: normalized,
+		Shingles: characterShingles(
+			normalized,
+			shingleRunes,
+		),
+	}
+}
+
+func (m NearDuplicateMatcher) matchPrepared(
+	left nearDuplicatePrepared,
+	right nearDuplicatePrepared,
+) (EvidenceRelation, bool) {
 	leftID, rightID := orderedDocumentIDs(
-		left.ID,
-		right.ID,
+		left.Document.ID,
+		right.Document.ID,
 	)
 	if leftID == "" || rightID == "" ||
 		leftID == rightID {
 		return EvidenceRelation{}, false
 	}
 
-	if left.ContentHash != "" &&
-		left.ContentHash == right.ContentHash {
+	if left.Document.ContentHash != "" &&
+		left.Document.ContentHash ==
+			right.Document.ContentHash {
 		return EvidenceRelation{
 			LeftDocumentID:  leftID,
 			RightDocumentID: rightID,
@@ -65,21 +104,15 @@ func (m NearDuplicateMatcher) Match(
 		}, true
 	}
 
-	leftSource := corroborationSourceKey(left.Source)
-	rightSource := corroborationSourceKey(right.Source)
-	if leftSource == "" ||
-		rightSource == "" ||
-		leftSource == rightSource {
+	if left.SourceKey == "" ||
+		right.SourceKey == "" ||
+		left.SourceKey == right.SourceKey {
 		return EvidenceRelation{}, false
 	}
 
 	minRunes := m.MinRunes
 	if minRunes <= 0 {
 		minRunes = DefaultNearDuplicateMinRunes
-	}
-	shingleRunes := m.ShingleRunes
-	if shingleRunes <= 0 {
-		shingleRunes = DefaultNearDuplicateShingleRunes
 	}
 	minContainment := m.MinContainment
 	if minContainment <= 0 {
@@ -91,40 +124,25 @@ func (m NearDuplicateMatcher) Match(
 		minJaccard = DefaultNearDuplicateJaccard
 	}
 
-	leftText := normalizeNearDuplicateText(
-		left.Content,
-	)
-	rightText := normalizeNearDuplicateText(
-		right.Content,
-	)
-	if len([]rune(leftText)) < minRunes ||
-		len([]rune(rightText)) < minRunes {
+	if len([]rune(left.Normalized)) < minRunes ||
+		len([]rune(right.Normalized)) < minRunes {
 		return EvidenceRelation{}, false
 	}
-
-	leftShingles := characterShingles(
-		leftText,
-		shingleRunes,
-	)
-	rightShingles := characterShingles(
-		rightText,
-		shingleRunes,
-	)
-	if len(leftShingles) == 0 ||
-		len(rightShingles) == 0 {
+	if len(left.Shingles) == 0 ||
+		len(right.Shingles) == 0 {
 		return EvidenceRelation{}, false
 	}
 
 	intersection := shingleIntersectionCount(
-		leftShingles,
-		rightShingles,
+		left.Shingles,
+		right.Shingles,
 	)
-	minCount := len(leftShingles)
-	if len(rightShingles) < minCount {
-		minCount = len(rightShingles)
+	minCount := len(left.Shingles)
+	if len(right.Shingles) < minCount {
+		minCount = len(right.Shingles)
 	}
-	unionCount := len(leftShingles) +
-		len(rightShingles) - intersection
+	unionCount := len(left.Shingles) +
+		len(right.Shingles) - intersection
 
 	containment := float64(intersection) /
 		float64(minCount)
@@ -148,7 +166,6 @@ func (m NearDuplicateMatcher) Match(
 
 	return relation, true
 }
-
 func normalizeNearDuplicateText(
 	value string,
 ) string {
