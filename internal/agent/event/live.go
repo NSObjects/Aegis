@@ -14,16 +14,22 @@ import (
 type LiveAgentConfig struct {
 	Analysis *Agent
 
-	CaptureRunner       capevent.AcquisitionPlanRunner
-	OfficialRetriever   capevent.Retriever
-	BreakingRetriever   capevent.Retriever
+	CaptureRunner capevent.AcquisitionPlanRunner
+
+	// Singular fields remain compatible with existing callers. New provider
+	// fan-out should use the plural slices; both forms are merged and validated.
+	OfficialRetriever capevent.Retriever
+	BreakingRetriever capevent.Retriever
+
+	OfficialRetrievers []capevent.Retriever
+	BreakingRetrievers []capevent.Retriever
 }
 
 type LiveAgent struct {
-	analysis            *Agent
-	captureRunner       capevent.AcquisitionPlanRunner
-	officialRetriever   capevent.Retriever
-	breakingRetriever   capevent.Retriever
+	analysis             *Agent
+	captureRunner        capevent.AcquisitionPlanRunner
+	officialRetrievers   []capevent.Retriever
+	breakingRetrievers   []capevent.Retriever
 }
 
 func NewLiveAgent(
@@ -39,22 +45,29 @@ func NewLiveAgent(
 			"live event capture snapshot store is required",
 		)
 	}
-	if cfg.OfficialRetriever == nil {
-		return nil, errors.New(
-			"live event official retriever is required",
-		)
+
+	official, err := resolveLiveRetrieverSet(
+		"official",
+		cfg.OfficialRetriever,
+		cfg.OfficialRetrievers,
+	)
+	if err != nil {
+		return nil, err
 	}
-	if cfg.BreakingRetriever == nil {
-		return nil, errors.New(
-			"live event breaking-news retriever is required",
-		)
+	breaking, err := resolveLiveRetrieverSet(
+		"breaking-news",
+		cfg.BreakingRetriever,
+		cfg.BreakingRetrievers,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	return &LiveAgent{
-		analysis:          cfg.Analysis,
+		analysis:           cfg.Analysis,
 		captureRunner:     cfg.CaptureRunner,
-		officialRetriever: cfg.OfficialRetriever,
-		breakingRetriever: cfg.BreakingRetriever,
+		officialRetrievers: official,
+		breakingRetrievers: breaking,
 	}, nil
 }
 
@@ -97,37 +110,37 @@ func (a *LiveAgent) Analyze(
 			PITSafe: false,
 		}
 
+	capturePlan := capevent.AcquisitionPlan{
+		Steps: make(
+			[]capevent.AcquisitionStep,
+			0,
+			len(a.officialRetrievers)+
+				len(a.breakingRetrievers),
+		),
+	}
+	capturePlan.Steps = append(
+		capturePlan.Steps,
+		liveCaptureSteps(
+			"capture_official",
+			task.Symbol,
+			capevent.NeedOfficialDisclosure,
+			a.officialRetrievers,
+		)...,
+	)
+	capturePlan.Steps = append(
+		capturePlan.Steps,
+		liveCaptureSteps(
+			"capture_breaking_news",
+			"",
+			capevent.NeedBreakingNews,
+			a.breakingRetrievers,
+		)...,
+	)
+
 	capture, err := a.captureRunner.Run(
 		ctx,
 		captureRoot,
-		capevent.AcquisitionPlan{
-			Steps: []capevent.AcquisitionStep{
-				{
-					ID: "capture_official",
-					Scope: capevent.
-						AcquisitionScopeDirect,
-					Task: capevent.ResearchTask{
-						Symbol: task.Symbol,
-						InformationNeed: capevent.
-							NeedOfficialDisclosure,
-					},
-					Retriever:
-						a.officialRetriever,
-				},
-				{
-					ID: "capture_breaking_news",
-					Scope: capevent.
-						AcquisitionScopeDirect,
-					Task: capevent.ResearchTask{
-						Symbol: "",
-						InformationNeed: capevent.
-							NeedBreakingNews,
-					},
-					Retriever:
-						a.breakingRetriever,
-				},
-			},
-		},
+		capturePlan,
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -203,6 +216,126 @@ func (a *LiveAgent) Analyze(
 		)
 	}
 	return result, nil
+}
+
+func resolveLiveRetrieverSet(
+	channel string,
+	single capevent.Retriever,
+	providers []capevent.Retriever,
+) ([]capevent.Retriever, error) {
+	retrievers := make(
+		[]capevent.Retriever,
+		0,
+		len(providers)+1,
+	)
+	if single != nil {
+		retrievers = append(
+			retrievers,
+			single,
+		)
+	}
+	retrievers = append(
+		retrievers,
+		providers...,
+	)
+
+	if len(retrievers) == 0 {
+		return nil, fmt.Errorf(
+			"live event %s retrievers are required",
+			channel,
+		)
+	}
+
+	validated := make(
+		[]capevent.Retriever,
+		0,
+		len(retrievers),
+	)
+	seenIDs := make(
+		map[string]struct{},
+		len(retrievers),
+	)
+
+	for index, retriever := range retrievers {
+		if retriever == nil {
+			return nil, fmt.Errorf(
+				"live event %s retriever %d is nil",
+				channel,
+				index,
+			)
+		}
+
+		retrieverID := strings.TrimSpace(
+			retriever.ID(),
+		)
+		if retrieverID == "" {
+			return nil, fmt.Errorf(
+				"live event %s retriever %d id is required",
+				channel,
+				index,
+			)
+		}
+		if retriever.Method() == "" {
+			return nil, fmt.Errorf(
+				"live event %s retriever %q acquisition method is required",
+				channel,
+				retrieverID,
+			)
+		}
+		if _, duplicate := seenIDs[retrieverID]; duplicate {
+			return nil, fmt.Errorf(
+				"live event %s retriever id %q is duplicated",
+				channel,
+				retrieverID,
+			)
+		}
+		seenIDs[retrieverID] = struct{}{}
+		validated = append(
+			validated,
+			retriever,
+		)
+	}
+
+	return validated, nil
+}
+
+func liveCaptureSteps(
+	baseID string,
+	symbol string,
+	need capevent.InformationNeed,
+	retrievers []capevent.Retriever,
+) []capevent.AcquisitionStep {
+	steps := make(
+		[]capevent.AcquisitionStep,
+		0,
+		len(retrievers),
+	)
+
+	for _, retriever := range retrievers {
+		stepID := baseID
+		if len(retrievers) > 1 {
+			stepID += "@" +
+				strings.TrimSpace(
+					retriever.ID(),
+				)
+		}
+
+		steps = append(
+			steps,
+			capevent.AcquisitionStep{
+				ID: stepID,
+				Scope: capevent.
+					AcquisitionScopeDirect,
+				Task: capevent.ResearchTask{
+					Symbol:          symbol,
+					InformationNeed: need,
+				},
+				Retriever: retriever,
+			},
+		)
+	}
+
+	return steps
 }
 
 func latestCaptureFinishedAt(

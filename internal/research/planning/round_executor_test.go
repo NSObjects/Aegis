@@ -94,9 +94,10 @@ func (m *scriptedToolCallingChatModel) WithTools(
 }
 
 type roundTestRetriever struct {
-	id       string
-	docs     []event.RawDocument
-	err      error
+	id        string
+	method    event.AcquisitionMethod
+	docs      []event.RawDocument
+	err       error
 	callCount int
 }
 
@@ -105,6 +106,9 @@ func (r *roundTestRetriever) ID() string {
 }
 
 func (r *roundTestRetriever) Method() event.AcquisitionMethod {
+	if r.method != "" {
+		return r.method
+	}
 	return event.AcquisitionAPI
 }
 
@@ -649,6 +653,220 @@ func TestPlanExecuteAgentKeepsRetrieverFailureInResearchSemantics(
 			"replanner input does not preserve acquisition failure:\n%s",
 			input,
 		)
+	}
+}
+
+func TestPlanExecuteAgentFansOutProvidersAndKeepsSiblingFailure(
+	t *testing.T,
+) {
+	asOf := time.Date(
+		2026, 9, 29, 15, 0, 0, 0, time.UTC,
+	)
+	published := asOf.Add(-time.Hour)
+
+	plannerModel := newScriptedToolCallingChatModel(
+		researchPlanToolCall(
+			"plan-multi-provider",
+			&ResearchPlan{
+				Steps: []ResearchPlanStep{
+					{
+						ID:    "news",
+						Need:  event.NeedBreakingNews,
+						Scope: event.AcquisitionScopeCandidate,
+					},
+				},
+			},
+		),
+	)
+	replannerModel := newScriptedToolCallingChatModel(
+		respondToolCall(
+			"respond-multi-provider",
+			"usable evidence is sufficient",
+		),
+	)
+
+	apiProvider := &roundTestRetriever{
+		id:     "cls_api",
+		method: event.AcquisitionAPI,
+		docs: []event.RawDocument{
+			{
+				ID:           "cls-news-1",
+				Title:        "target company event",
+				Content:      "target company material event",
+				URL:          "https://media.example/cls-1",
+				Publisher:    "media-a",
+				SourceType:   event.SourceIndustryMedia,
+				Authority:    event.AuthorityMedia,
+				EvidenceKind: event.EvidenceNewsReport,
+				PublishedAt:  &published,
+			},
+		},
+	}
+	webProvider := &roundTestRetriever{
+		id:     "web_search",
+		method: event.AcquisitionWebSearch,
+		err: errors.New(
+			"web search provider unavailable",
+		),
+	}
+	selector := &roundTestSelector{}
+	artifacts := make(
+		[]ResearchRoundArtifact,
+		0,
+		1,
+	)
+
+	agent, err := NewPlanExecuteAgent(
+		context.Background(),
+		PlanExecuteConfig{
+			PlannerModel:   plannerModel,
+			ReplannerModel: replannerModel,
+			Executor: ResearchRoundExecutorConfig{
+				ResolveRootTask: func(
+					context.Context,
+					[]adk.Message,
+				) (event.ResearchTask, error) {
+					return event.ResearchTask{
+						ID:     "multi-provider-root",
+						Symbol: "600519.SH",
+						AsOf:   asOf,
+						Requirements:
+							event.ResearchRequirements{
+								PITSafe: true,
+								RequiredSourceTypes:
+									[]event.SourceType{
+										event.SourceIndustryMedia,
+									},
+								MinDocuments: 1,
+							},
+					}, nil
+				},
+				Compiler: Compiler{
+					Channels: ChannelBindings{
+						BreakingNewsProviders:
+							[]event.Retriever{
+								apiProvider,
+								webProvider,
+							},
+						Selector: selector,
+					},
+				},
+				Runner: event.AcquisitionPlanRunner{
+					Now: func() time.Time {
+						return asOf.Add(time.Minute)
+					},
+				},
+				OnRoundCompleted: func(
+					_ context.Context,
+					artifact ResearchRoundArtifact,
+				) {
+					artifacts = append(
+						artifacts,
+						artifact,
+					)
+				},
+			},
+			MaxIterations: 2,
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"NewPlanExecuteAgent() error = %v",
+			err,
+		)
+	}
+
+	events := runPlanExecuteAgent(
+		t,
+		agent,
+	)
+	assertNoAgentErrors(t, events)
+
+	if apiProvider.callCount != 1 ||
+		webProvider.callCount != 1 {
+		t.Fatalf(
+			"provider calls api=%d web=%d, want 1/1",
+			apiProvider.callCount,
+			webProvider.callCount,
+		)
+	}
+	if selector.callCount != 1 {
+		t.Fatalf(
+			"selector calls = %d, want one combined candidate selection",
+			selector.callCount,
+		)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf(
+			"round artifacts = %d, want 1",
+			len(artifacts),
+		)
+	}
+	artifact := artifacts[0]
+	if artifact.Result.Status != event.TaskSatisfied {
+		t.Fatalf(
+			"round status = %q, want %q; gaps=%+v",
+			artifact.Result.Status,
+			event.TaskSatisfied,
+			artifact.Result.Gaps,
+		)
+	}
+	if len(artifact.Attempts) != 2 {
+		t.Fatalf(
+			"attempts = %d, want 2",
+			len(artifact.Attempts),
+		)
+	}
+
+	statuses := map[string]event.AcquisitionStatus{}
+	methods := map[string]event.AcquisitionMethod{}
+	for _, attempt := range artifact.Attempts {
+		statuses[attempt.Tool] = attempt.Status
+		methods[attempt.Tool] = attempt.Method
+	}
+	if statuses["cls_api"] !=
+		event.AcquisitionSucceeded {
+		t.Fatalf(
+			"cls_api status = %q",
+			statuses["cls_api"],
+		)
+	}
+	if statuses["web_search"] !=
+		event.AcquisitionFailed {
+		t.Fatalf(
+			"web_search status = %q",
+			statuses["web_search"],
+		)
+	}
+	if methods["web_search"] !=
+		event.AcquisitionWebSearch {
+		t.Fatalf(
+			"web_search method = %q",
+			methods["web_search"],
+		)
+	}
+
+	input := modelInputText(
+		replannerModel.state.inputs,
+		0,
+	)
+	for _, expected := range []string{
+		`"attempt_count":2`,
+		`"retriever":"cls_api"`,
+		`"retriever":"web_search"`,
+		`"status":"failed"`,
+		"web search provider unavailable",
+	} {
+		if !strings.Contains(
+			input,
+			expected,
+		) {
+			t.Fatalf(
+				"replanner input missing %q:\n%s",
+				expected,
+				input,
+			)
+		}
 	}
 }
 
