@@ -18,9 +18,18 @@ const (
 // EvidenceSelectionDecision is an auditable relevance decision for one raw
 // candidate document. Candidate evidence cannot enter the root evidence pool
 // without one explicit decision.
+type EvidenceSelectionMethod string
+
+const (
+	SelectionDeterministic EvidenceSelectionMethod = "deterministic"
+	SelectionSemantic      EvidenceSelectionMethod = "semantic"
+)
+
 type EvidenceSelectionDecision struct {
 	RawDocumentID string
 	Selected      bool
+	Method        EvidenceSelectionMethod
+	Confidence    float64
 	Reason        string
 }
 
