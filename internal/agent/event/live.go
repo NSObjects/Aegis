@@ -162,6 +162,15 @@ func (a *LiveAgent) Analyze(
 		return nil, err
 	}
 
+	// The inner PIT task runs at T1 so snapshots observed during live capture
+	// are eligible. Preserve T0 as the caller-visible requested cutoff and
+	// expose T1 separately as the evidence observation cutoff.
+	result.EvidenceAsOf = result.RequestedAsOf
+	result.RequestedAsOf =
+		publicationCutoff.UTC().Format(
+			time.RFC3339,
+		)
+
 	for _, step := range capture.Steps {
 		status := step.Run.Attempt.Status
 		switch status {
