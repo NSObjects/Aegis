@@ -120,6 +120,7 @@ func (r ClsNewsRetriever) Retrieve(
 	}
 
 	documents := make([]RawDocument, 0)
+	seenDocumentIDs := make(map[string]struct{})
 	for _, day := range days {
 		lastTime := clsEndOfDay(day)
 		if end.Before(lastTime) {
@@ -169,6 +170,14 @@ func (r ClsNewsRetriever) Retrieve(
 				task.TimeRange,
 			) {
 				continue
+			}
+			if document.ID != "" {
+				if _, duplicate :=
+					seenDocumentIDs[document.ID]; duplicate {
+					continue
+				}
+				seenDocumentIDs[document.ID] =
+					struct{}{}
 			}
 			documents = append(
 				documents,
@@ -266,7 +275,9 @@ func (r ClsNewsRetriever) fetchDay(
 			RollData []clsNewsItem `json:"roll_data"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(
+	decoder := json.NewDecoder(resp.Body)
+	decoder.UseNumber()
+	if err := decoder.Decode(
 		&payload,
 	); err != nil {
 		return nil, fmt.Errorf(
