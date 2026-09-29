@@ -794,7 +794,7 @@ func TestLiveEventProvidersHostedIntegration(
 		TavilyResolved      int                       `json:"tavily_resolved_count"`
 		CninfoDocuments     int                       `json:"cninfo_document_count"`
 		CninfoResolved      int                       `json:"cninfo_resolved_count"`
-		CLSResolved         int                       `json:"cls_resolved_count"`     int                       `json:"cninfo_document_count"`
+		CLSResolved         int                       `json:"cls_resolved_count"`
 		CninfoEnriched      int                       `json:"cninfo_enriched_count"`
 		CninfoBodyRiskCount int                       `json:"cninfo_body_risk_count"`
 		SnapshotCount       int                       `json:"snapshot_file_count"`
