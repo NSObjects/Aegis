@@ -422,3 +422,215 @@ func TestCninfoPDFEnrichmentBoundsTextAndKeepsIdentity(
 		)
 	}
 }
+
+
+func TestCninfoPDFExtractorFailurePreservesMetadata(
+	t *testing.T,
+) {
+	publishedAt := time.Date(
+		2026, 9, 29, 10, 0, 0, 0, time.UTC,
+	)
+	retrievedAt := publishedAt.Add(time.Hour)
+	task := ResearchTask{
+		ID:     "extractor-failure",
+		Symbol: "600519.SH",
+		AsOf:   retrievedAt,
+	}
+
+	document := cninfoRawDocument(
+		task,
+		cninfoStock{
+			Symbol:       "600519",
+			InstrumentID: "600519.SH",
+			Exchange:     "SSE",
+			Name:         "贵州茅台",
+		},
+		map[string]any{
+			"announcementId":    "extract-fail",
+			"announcementTitle": "解析失败测试",
+			"announcementTime":  publishedAt.UnixMilli(),
+			"adjunctUrl":         "finalpage/extract-fail.PDF",
+			"adjunctType":        "PDF",
+		},
+		retrievedAt,
+	)
+	if document == nil {
+		t.Fatal("cninfoRawDocument() returned nil")
+	}
+
+	client := httpDoerFunc(
+		func(*http.Request) (*http.Response, error) {
+			return bytesHTTPResponse(
+				http.StatusOK,
+				[]byte("pdf-bytes"),
+			), nil
+		},
+	)
+	documents := []RawDocument{*document}
+
+	err := (CninfoAnnouncementRetriever{
+		PDFExtractor: PDFTextExtractorFunc(
+			func(
+				context.Context,
+				[]byte,
+			) (PDFTextExtraction, error) {
+				return PDFTextExtraction{},
+					errors.New("extractor failed")
+			},
+		),
+	}).enrichPDFBodies(
+		context.Background(),
+		client,
+		task,
+		documents,
+	)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"PDF body enrichment failed for 1 announcement",
+		) {
+		t.Fatalf(
+			"enrichPDFBodies() error = %v",
+			err,
+		)
+	}
+
+	got := documents[0]
+	if got.Content != "" {
+		t.Fatalf(
+			"content = %q, want metadata-only",
+			got.Content,
+		)
+	}
+	if got.RawMetadata["body_enriched"] != false {
+		t.Fatalf(
+			"body_enriched = %v",
+			got.RawMetadata["body_enriched"],
+		)
+	}
+	if !strings.Contains(
+		got.RawMetadata["body_error"].(string),
+		"extractor failed",
+	) {
+		t.Fatalf(
+			"body_error = %v",
+			got.RawMetadata["body_error"],
+		)
+	}
+}
+
+func TestCninfoPDFEnrichmentStopsAfterContextCancellation(
+	t *testing.T,
+) {
+	publishedAt := time.Date(
+		2026, 9, 29, 10, 0, 0, 0, time.UTC,
+	)
+	retrievedAt := publishedAt.Add(time.Hour)
+	task := ResearchTask{
+		ID:     "cancel-enrichment",
+		Symbol: "600519.SH",
+		AsOf:   retrievedAt,
+	}
+
+	makeDocument := func(
+		id string,
+		path string,
+	) RawDocument {
+		document := cninfoRawDocument(
+			task,
+			cninfoStock{
+				Symbol:       "600519",
+				InstrumentID: "600519.SH",
+				Exchange:     "SSE",
+				Name:         "贵州茅台",
+			},
+			map[string]any{
+				"announcementId":    id,
+				"announcementTitle": id,
+				"announcementTime":  publishedAt.UnixMilli(),
+				"adjunctUrl":         path,
+				"adjunctType":        "PDF",
+			},
+			retrievedAt,
+		)
+		if document == nil {
+			t.Fatalf(
+				"cninfoRawDocument(%q) returned nil",
+				id,
+			)
+		}
+		return *document
+	}
+
+	documents := []RawDocument{
+		makeDocument(
+			"cancel-1",
+			"finalpage/cancel-1.PDF",
+		),
+		makeDocument(
+			"cancel-2",
+			"finalpage/cancel-2.PDF",
+		),
+	}
+
+	requestCount := 0
+	client := httpDoerFunc(
+		func(*http.Request) (*http.Response, error) {
+			requestCount++
+			return bytesHTTPResponse(
+				http.StatusOK,
+				[]byte("pdf"),
+			), nil
+		},
+	)
+
+	ctx, cancel := context.WithCancel(
+		context.Background(),
+	)
+	extractorCalls := 0
+	extractor := PDFTextExtractorFunc(
+		func(
+			_ context.Context,
+			_ []byte,
+		) (PDFTextExtraction, error) {
+			extractorCalls++
+			cancel()
+			return PDFTextExtraction{},
+				context.Canceled
+		},
+	)
+
+	err := (CninfoAnnouncementRetriever{
+		PDFExtractor: extractor,
+	}).enrichPDFBodies(
+		ctx,
+		client,
+		task,
+		documents,
+	)
+	if err == nil ||
+		!errors.Is(err, context.Canceled) {
+		t.Fatalf(
+			"enrichPDFBodies() error = %v, want context.Canceled",
+			err,
+		)
+	}
+	if requestCount != 1 {
+		t.Fatalf(
+			"PDF requests = %d, want 1",
+			requestCount,
+		)
+	}
+	if extractorCalls != 1 {
+		t.Fatalf(
+			"extractor calls = %d, want 1",
+			extractorCalls,
+		)
+	}
+	if documents[1].RawMetadata["body_enriched"] != nil {
+		t.Fatalf(
+			"second document should remain untouched after cancellation: %+v",
+			documents[1].RawMetadata,
+		)
+	}
+}
