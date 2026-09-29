@@ -26,12 +26,14 @@ type ResearchTask struct {
 }
 
 type ResearchRequirements struct {
-	PITSafe               bool
-	RequiredSourceTypes   []SourceType
-	PreferredSourceTypes  []SourceType
-	MinDocuments          int
-	MinIndependentSources int
-	RequirePrimarySource  bool
+	PITSafe                bool
+	RequiredSourceTypes    []SourceType
+	PreferredSourceTypes   []SourceType
+	RequiredAuthorities    []EvidenceAuthority
+	RequiredEvidenceKinds  []EvidenceKind
+	MinDocuments           int
+	MinIndependentSources  int
+	RequirePrimarySource   bool
 }
 
 type SourceType string
@@ -43,6 +45,29 @@ const (
 	SourceResearch        SourceType = "research"
 	SourceSocial          SourceType = "social"
 	SourceOther           SourceType = "other"
+)
+
+type EvidenceAuthority string
+
+const (
+	AuthorityIssuer    EvidenceAuthority = "issuer"
+	AuthorityRegulator EvidenceAuthority = "regulator"
+	AuthorityExchange  EvidenceAuthority = "exchange"
+	AuthorityMedia     EvidenceAuthority = "media"
+	AuthorityResearch  EvidenceAuthority = "research"
+	AuthoritySocial    EvidenceAuthority = "social"
+	AuthorityOther     EvidenceAuthority = "other"
+)
+
+type EvidenceKind string
+
+const (
+	EvidenceDisclosure       EvidenceKind = "disclosure"
+	EvidenceNewsReport       EvidenceKind = "news_report"
+	EvidenceResearchAnalysis EvidenceKind = "research_analysis"
+	EvidenceSocialPost       EvidenceKind = "social_post"
+	EvidenceMarketData       EvidenceKind = "market_data"
+	EvidenceOther            EvidenceKind = "other"
 )
 
 type AcquisitionMethod string
@@ -87,8 +112,10 @@ type RawDocument struct {
 	Publisher string
 	Author    string
 
-	SourceType SourceType
-	IsPrimary  bool
+	SourceType    SourceType
+	Authority     EvidenceAuthority
+	EvidenceKind  EvidenceKind
+	IsPrimary     bool
 
 	PublishedAt *time.Time
 	RetrievedAt time.Time
@@ -97,10 +124,12 @@ type RawDocument struct {
 }
 
 type DocumentSource struct {
-	Publisher  string
-	URL        string
-	SourceType SourceType
-	IsPrimary  bool
+	Publisher    string
+	URL          string
+	SourceType   SourceType
+	Authority    EvidenceAuthority
+	EvidenceKind EvidenceKind
+	IsPrimary    bool
 }
 
 type CanonicalDocument struct {
@@ -149,6 +178,8 @@ const (
 	GapInsufficientDocuments          ResearchGapType = "insufficient_documents"
 	GapInsufficientIndependentSources ResearchGapType = "insufficient_independent_sources"
 	GapMissingRequiredSourceType      ResearchGapType = "missing_required_source_type"
+	GapMissingRequiredAuthority       ResearchGapType = "missing_required_authority"
+	GapMissingRequiredEvidenceKind    ResearchGapType = "missing_required_evidence_kind"
 	GapMissingPrimarySource           ResearchGapType = "missing_primary_source"
 )
 
@@ -157,7 +188,9 @@ type ResearchGap struct {
 	Description string
 	Required    int
 	Observed    int
-	SourceType  SourceType
+	SourceType    SourceType
+	Authority     EvidenceAuthority
+	EvidenceKind  EvidenceKind
 }
 
 type ResearchTaskResult struct {
