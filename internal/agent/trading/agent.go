@@ -4,6 +4,7 @@ import (
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/decision"
+	"Aegis/internal/research/synthesis"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,7 +29,8 @@ type Input struct {
 }
 
 type Agent struct {
-	runner *adk.TypedRunner[*schema.AgenticMessage]
+	runner         *adk.TypedRunner[*schema.AgenticMessage]
+	artifactRunner *adk.TypedRunner[*schema.AgenticMessage]
 }
 
 func New(
@@ -46,36 +48,74 @@ func New(
 		maxIterations = 20
 	}
 
-	a, err := adk.NewTypedChatModelAgent[*schema.AgenticMessage](
+	legacyRunner, err := newTradingRunner(
 		ctx,
-		&adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
-			Name:        "trading_agent",
-			Description: "Researches a single symbol using market context and symbol-specific evidence, then produces a structured decision.",
-			Instruction: instruction,
-			Model:       cfg.Model,
-
-			MaxIterations: maxIterations,
-		},
+		cfg.Model,
+		maxIterations,
+		"trading_agent_legacy",
+		"Consumes legacy market and technical contexts and produces a structured decision.",
+		instruction,
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"create trading agent: %w",
+			"create legacy trading runner: %w",
 			err,
 		)
 	}
 
-	runner := adk.NewTypedRunner(
+	artifactRunner, err := newTradingRunner(
+		ctx,
+		cfg.Model,
+		maxIterations,
+		"trading_agent",
+		"Consumes a validated ResearchArtifact and produces a structured decision.",
+		artifactInstruction,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"create artifact trading runner: %w",
+			err,
+		)
+	}
+
+	return &Agent{
+		runner:         legacyRunner,
+		artifactRunner: artifactRunner,
+	}, nil
+}
+
+func newTradingRunner(
+	ctx context.Context,
+	m model.BaseModel[*schema.AgenticMessage],
+	maxIterations int,
+	name string,
+	description string,
+	instructionText string,
+) (*adk.TypedRunner[*schema.AgenticMessage], error) {
+	a, err := adk.NewTypedChatModelAgent[*schema.AgenticMessage](
+		ctx,
+		&adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
+			Name:          name,
+			Description:   description,
+			Instruction:   instructionText,
+			Model:         m,
+			MaxIterations: maxIterations,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return adk.NewTypedRunner(
 		adk.TypedRunnerConfig[*schema.AgenticMessage]{
 			Agent:           a,
 			EnableStreaming: false,
 		},
-	)
-
-	return &Agent{
-		runner: runner,
-	}, nil
+	), nil
 }
 
+// Analyze is the legacy MarketContext + TechnicalContext trading path.
+// The main research graph uses AnalyzeArtifact.
 func (a *Agent) Analyze(
 	ctx context.Context,
 	input Input,
@@ -150,7 +190,78 @@ func (a *Agent) Analyze(
 		string(technicalJSON),
 	)
 
-	iter := a.runner.Query(
+	return runDecision(
+		ctx,
+		a.runner,
+		symbol,
+		query,
+		opts...,
+	)
+}
+
+func (a *Agent) AnalyzeArtifact(
+	ctx context.Context,
+	artifact *synthesis.Artifact,
+	opts ...adk.AgentRunOption,
+) (
+	*decision.Decision,
+	error,
+) {
+	if a == nil || a.artifactRunner == nil {
+		return nil, errors.New(
+			"trading artifact runner is not initialized",
+		)
+	}
+	if err := synthesis.Validate(artifact); err != nil {
+		return nil, fmt.Errorf(
+			"invalid research artifact: %w",
+			err,
+		)
+	}
+
+	symbol := strings.TrimSpace(
+		artifact.Symbol,
+	)
+	if symbol == "" {
+		return nil, errors.New(
+			"research artifact symbol is required",
+		)
+	}
+
+	data, err := json.Marshal(artifact)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"marshal research artifact: %w",
+			err,
+		)
+	}
+
+	query := fmt.Sprintf(
+		"研究标的：%s\n\n上游 research_artifact：\n%s\n\n请仅基于该结构化 ResearchArtifact 形成最终 Decision。",
+		symbol,
+		string(data),
+	)
+
+	return runDecision(
+		ctx,
+		a.artifactRunner,
+		symbol,
+		query,
+		opts...,
+	)
+}
+
+func runDecision(
+	ctx context.Context,
+	runner *adk.TypedRunner[*schema.AgenticMessage],
+	symbol string,
+	query string,
+	opts ...adk.AgentRunOption,
+) (
+	*decision.Decision,
+	error,
+) {
+	iter := runner.Query(
 		ctx,
 		query,
 		opts...,
@@ -163,18 +274,15 @@ func (a *Agent) Analyze(
 		if !ok {
 			break
 		}
-
 		if event == nil {
 			continue
 		}
-
 		if event.Err != nil {
 			return nil, fmt.Errorf(
 				"trading agent run failed: %w",
 				event.Err,
 			)
 		}
-
 		if event.Output == nil ||
 			event.Output.MessageOutput == nil ||
 			event.Output.MessageOutput.Message == nil {
@@ -186,7 +294,6 @@ func (a *Agent) Analyze(
 				event.Output.MessageOutput.Message,
 			),
 		)
-
 		if text != "" {
 			output = text
 		}
