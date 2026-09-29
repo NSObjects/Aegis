@@ -13,7 +13,10 @@ import (
 	"time"
 )
 
-const evidenceSnapshotDirectory = "snapshots"
+const (
+	evidenceSnapshotDirectory     = "snapshots"
+	evidenceSnapshotSchemaVersion = 1
+)
 
 type FileEvidenceSnapshotStore struct {
 	root string
@@ -262,6 +265,7 @@ func evidenceSnapshotFromRaw(
 	)
 
 	return EvidenceSnapshot{
+		SchemaVersion:     evidenceSnapshotSchemaVersion,
 		ID:                snapshotID,
 		LogicalDocumentID: logicalID,
 		VersionID:         version.ID,
@@ -375,16 +379,19 @@ func (s *FileEvidenceSnapshotStore) writeSnapshot(
 		)
 	}
 
-	if err := os.Rename(
+	if err := os.Link(
 		tempName,
 		target,
 	); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return nil
+		}
 		if _, statErr := os.Stat(target);
 			statErr == nil {
 			return nil
 		}
 		return fmt.Errorf(
-			"commit evidence snapshot %q: %w",
+			"commit immutable evidence snapshot %q: %w",
 			snapshot.ID,
 			err,
 		)
@@ -414,6 +421,15 @@ func readEvidenceSnapshot(
 			"decode evidence snapshot %q: %w",
 			path,
 			err,
+		)
+	}
+
+	if snapshot.SchemaVersion !=
+		evidenceSnapshotSchemaVersion {
+		return EvidenceSnapshot{}, fmt.Errorf(
+			"evidence snapshot %q has unsupported schema version %d",
+			path,
+			snapshot.SchemaVersion,
 		)
 	}
 
