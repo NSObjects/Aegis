@@ -18,15 +18,15 @@ const (
 )
 
 type EvidenceSupport struct {
-	DocumentCount            int
-	IndependentEvidenceCount int
-	IndependentSourceCount   int
-	PrimarySourcePresent     bool
-	Authorities              []EvidenceAuthority
-	EvidenceKinds            []EvidenceKind
-	CollapsedReprintCount    int
-	UnknownSourceCount       int
-	SupportClass             EvidenceSupportClass
+	DocumentCount            int                  `json:"document_count"`
+	IndependentEvidenceCount int                  `json:"independent_evidence_count"`
+	IndependentSourceCount   int                  `json:"independent_source_count"`
+	PrimarySourcePresent     bool                 `json:"primary_source_present"`
+	Authorities              []EvidenceAuthority  `json:"authorities,omitempty"`
+	EvidenceKinds            []EvidenceKind       `json:"evidence_kinds,omitempty"`
+	CollapsedReprintCount    int                  `json:"collapsed_reprint_count"`
+	UnknownSourceCount       int                  `json:"unknown_source_count"`
+	SupportClass             EvidenceSupportClass `json:"support_class"`
 }
 
 type EvidenceSupportAnalyzer struct{}
