@@ -264,8 +264,7 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 			}[grounding.DocumentID]
 			if document.Content[
 				grounding.StartByte:
-				grounding.EndByte,
-			] != grounding.Quote {
+				grounding.EndByte] != grounding.Quote {
 				t.Fatalf(
 					"grounding does not round-trip: %+v",
 					grounding,
