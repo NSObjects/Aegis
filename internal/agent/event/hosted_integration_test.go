@@ -111,25 +111,29 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 					Compiler: planning.Compiler{
 						Channels: planning.ChannelBindings{
 							OfficialDisclosure:
-								&capevent.SnapshotRetriever{
-									Store: store,
-									Name:
-										"hosted_snapshot_official",
-									SourceTypes:
-										[]capevent.SourceType{
-											capevent.SourceOfficial,
-										},
+								[]capevent.Retriever{
+									&capevent.SnapshotRetriever{
+										Store: store,
+										Name:
+											"hosted_snapshot_official",
+										SourceTypes:
+											[]capevent.SourceType{
+												capevent.SourceOfficial,
+											},
+									},
 								},
 							BreakingNews:
-								&capevent.SnapshotRetriever{
-									Store: store,
-									Name:
-										"hosted_snapshot_breaking_news",
-									SourceTypes:
-										[]capevent.SourceType{
-											capevent.SourceIndustryMedia,
-											capevent.SourceMainstreamMedia,
-										},
+								[]capevent.Retriever{
+									&capevent.SnapshotRetriever{
+										Store: store,
+										Name:
+											"hosted_snapshot_breaking_news",
+										SourceTypes:
+											[]capevent.SourceType{
+												capevent.SourceIndustryMedia,
+												capevent.SourceMainstreamMedia,
+											},
+									},
 								},
 							Selector: selector,
 						},
@@ -176,11 +180,15 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 				capevent.AcquisitionPlanRunner{
 					SnapshotStore: store,
 				},
-			OfficialRetriever:
-				&capevent.CninfoAnnouncementRetriever{},
-			BreakingRetriever:
-				&capevent.ClsNewsRetriever{
-					MaxDays: maxCLSDays,
+			OfficialRetrievers:
+				[]capevent.Retriever{
+					&capevent.CninfoAnnouncementRetriever{},
+				},
+			BreakingRetrievers:
+				[]capevent.Retriever{
+					&capevent.ClsNewsRetriever{
+						MaxDays: maxCLSDays,
+					},
 				},
 		},
 	)
