@@ -1,0 +1,39 @@
+name: CLS Live Verification
+
+on:
+  push:
+    branches:
+      - "feat/v2.7.3-cls-news-retriever"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cls-live-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  live-cls:
+    name: Live CLS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      AEGIS_LIVE_CLS: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run live CLS integration
+        run: |
+          go test ./internal/capability/event \
+            -run '^TestLiveCLSNewsRetriever$' \
+            -v \
+            -count=1
