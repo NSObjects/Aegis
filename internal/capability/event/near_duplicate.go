@@ -42,6 +42,7 @@ type nearDuplicatePrepared struct {
 	Document     CanonicalDocument
 	SourceKey    string
 	Normalized   string
+	RuneCount    int
 	Shingles     map[string]struct{}
 }
 
@@ -69,6 +70,7 @@ func (m NearDuplicateMatcher) prepare(
 		Document:   document,
 		SourceKey:  corroborationSourceKey(document.Source),
 		Normalized: normalized,
+		RuneCount:  len([]rune(normalized)),
 		Shingles: characterShingles(
 			normalized,
 			shingleRunes,
@@ -124,8 +126,8 @@ func (m NearDuplicateMatcher) matchPrepared(
 		minJaccard = DefaultNearDuplicateJaccard
 	}
 
-	if len([]rune(left.Normalized)) < minRunes ||
-		len([]rune(right.Normalized)) < minRunes {
+	if left.RuneCount < minRunes ||
+		right.RuneCount < minRunes {
 		return EvidenceRelation{}, false
 	}
 	if len(left.Shingles) == 0 ||
