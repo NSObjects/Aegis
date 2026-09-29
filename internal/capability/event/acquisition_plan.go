@@ -88,6 +88,13 @@ func (r AcquisitionPlanRunner) Run(
 	plan AcquisitionPlan,
 ) (AcquisitionPlanOutput, error) {
 	root.ID = strings.TrimSpace(root.ID)
+	root.Symbol = strings.ToUpper(strings.TrimSpace(root.Symbol))
+	root.TargetSymbol = strings.ToUpper(
+		strings.TrimSpace(root.TargetSymbol),
+	)
+	if root.TargetSymbol == "" {
+		root.TargetSymbol = root.Symbol
+	}
 	if root.ID == "" {
 		return AcquisitionPlanOutput{}, errors.New(
 			"event root research task id is required",
@@ -334,6 +341,31 @@ func prepareAcquisitionStepTask(
 		)
 	}
 	task.ID = root.ID
+
+	task.Symbol = strings.ToUpper(
+		strings.TrimSpace(task.Symbol),
+	)
+	task.TargetSymbol = strings.ToUpper(
+		strings.TrimSpace(task.TargetSymbol),
+	)
+	rootTarget := strings.ToUpper(
+		strings.TrimSpace(root.TargetSymbol),
+	)
+	if rootTarget == "" {
+		rootTarget = strings.ToUpper(
+			strings.TrimSpace(root.Symbol),
+		)
+	}
+	if task.TargetSymbol == "" {
+		task.TargetSymbol = rootTarget
+	} else if rootTarget != "" &&
+		task.TargetSymbol != rootTarget {
+		return ResearchTask{}, fmt.Errorf(
+			"step target symbol %q must match root target symbol %q",
+			task.TargetSymbol,
+			rootTarget,
+		)
+	}
 
 	if strings.TrimSpace(task.Objective) == "" {
 		task.Objective = root.Objective

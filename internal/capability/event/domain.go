@@ -17,7 +17,12 @@ type TimeRange struct {
 
 type ResearchTask struct {
 	ID              string
+	// Symbol describes the concrete acquisition scope. Candidate/broad
+	// retrievers may intentionally leave it empty.
 	Symbol          string
+	// TargetSymbol preserves the logical research subject independently of
+	// whether one concrete retriever is symbol-scoped.
+	TargetSymbol    string
 	Objective       string
 	InformationNeed InformationNeed
 	AsOf            time.Time
