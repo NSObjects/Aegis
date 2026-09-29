@@ -266,6 +266,11 @@ func TestAgenticStagesRejectNonStrictJSON(t *testing.T) {
 			want: "unknown field",
 		},
 		{
+			name: "legacy evidence document ids",
+			response: `{"facts":[{"type":"OTHER","headline":"fact","summary":"fact","evidence_document_ids":["doc_1"],"confidence":1}],"confidence":1}`,
+			want: "unknown field",
+		},
+		{
 			name: "trailing json",
 			response: `{"facts":[],"confidence":1} {"facts":[],"confidence":1}`,
 			want: "multiple JSON values",
