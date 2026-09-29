@@ -29,14 +29,14 @@ type FactExtractionResult struct {
 }
 
 type Fact struct {
-	ID                  string
-	Type                EventType
-	OccurredAt          string
-	Headline            string
-	Summary             string
-	Entities            []string
-	EvidenceDocumentIDs []string
-	Confidence          float64
+	ID                  string    `json:"id"`
+	Type                EventType `json:"type"`
+	OccurredAt          string    `json:"occurred_at,omitempty"`
+	Headline            string    `json:"headline"`
+	Summary             string    `json:"summary"`
+	Entities            []string  `json:"entities,omitempty"`
+	EvidenceDocumentIDs []string  `json:"evidence_document_ids"`
+	Confidence          float64   `json:"confidence"`
 }
 
 type EventCluster struct {
