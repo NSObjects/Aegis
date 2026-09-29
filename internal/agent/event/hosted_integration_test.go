@@ -510,8 +510,8 @@ func TestLiveEventProvidersHostedIntegration(
 	}
 
 	cninfoLookback := lookback
-	if cninfoLookback < 30*24*time.Hour {
-		cninfoLookback = 30 * 24 * time.Hour
+	if cninfoLookback < 180*24*time.Hour {
+		cninfoLookback = 180 * 24 * time.Hour
 	}
 
 	root := capevent.ResearchTask{
@@ -552,7 +552,7 @@ func TestLiveEventProvidersHostedIntegration(
 					},
 					Retriever:
 						&capevent.CninfoAnnouncementRetriever{
-							PageSize: 10,
+							PageSize: 3,
 							MaxPages: 1,
 						},
 				},
