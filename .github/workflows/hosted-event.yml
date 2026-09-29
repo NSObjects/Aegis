@@ -1,0 +1,74 @@
+name: Hosted Event E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: A-share symbol
+        required: false
+        default: 600519.SH
+      lookback:
+        description: Event lookback duration
+        required: false
+        default: 72h
+  push:
+    branches:
+      - feat/v2.7.16-hosted-event-verification
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-event-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hosted-event:
+    name: DeepSeek + Cninfo + CLS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      AEGIS_HOSTED_EVENT_SYMBOL: ${{ github.event.inputs.symbol || '600519.SH' }}
+      AEGIS_HOSTED_EVENT_LOOKBACK: ${{ github.event.inputs.lookback || '72h' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check hosted secret
+        id: hosted-secret
+        shell: bash
+        run: |
+          if [ -n "$DEEPSEEK_API_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "DEEPSEEK_API_KEY is configured; hosted test will run."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEEPSEEK_API_KEY is not configured; hosted News/Event verification is explicitly skipped."
+          fi
+
+      - name: Download modules
+        if: steps.hosted-secret.outputs.available == 'true'
+        run: go mod download
+
+      - name: Run hosted News/Event E2E
+        if: steps.hosted-secret.outputs.available == 'true'
+        env:
+          AEGIS_HOSTED_EVENT: "1"
+        run: |
+          go test ./internal/agent/event             -run '^TestLiveEventHostedIntegration$'             -count=1             -v
+
+      - name: Hosted verification skipped
+        if: steps.hosted-secret.outputs.available != 'true'
+        run: |
+          echo "Hosted verification did not run because DEEPSEEK_API_KEY is unavailable."
