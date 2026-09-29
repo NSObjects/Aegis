@@ -53,29 +53,7 @@ jobs:
           AEGIS_HOSTED_EVENT_PROVIDERS: "1"
         run: |
           go test ./internal/agent/event \
-            -run '^TestLiveEventProvidersHostedIntegration
-        shell: bash
-        run: |
-          if [ -n "$DEEPSEEK_API_KEY" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            echo "DEEPSEEK_API_KEY is configured; hosted test will run."
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DEEPSEEK_API_KEY is not configured; hosted News/Event verification is explicitly skipped."
-          fi
-
-      - name: Run hosted News/Event E2E
-        if: steps.hosted-secret.outputs.available == 'true'
-        env:
-          AEGIS_HOSTED_EVENT: "1"
-        run: |
-          go test ./internal/agent/event             -run '^TestLiveEventHostedIntegration$'             -count=1             -v
-
-      - name: Hosted verification skipped
-        if: steps.hosted-secret.outputs.available != 'true'
-        run: |
-          echo "Hosted verification did not run because DEEPSEEK_API_KEY is unavailable."
- \
+            -run '^TestLiveEventProvidersHostedIntegration$' \
             -count=1 \
             -v
 
@@ -85,24 +63,23 @@ jobs:
         run: |
           if [ -n "$DEEPSEEK_API_KEY" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
-            echo "DEEPSEEK_API_KEY is configured; hosted test will run."
+            echo "DEEPSEEK_API_KEY is configured; hosted model E2E will run."
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DEEPSEEK_API_KEY is not configured; hosted News/Event verification is explicitly skipped."
+            echo "::notice::DEEPSEEK_API_KEY is not configured; hosted model E2E is explicitly skipped."
           fi
-
-      - name: Download modules
-        if: steps.hosted-secret.outputs.available == 'true'
-        run: go mod download
 
       - name: Run hosted News/Event E2E
         if: steps.hosted-secret.outputs.available == 'true'
         env:
           AEGIS_HOSTED_EVENT: "1"
         run: |
-          go test ./internal/agent/event             -run '^TestLiveEventHostedIntegration$'             -count=1             -v
+          go test ./internal/agent/event \
+            -run '^TestLiveEventHostedIntegration$' \
+            -count=1 \
+            -v
 
-      - name: Hosted verification skipped
+      - name: Hosted model verification skipped
         if: steps.hosted-secret.outputs.available != 'true'
         run: |
-          echo "Hosted verification did not run because DEEPSEEK_API_KEY is unavailable."
+          echo "Hosted DeepSeek verification did not run because DEEPSEEK_API_KEY is unavailable."
