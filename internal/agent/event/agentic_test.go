@@ -254,6 +254,58 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 	}
 }
 
+func TestAgenticFactExtractorRepairsAmbiguousGroundingOnce(
+	t *testing.T,
+) {
+	model := &eventModel{
+		responses: []*schema.AgenticMessage{
+			assistantJSON(
+				`{"facts":[{"type":"CONTRACT","headline":"合同","summary":"公司签署合同。","evidence_quotes":[{"document_id":"doc_1","quote":"合同"}],"confidence":0.9}],"confidence":0.9}`,
+			),
+			assistantJSON(
+				`{"facts":[{"type":"CONTRACT","headline":"合同","summary":"公司签署合同。","evidence_quotes":[{"document_id":"doc_1","quote":"公司签署合同"}],"confidence":0.9}],"confidence":0.9}`,
+			),
+		},
+	}
+
+	result, err := (&AgenticEventFactExtractor{
+		Model: model,
+	}).Extract(
+		context.Background(),
+		capevent.ResearchTask{
+			Symbol: "600519.SH",
+			AsOf: time.Date(
+				2026, 9, 29, 15, 0, 0, 0,
+				time.UTC,
+			),
+		},
+		[]capevent.CanonicalDocument{
+			{
+				ID: "doc_1",
+				Content: "合同公告：公司签署合同，合同开始履行。",
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(model.inputs) != 2 {
+		t.Fatalf(
+			"model calls = %d, want initial + one repair",
+			len(model.inputs),
+		)
+	}
+	if len(result.Facts) != 1 ||
+		len(result.Facts[0].EvidenceQuotes) != 1 ||
+		result.Facts[0].EvidenceQuotes[0].Quote !=
+			"公司签署合同" {
+		t.Fatalf(
+			"repaired extraction = %+v",
+			result,
+		)
+	}
+}
+
 func TestAgenticStagesRejectNonStrictJSON(t *testing.T) {
 	tests := []struct {
 		name     string
