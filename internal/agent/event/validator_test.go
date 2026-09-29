@@ -56,3 +56,33 @@ func TestValidateEventContext(t *testing.T) {
 		)
 	}
 }
+
+
+func TestValidateEventContextEvidenceAsOf(t *testing.T) {
+	valid := &Context{
+		Symbol:        "600519.SH",
+		RequestedAsOf: "2026-09-29T12:00:00Z",
+		EvidenceAsOf:  "2026-09-29T12:00:05Z",
+		Status:        StatusNoEvent,
+		Confidence:    0.8,
+	}
+	if err := Validate(valid); err != nil {
+		t.Fatalf(
+			"Validate() error = %v",
+			err,
+		)
+	}
+
+	invalid := *valid
+	invalid.EvidenceAsOf = "not-a-time"
+	if err := Validate(&invalid); err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"evidence_as_of must be RFC3339",
+		) {
+		t.Fatalf(
+			"error = %v, want evidence_as_of validation error",
+			err,
+		)
+	}
+}
