@@ -6,6 +6,7 @@ type InformationNeed string
 
 const (
 	NeedOfficialDisclosure InformationNeed = "official_disclosure"
+	NeedBreakingNews       InformationNeed = "breaking_news"
 )
 
 type TimeRange struct {

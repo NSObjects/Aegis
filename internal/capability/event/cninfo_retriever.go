@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -28,12 +27,6 @@ var (
 	cninfoShanghaiLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 	cninfoHTMLTagPattern    = regexp.MustCompile("<[^>]+>")
 )
-
-// HTTPDoer is the minimal transport dependency needed by a real retriever.
-// Tests can inject a deterministic implementation without using the network.
-type HTTPDoer interface {
-	Do(*http.Request) (*http.Response, error)
-}
 
 // CninfoAnnouncementRetriever retrieves official A-share announcement metadata
 // from Cninfo. It intentionally implements only one concrete acquisition path;
@@ -622,37 +615,5 @@ func setCninfoHeaders(req *http.Request) {
 	req.Header.Set(
 		"Referer",
 		"https://www.cninfo.com.cn/",
-	)
-}
-
-func requireHTTP2xx(
-	resp *http.Response,
-	context string,
-) error {
-	if resp.StatusCode >= 200 &&
-		resp.StatusCode < 300 {
-		return nil
-	}
-
-	message := ""
-	if resp.Body != nil {
-		body, _ := io.ReadAll(
-			io.LimitReader(resp.Body, 512),
-		)
-		message = strings.TrimSpace(string(body))
-	}
-
-	if message == "" {
-		return fmt.Errorf(
-			"%s returned HTTP %d",
-			context,
-			resp.StatusCode,
-		)
-	}
-	return fmt.Errorf(
-		"%s returned HTTP %d: %s",
-		context,
-		resp.StatusCode,
-		message,
 	)
 }
