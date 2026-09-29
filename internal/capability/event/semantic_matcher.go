@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/cloudwego/eino/components/model"
@@ -102,10 +103,25 @@ func (m *AgenticSemanticEvidenceMatcher) Match(
 	}
 
 	var parsed semanticEvidenceResponse
-	if err := json.Unmarshal(
-		[]byte(raw),
-		&parsed,
-	); err != nil {
+	decoder := json.NewDecoder(
+		strings.NewReader(raw),
+	)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&parsed); err != nil {
+		return nil, fmt.Errorf(
+			"invalid semantic evidence matcher JSON: %w: output=%q",
+			err,
+			raw,
+		)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing);
+		err != io.EOF {
+		if err == nil {
+			err = errors.New(
+				"multiple JSON values",
+			)
+		}
 		return nil, fmt.Errorf(
 			"invalid semantic evidence matcher JSON: %w: output=%q",
 			err,
