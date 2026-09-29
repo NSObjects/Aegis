@@ -1,4 +1,4 @@
-# V2.7.20 hosted verification
+# V2.7.21 hosted verification
 name: Hosted Event E2E
 
 on:
@@ -14,7 +14,7 @@ on:
         default: 72h
   push:
     branches:
-      - feat/v2.7.20-source-identity
+      - feat/v2.7.21-corroboration
 
 permissions:
   contents: read
