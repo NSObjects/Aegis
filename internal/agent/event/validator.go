@@ -133,9 +133,61 @@ func validateEvent(v *Event) error {
 			)
 		}
 	}
-	if len(v.EvidenceDocumentIDs) == 0 {
+	if len(v.Facts) == 0 {
+		return errors.New(
+			"facts are required",
+		)
+	}
+	factEvidenceIDs := make([]string, 0)
+	seenFactIDs := make(
+		map[string]struct{},
+		len(v.Facts),
+	)
+	for index := range v.Facts {
+		fact := &v.Facts[index]
+		if err := validateGroundedFact(fact); err != nil {
+			return fmt.Errorf(
+				"fact %d: %w",
+				index,
+				err,
+			)
+		}
+		if _, duplicate :=
+			seenFactIDs[fact.ID]; duplicate {
+			return fmt.Errorf(
+				"fact id %q is duplicated",
+				fact.ID,
+			)
+		}
+		seenFactIDs[fact.ID] = struct{}{}
+		factEvidenceIDs = append(
+			factEvidenceIDs,
+			fact.EvidenceDocumentIDs...,
+		)
+	}
+	factEvidenceIDs =
+		uniqueSortedStrings(factEvidenceIDs)
+	eventEvidenceIDs :=
+		uniqueSortedStrings(
+			v.EvidenceDocumentIDs,
+		)
+	if !equalStringSlices(
+		eventEvidenceIDs,
+		factEvidenceIDs,
+	) {
+		return errors.New(
+			"evidence_document_ids must equal the union of grounded fact evidence",
+		)
+	}
+	if len(eventEvidenceIDs) == 0 {
 		return errors.New(
 			"evidence_document_ids are required",
+		)
+	}
+	if v.EvidenceSupport.DocumentCount !=
+		len(eventEvidenceIDs) {
+		return errors.New(
+			"evidence_support document_count must equal grounded event evidence count",
 		)
 	}
 	if v.SourceCount < 0 {
@@ -178,6 +230,128 @@ func validateEvent(v *Event) error {
 	}
 
 	return nil
+}
+
+func validateGroundedFact(
+	v *Fact,
+) error {
+	if v == nil {
+		return errors.New("fact is nil")
+	}
+	if strings.TrimSpace(v.ID) == "" {
+		return errors.New("id is required")
+	}
+	if !validEventType(v.Type) {
+		return fmt.Errorf(
+			"invalid type: %q",
+			v.Type,
+		)
+	}
+	if strings.TrimSpace(v.Headline) == "" {
+		return errors.New("headline is required")
+	}
+	if strings.TrimSpace(v.Summary) == "" {
+		return errors.New("summary is required")
+	}
+	if v.Confidence < 0 || v.Confidence > 1 {
+		return fmt.Errorf(
+			"confidence out of range: %f",
+			v.Confidence,
+		)
+	}
+	if len(v.Groundings) == 0 {
+		return errors.New("groundings are required")
+	}
+
+	groundingIDs := make(
+		[]string,
+		0,
+		len(v.Groundings),
+	)
+	seenGroundings := make(map[string]struct{})
+	for index, grounding := range v.Groundings {
+		documentID := strings.TrimSpace(
+			grounding.DocumentID,
+		)
+		if documentID == "" {
+			return fmt.Errorf(
+				"grounding %d document_id is required",
+				index,
+			)
+		}
+		if strings.TrimSpace(grounding.Quote) == "" {
+			return fmt.Errorf(
+				"grounding %d quote is required",
+				index,
+			)
+		}
+		if grounding.StartByte < 0 ||
+			grounding.EndByte <=
+				grounding.StartByte {
+			return fmt.Errorf(
+				"grounding %d has invalid byte span",
+				index,
+			)
+		}
+		if grounding.EndByte-
+			grounding.StartByte !=
+			len(grounding.Quote) {
+			return fmt.Errorf(
+				"grounding %d byte span length does not match quote",
+				index,
+			)
+		}
+		key := fmt.Sprintf(
+			"%s\x00%d\x00%d\x00%s",
+			documentID,
+			grounding.StartByte,
+			grounding.EndByte,
+			grounding.Quote,
+		)
+		if _, duplicate :=
+			seenGroundings[key]; duplicate {
+			return fmt.Errorf(
+				"grounding %d is duplicated",
+				index,
+			)
+		}
+		seenGroundings[key] = struct{}{}
+		groundingIDs = append(
+			groundingIDs,
+			documentID,
+		)
+	}
+
+	groundingIDs =
+		uniqueSortedStrings(groundingIDs)
+	evidenceIDs :=
+		uniqueSortedStrings(
+			v.EvidenceDocumentIDs,
+		)
+	if !equalStringSlices(
+		groundingIDs,
+		evidenceIDs,
+	) {
+		return errors.New(
+			"evidence_document_ids must be derived from groundings",
+		)
+	}
+	return nil
+}
+
+func equalStringSlices(
+	left []string,
+	right []string,
+) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func validateEvidenceSupport(

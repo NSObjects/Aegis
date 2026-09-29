@@ -184,9 +184,15 @@ func TestLiveAgentCapturesThenResearchesFrozenSnapshots(
 								len(documents),
 							)
 						}
-						ids := []string{
-							documents[0].ID,
-							documents[1].ID,
+						quotes := []EvidenceQuote{
+							{
+								DocumentID: documents[0].ID,
+								Quote:      documents[0].Content,
+							},
+							{
+								DocumentID: documents[1].ID,
+								Quote:      documents[1].Content,
+							},
 						}
 						return FactExtractionResult{
 							Confidence: 0.95,
@@ -195,7 +201,7 @@ func TestLiveAgentCapturesThenResearchesFrozenSnapshots(
 									Type:       EventContract,
 									Headline:   "合同事件",
 									Summary:    "公司披露合同并获得媒体独立报道。",
-									EvidenceDocumentIDs: ids,
+									EvidenceQuotes: quotes,
 									Confidence: 0.94,
 								},
 							},

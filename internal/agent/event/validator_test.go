@@ -17,6 +17,26 @@ func TestValidateEventContext(t *testing.T) {
 				Type:        EventDisclosure,
 				Headline:    "公告",
 				FactSummary: "公司发布公告。",
+				Facts: []Fact{
+					{
+						ID:       "fact_1",
+						Type:     EventDisclosure,
+						Headline: "公告",
+						Summary:  "公司发布公告。",
+						Groundings: []EvidenceGrounding{
+							{
+								DocumentID: "doc_1",
+								Quote:      "公司发布公告。",
+								StartByte:  0,
+								EndByte:    len("公司发布公告。"),
+							},
+						},
+						EvidenceDocumentIDs: []string{
+							"doc_1",
+						},
+						Confidence: 0.9,
+					},
+				},
 				EvidenceDocumentIDs: []string{
 					"doc_1",
 				},

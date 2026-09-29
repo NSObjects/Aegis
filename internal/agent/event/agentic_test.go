@@ -74,7 +74,7 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 	model := &eventModel{
 		responses: []*schema.AgenticMessage{
 			assistantJSON(
-				`{"facts":[{"type":"CONTRACT","occurred_at":"2026-09-29T09:00:00Z","headline":"合同事件","summary":"公司披露签订合同。","entities":["目标公司"],"evidence_document_ids":["doc_1"],"confidence":0.95}],"confidence":0.94}`,
+				`{"facts":[{"type":"CONTRACT","occurred_at":"2026-09-29T09:00:00Z","headline":"合同事件","summary":"公司披露签订合同。","entities":["目标公司"],"evidence_quotes":[{"document_id":"doc_1","quote":"公司披露签订合同。"}],"confidence":0.95}],"confidence":0.94}`,
 			),
 			assistantJSON(
 				`{"clusters":[{"fact_ids":["fact_placeholder"]}]}`,
@@ -123,7 +123,8 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 		extraction.Facts,
 		map[string]capevent.CanonicalDocument{
 			"doc_1": {
-				ID: "doc_1",
+				ID:      "doc_1",
+				Content: "公司披露签订合同。",
 			},
 		},
 	)
@@ -237,10 +238,70 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 		!strings.Contains(
 			materialityPayload,
 			`"independent_source_count":1`,
+		) ||
+		!strings.Contains(
+			materialityPayload,
+			`"quote":"公司披露签订合同。"`,
+		) ||
+		!strings.Contains(
+			materialityPayload,
+			`"start_byte":0`,
 		) {
 		t.Fatalf(
 			"materiality payload lacks evidence support: %s",
 			materialityPayload,
+		)
+	}
+}
+
+func TestAgenticFactExtractorRepairsAmbiguousGroundingOnce(
+	t *testing.T,
+) {
+	model := &eventModel{
+		responses: []*schema.AgenticMessage{
+			assistantJSON(
+				`{"facts":[{"type":"CONTRACT","headline":"合同","summary":"公司签署合同。","evidence_quotes":[{"document_id":"doc_1","quote":"合同"}],"confidence":0.9}],"confidence":0.9}`,
+			),
+			assistantJSON(
+				`{"facts":[{"type":"CONTRACT","headline":"合同","summary":"公司签署合同。","evidence_quotes":[{"document_id":"doc_1","quote":"公司签署合同"}],"confidence":0.9}],"confidence":0.9}`,
+			),
+		},
+	}
+
+	result, err := (&AgenticEventFactExtractor{
+		Model: model,
+	}).Extract(
+		context.Background(),
+		capevent.ResearchTask{
+			Symbol: "600519.SH",
+			AsOf: time.Date(
+				2026, 9, 29, 15, 0, 0, 0,
+				time.UTC,
+			),
+		},
+		[]capevent.CanonicalDocument{
+			{
+				ID: "doc_1",
+				Content: "合同公告：公司签署合同，合同开始履行。",
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(model.inputs) != 2 {
+		t.Fatalf(
+			"model calls = %d, want initial + one repair",
+			len(model.inputs),
+		)
+	}
+	if len(result.Facts) != 1 ||
+		len(result.Facts[0].EvidenceQuotes) != 1 ||
+		result.Facts[0].EvidenceQuotes[0].Quote !=
+			"公司签署合同" {
+		t.Fatalf(
+			"repaired extraction = %+v",
+			result,
 		)
 	}
 }
@@ -254,6 +315,11 @@ func TestAgenticStagesRejectNonStrictJSON(t *testing.T) {
 		{
 			name: "unknown field",
 			response: `{"facts":[],"confidence":1,"unknown":true}`,
+			want: "unknown field",
+		},
+		{
+			name: "legacy evidence document ids",
+			response: `{"facts":[{"type":"OTHER","headline":"fact","summary":"fact","evidence_document_ids":["doc_1"],"confidence":1}],"confidence":1}`,
 			want: "unknown field",
 		},
 		{

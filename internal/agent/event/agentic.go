@@ -66,13 +66,14 @@ type materialityPrompt struct {
 }
 
 type materialityFact struct {
-	ID         string    `json:"id"`
-	Type       EventType `json:"type"`
-	OccurredAt string    `json:"occurred_at,omitempty"`
-	Headline   string    `json:"headline"`
-	Summary    string    `json:"summary"`
-	Entities   []string  `json:"entities,omitempty"`
-	Confidence float64   `json:"confidence"`
+	ID         string              `json:"id"`
+	Type       EventType           `json:"type"`
+	OccurredAt string              `json:"occurred_at,omitempty"`
+	Headline   string              `json:"headline"`
+	Summary    string              `json:"summary"`
+	Entities   []string            `json:"entities,omitempty"`
+	Groundings []EvidenceGrounding `json:"groundings"`
+	Confidence float64             `json:"confidence"`
 }
 
 func (a *AgenticEventFactExtractor) Extract(
@@ -140,7 +141,68 @@ func (a *AgenticEventFactExtractor) Extract(
 			err,
 		)
 	}
-	return output, nil
+	if groundingErr :=
+		validateFactExtractionGroundings(
+			output,
+			documents,
+		); groundingErr == nil {
+		return output, nil
+	} else {
+		var repaired FactExtractionResult
+		repairInstruction :=
+			factExtractionInstruction +
+				"\n\nThe previous extraction failed deterministic grounding validation: " +
+				groundingErr.Error() +
+				". Return the full corrected JSON. Preserve only supported facts and repair evidence_quotes so every quote is verbatim and unique within its identified document."
+		if err := generateStrictAgenticJSON(
+			ctx,
+			a.Model,
+			repairInstruction,
+			prompt,
+			&repaired,
+		); err != nil {
+			return FactExtractionResult{}, fmt.Errorf(
+				"event fact extraction grounding repair model: %w",
+				err,
+			)
+		}
+		if err := validateFactExtractionGroundings(
+			repaired,
+			documents,
+		); err != nil {
+			return FactExtractionResult{}, fmt.Errorf(
+				"event fact extraction grounding repair: %w",
+				err,
+			)
+		}
+		return repaired, nil
+	}
+}
+
+func validateFactExtractionGroundings(
+	extraction FactExtractionResult,
+	documents []capevent.CanonicalDocument,
+) error {
+	documentByID := make(
+		map[string]capevent.CanonicalDocument,
+		len(documents),
+	)
+	for _, document := range documents {
+		documentByID[document.ID] = document
+	}
+	for index, fact := range extraction.Facts {
+		if _, err := ResolveEvidenceGroundings(
+			fact.EvidenceQuotes,
+			documentByID,
+		); err != nil {
+			return fmt.Errorf(
+				"fact %d: %w",
+				index,
+				err,
+			)
+		}
+	}
+	return nil
 }
 
 func (a *AgenticEventClusterer) Cluster(
@@ -199,6 +261,7 @@ func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 				Headline:   fact.Headline,
 				Summary:    fact.Summary,
 				Entities:   fact.Entities,
+				Groundings: fact.Groundings,
 				Confidence: fact.Confidence,
 			},
 		)
@@ -331,14 +394,19 @@ const factExtractionInstruction = "You are the factual extraction stage of an in
 	"- Return JSON only.\n" +
 	"- Do not assess whether an event is positive, negative, material, investable, or actionable.\n" +
 	"- Do not add outside knowledge.\n" +
-	"- Every fact must cite one or more supplied canonical document IDs.\n" +
+	"- Every fact must include one or more evidence_quotes.\n" +
+	"- Each evidence quote must contain a supplied canonical document_id and a verbatim quote copied exactly from that document's content.\n" +
+	"- Never invent byte offsets; the runtime verifies the quote and derives offsets deterministically.\n" +
+	"- Use a concise quote that directly supports the factual claim; do not paraphrase inside quote.\n" +
+	"- Every quote must occur exactly once in its identified document content. If a short phrase is repeated, extend the quote with adjacent verbatim text until the occurrence is unique.\n" +
+	"- Do not use ellipses, omitted text markers, normalized wording, or reconstructed sentences inside quote.\n" +
 	"- A document may yield zero, one, or multiple facts.\n" +
 	"- Use occurred_at only when the evidence supports a concrete event time; otherwise leave it empty.\n" +
 	"- occurred_at must be RFC3339 when present.\n" +
 	"- confidence must be between 0 and 1.\n" +
 	"- type must be one of DISCLOSURE, EARNINGS, GUIDANCE, CONTRACT, REGULATORY, LITIGATION, M_AND_A, FINANCING, DIVIDEND, BUYBACK, MANAGEMENT, PRODUCT, INCIDENT, POLICY, INDUSTRY, OTHER.\n" +
 	"- fact summary must state what happened, not why the stock should rise or fall.\n\n" +
-	"Output: {\"facts\":[{\"type\":\"CONTRACT\",\"occurred_at\":\"2026-09-29T10:00:00+08:00\",\"headline\":\"string\",\"summary\":\"string\",\"entities\":[\"string\"],\"evidence_document_ids\":[\"doc_x\"],\"confidence\":0.0}],\"confidence\":0.0}"
+	"Output: {\"facts\":[{\"type\":\"CONTRACT\",\"occurred_at\":\"2026-09-29T10:00:00+08:00\",\"headline\":\"string\",\"summary\":\"string\",\"entities\":[\"string\"],\"evidence_quotes\":[{\"document_id\":\"doc_x\",\"quote\":\"verbatim supporting text\"}],\"confidence\":0.0}],\"confidence\":0.0}"
 
 const eventClusteringInstruction = "You are the event clustering stage of an investment research system.\n\n" +
 	"Group extracted facts that describe the same underlying real-world event.\n\n" +
@@ -358,6 +426,7 @@ const materialityInstruction = "You are the interpretation stage of an investmen
 	"- Return JSON only.\n" +
 	"- Do not rewrite or add facts.\n" +
 	"- Use only the supplied facts.\n" +
+	"- Fact groundings are already runtime-verified exact spans. Treat them as provenance for the supplied fact, not as permission to infer additional facts from surrounding or outside text.\n" +
 	"- Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, price targets, or trading instructions.\n" +
 	"- level must be LOW, MEDIUM, HIGH, or UNKNOWN.\n" +
 	"- direction must be POSITIVE, NEGATIVE, MIXED, NEUTRAL, or UNCERTAIN.\n" +

@@ -104,8 +104,11 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 							Headline:   "签订重大合同",
 							Summary:    "公司披露签订重大合同。",
 							Entities:   []string{"目标公司"},
-							EvidenceDocumentIDs: []string{
-								"doc_official",
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc_official",
+									Quote:      "签订重大合同",
+								},
 							},
 							Confidence: 0.96,
 						},
@@ -115,8 +118,11 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 							Headline:   "媒体确认合同事件",
 							Summary:    "媒体报道同一合同事件。",
 							Entities:   []string{"目标公司"},
-							EvidenceDocumentIDs: []string{
-								"doc_media",
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc_media",
+									Quote:      "报道同一合同",
+								},
 							},
 							Confidence: 0.90,
 						},
@@ -242,6 +248,30 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 			item.EvidenceDocumentIDs,
 		)
 	}
+	if len(item.Facts) != 2 ||
+		len(item.Facts[0].Groundings) != 1 ||
+		len(item.Facts[1].Groundings) != 1 {
+		t.Fatalf(
+			"grounded event facts = %+v",
+			item.Facts,
+		)
+	}
+	for _, fact := range item.Facts {
+		for _, grounding := range fact.Groundings {
+			document := map[string]capevent.CanonicalDocument{
+				"doc_official": documents[0],
+				"doc_media":    documents[1],
+			}[grounding.DocumentID]
+			if document.Content[
+				grounding.StartByte:
+				grounding.EndByte] != grounding.Quote {
+				t.Fatalf(
+					"grounding does not round-trip: %+v",
+					grounding,
+				)
+			}
+		}
+	}
 	if item.Materiality.Level != MaterialityHigh {
 		t.Fatalf(
 			"materiality = %+v",
@@ -266,8 +296,11 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 				Headline:   "签订重大合同",
 				Summary:    "公司披露签订重大合同。",
 				Entities:   []string{"目标公司"},
-				EvidenceDocumentIDs: []string{
-					"doc_official",
+				EvidenceQuotes: []EvidenceQuote{
+					{
+						DocumentID: "doc_official",
+						Quote:      "签订重大合同",
+					},
 				},
 				Confidence: 0.96,
 			},
@@ -277,8 +310,11 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 				Headline:   "媒体确认合同事件",
 				Summary:    "媒体报道同一合同事件。",
 				Entities:   []string{"目标公司"},
-				EvidenceDocumentIDs: []string{
-					"doc_media",
+				EvidenceQuotes: []EvidenceQuote{
+					{
+						DocumentID: "doc_media",
+						Quote:      "报道同一合同",
+					},
 				},
 				Confidence: 0.90,
 			},
@@ -442,8 +478,11 @@ func TestAnalyzerRejectsInvalidFactEvidenceReference(
 							Headline:   "fact",
 							Summary:    "fact",
 							Confidence: 1,
-							EvidenceDocumentIDs: []string{
-								"unknown",
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "unknown",
+									Quote:      "fact",
+								},
 							},
 						},
 					},
@@ -501,8 +540,11 @@ func TestAnalyzerRejectsInvalidClusterCoverage(
 							Headline:   "one",
 							Summary:    "one",
 							Confidence: 1,
-							EvidenceDocumentIDs: []string{
-								"doc",
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc",
+									Quote:      "shared evidence",
+								},
 							},
 						},
 						{
@@ -510,8 +552,11 @@ func TestAnalyzerRejectsInvalidClusterCoverage(
 							Headline:   "two",
 							Summary:    "two",
 							Confidence: 1,
-							EvidenceDocumentIDs: []string{
-								"doc",
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc",
+									Quote:      "shared evidence",
+								},
 							},
 						},
 					},
@@ -558,7 +603,10 @@ func TestAnalyzerRejectsInvalidClusterCoverage(
 			},
 			ResearchStatus: capevent.TaskSatisfied,
 			Documents: []capevent.CanonicalDocument{
-				{ID: "doc"},
+				{
+					ID:      "doc",
+					Content: "shared evidence",
+				},
 			},
 		},
 	)
@@ -763,9 +811,15 @@ func TestAnalyzerDoesNotCountReprintsAsIndependentSources(
 							Type:       EventContract,
 							Headline:   "重大合同",
 							Summary:    "公司披露重大合同。",
-							EvidenceDocumentIDs: []string{
-								"doc_official",
-								"doc_reprint",
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc_official",
+									Quote:      body,
+								},
+								{
+									DocumentID: "doc_reprint",
+									Quote:      body,
+								},
 							},
 							Confidence: 0.9,
 						},

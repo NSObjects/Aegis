@@ -13,13 +13,13 @@ import (
 )
 
 type ExtractedFact struct {
-	Type                EventType `json:"type"`
-	OccurredAt          string    `json:"occurred_at,omitempty"`
-	Headline            string    `json:"headline"`
-	Summary             string    `json:"summary"`
-	Entities            []string  `json:"entities,omitempty"`
-	EvidenceDocumentIDs []string  `json:"evidence_document_ids"`
-	Confidence          float64   `json:"confidence"`
+	Type           EventType       `json:"type"`
+	OccurredAt     string          `json:"occurred_at,omitempty"`
+	Headline       string          `json:"headline"`
+	Summary        string          `json:"summary"`
+	Entities       []string        `json:"entities,omitempty"`
+	EvidenceQuotes []EvidenceQuote `json:"evidence_quotes"`
+	Confidence     float64         `json:"confidence"`
 }
 
 type FactExtractionResult struct {
@@ -28,14 +28,15 @@ type FactExtractionResult struct {
 }
 
 type Fact struct {
-	ID                  string    `json:"id"`
-	Type                EventType `json:"type"`
-	OccurredAt          string    `json:"occurred_at,omitempty"`
-	Headline            string    `json:"headline"`
-	Summary             string    `json:"summary"`
-	Entities            []string  `json:"entities,omitempty"`
-	EvidenceDocumentIDs []string  `json:"evidence_document_ids"`
-	Confidence          float64   `json:"confidence"`
+	ID                  string              `json:"id"`
+	Type                EventType           `json:"type"`
+	OccurredAt          string              `json:"occurred_at,omitempty"`
+	Headline            string              `json:"headline"`
+	Summary             string              `json:"summary"`
+	Entities            []string            `json:"entities,omitempty"`
+	Groundings          []EvidenceGrounding `json:"groundings"`
+	EvidenceDocumentIDs []string            `json:"evidence_document_ids"`
+	Confidence          float64             `json:"confidence"`
 }
 
 type EventCluster struct {
@@ -420,24 +421,21 @@ func normalizeExtractedFacts(
 			}
 		}
 
-		evidenceIDs := uniqueSortedStrings(
-			raw.EvidenceDocumentIDs,
-		)
-		if len(evidenceIDs) == 0 {
+		groundings, groundingErr :=
+			ResolveEvidenceGroundings(
+				raw.EvidenceQuotes,
+				documents,
+			)
+		if groundingErr != nil {
 			return nil, fmt.Errorf(
-				"extracted fact %d requires evidence document ids",
+				"extracted fact %d grounding: %w",
 				index,
+				groundingErr,
 			)
 		}
-		for _, documentID := range evidenceIDs {
-			if _, ok := documents[documentID]; !ok {
-				return nil, fmt.Errorf(
-					"extracted fact %d references unknown canonical document %q",
-					index,
-					documentID,
-				)
-			}
-		}
+		evidenceIDs := groundingDocumentIDs(
+			groundings,
+		)
 
 		fact := Fact{
 			Type:                raw.Type,
@@ -445,6 +443,7 @@ func normalizeExtractedFacts(
 			Headline:            raw.Headline,
 			Summary:             raw.Summary,
 			Entities:            uniqueSortedStrings(raw.Entities),
+			Groundings:          groundings,
 			EvidenceDocumentIDs: evidenceIDs,
 			Confidence:          raw.Confidence,
 		}
@@ -672,6 +671,7 @@ func buildEventFactView(
 		Headline:            headline,
 		FactSummary:         strings.Join(uniqueStringsPreserveOrder(summaries), "\n"),
 		Entities:            uniqueSortedStrings(entities),
+		Facts:               append([]Fact(nil), facts...),
 		EvidenceDocumentIDs: evidenceIDs,
 		SourceCount:         0,
 		HasPrimarySource:    false,
