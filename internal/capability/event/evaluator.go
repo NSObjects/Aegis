@@ -2,7 +2,6 @@ package event
 
 import (
 	"fmt"
-	"strings"
 	"time"
 )
 
