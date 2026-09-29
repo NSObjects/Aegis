@@ -336,7 +336,9 @@ const factExtractionInstruction = "You are the factual extraction stage of an in
 	"- Every fact must include one or more evidence_quotes.\n" +
 	"- Each evidence quote must contain a supplied canonical document_id and a verbatim quote copied exactly from that document's content.\n" +
 	"- Never invent byte offsets; the runtime verifies the quote and derives offsets deterministically.\n" +
-	"- Use the shortest quote that still directly supports the factual claim; do not paraphrase inside quote.\n" +
+	"- Use a concise quote that directly supports the factual claim; do not paraphrase inside quote.\n" +
+	"- Every quote must occur exactly once in its identified document content. If a short phrase is repeated, extend the quote with adjacent verbatim text until the occurrence is unique.\n" +
+	"- Do not use ellipses, omitted text markers, normalized wording, or reconstructed sentences inside quote.\n" +
 	"- A document may yield zero, one, or multiple facts.\n" +
 	"- Use occurred_at only when the evidence supports a concrete event time; otherwise leave it empty.\n" +
 	"- occurred_at must be RFC3339 when present.\n" +
