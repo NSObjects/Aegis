@@ -565,7 +565,7 @@ func TestLiveEventProvidersHostedIntegration(
 	}
 
 	statuses := make(
-		map[string]capevent.AcquisitionAttemptStatus,
+		map[string]capevent.AcquisitionStatus,
 		len(output.Steps),
 	)
 	for _, step := range output.Steps {
@@ -622,8 +622,8 @@ func TestLiveEventProvidersHostedIntegration(
 	diagnostic := struct {
 		Symbol        string                                     `json:"symbol"`
 		TargetName    string                                     `json:"target_name"`
-		CninfoStatus  capevent.AcquisitionAttemptStatus          `json:"cninfo_status"`
-		CLSStatus     capevent.AcquisitionAttemptStatus          `json:"cls_status"`
+		CninfoStatus  capevent.AcquisitionStatus          `json:"cninfo_status"`
+		CLSStatus     capevent.AcquisitionStatus          `json:"cls_status"`
 		SnapshotCount int                                        `json:"snapshot_file_count"`
 	}{
 		Symbol:        symbol,
