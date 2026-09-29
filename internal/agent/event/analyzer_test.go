@@ -942,6 +942,166 @@ func TestAnalyzerDoesNotCountReprintsAsIndependentSources(
 	}
 }
 
+func TestAnalyzerCarriesContradictionsIntoMaterialityAndRisk(
+	t *testing.T,
+) {
+	asOf := time.Date(
+		2026, 9, 29, 15, 0, 0, 0, time.UTC,
+	)
+	documents := []capevent.CanonicalDocument{
+		{
+			ID:      "doc_a",
+			Content: "2026H1 revenue was 100.",
+			Source: capevent.DocumentSource{
+				Publisher: "source-a",
+			},
+		},
+		{
+			ID:      "doc_b",
+			Content: "2026H1 revenue was 120.",
+			Source: capevent.DocumentSource{
+				Publisher: "source-b",
+			},
+		},
+	}
+
+	analyzer := Analyzer{
+		Extractor: extractorFunc(
+			func(
+				context.Context,
+				capevent.ResearchTask,
+				[]capevent.CanonicalDocument,
+			) (FactExtractionResult, error) {
+				return FactExtractionResult{
+					Confidence: 0.9,
+					Facts: []ExtractedFact{
+						{
+							Type:     EventEarnings,
+							Headline: "revenue",
+							Summary:  "2026H1 revenue was 100.",
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc_a",
+									Quote: "2026H1 revenue was 100.",
+								},
+							},
+							Confidence: 0.9,
+						},
+						{
+							Type:     EventEarnings,
+							Headline: "revenue",
+							Summary:  "2026H1 revenue was 120.",
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc_b",
+									Quote: "2026H1 revenue was 120.",
+								},
+							},
+							Confidence: 0.9,
+						},
+					},
+				}, nil
+			},
+		),
+		Clusterer: clustererFunc(
+			func(
+				_ context.Context,
+				_ capevent.ResearchTask,
+				facts []Fact,
+			) (EventClusterResult, error) {
+				return EventClusterResult{
+					Clusters: []EventCluster{
+						{
+							FactIDs: []string{
+								facts[0].ID,
+								facts[1].ID,
+							},
+						},
+					},
+				}, nil
+			},
+		),
+		Contradictions: contradictionDetectorFunc(
+			func(
+				_ context.Context,
+				_ capevent.ResearchTask,
+				facts []Fact,
+			) (ContradictionDetectionResult, error) {
+				return ContradictionDetectionResult{
+					Contradictions: []DetectedContradiction{
+						{
+							Type: ContradictionValue,
+							FactIDs: []string{
+								facts[1].ID,
+								facts[0].ID,
+							},
+							Rationale: "same period revenue differs",
+						},
+					},
+				}, nil
+			},
+		),
+		Materiality: materialityFunc(
+			func(
+				_ context.Context,
+				_ capevent.ResearchTask,
+				input MaterialityInput,
+			) (Materiality, error) {
+				if len(input.Contradictions) != 1 ||
+					input.Contradictions[0].Type !=
+						ContradictionValue {
+					t.Fatalf(
+						"materiality contradictions = %+v",
+						input.Contradictions,
+					)
+				}
+				return Materiality{
+					Level:      MaterialityUnknown,
+					Direction:  DirectionUncertain,
+					Horizon:    HorizonUnknown,
+					Rationale:  "revenue evidence conflicts.",
+					Risks:      []string{"reported values conflict"},
+					Confidence: 0.5,
+				}, nil
+			},
+		),
+	}
+
+	result, err := analyzer.Analyze(
+		context.Background(),
+		AnalyzeInput{
+			Task: capevent.ResearchTask{
+				Symbol: "600519.SH",
+				AsOf:   asOf,
+			},
+			ResearchStatus: capevent.TaskSatisfied,
+			Documents:      documents,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Events) != 1 ||
+		len(result.Events[0].Contradictions) != 1 {
+		t.Fatalf("events = %+v", result.Events)
+	}
+	conflict := result.Events[0].Contradictions[0]
+	if !strings.HasPrefix(conflict.ID, "conflict_") ||
+		conflict.FactIDs[0] > conflict.FactIDs[1] {
+		t.Fatalf(
+			"contradiction is not normalized: %+v",
+			conflict,
+		)
+	}
+	if len(result.Risk) < 2 ||
+		!strings.Contains(
+			result.Risk[0],
+			"unresolved grounded claim contradiction",
+		) {
+		t.Fatalf("context risk = %v", result.Risk)
+	}
+}
+
 func testContentHash(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
