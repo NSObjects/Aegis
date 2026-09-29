@@ -433,32 +433,55 @@ func TestLiveAgentSurfacesProviderCaptureFailureAsRisk(
 				},
 				SnapshotStore: store,
 			},
-			OfficialRetriever: &liveRetriever{
-				id:     "official",
-				method: capevent.AcquisitionAPI,
-				docs: []capevent.RawDocument{
-					{
-						ID:          "official",
-						Title:       "例行公告",
-						URL:         "https://issuer.example/routine",
-						Publisher:   "issuer",
-						SourceType:  capevent.SourceOfficial,
-						IsPrimary:   true,
-						PublishedAt: &published,
-						AvailableAt: &published,
-						RetrievedAt: capturedAt,
-						RawMetadata: map[string]any{
-							"symbol": "600519.SH",
+			OfficialRetrievers: []capevent.Retriever{
+				&liveRetriever{
+					id:     "official",
+					method: capevent.AcquisitionAPI,
+					docs: []capevent.RawDocument{
+						{
+							ID:          "official",
+							Title:       "例行公告",
+							URL:         "https://issuer.example/routine",
+							Publisher:   "issuer",
+							SourceType:  capevent.SourceOfficial,
+							IsPrimary:   true,
+							PublishedAt: &published,
+							AvailableAt: &published,
+							RetrievedAt: capturedAt,
+							RawMetadata: map[string]any{
+								"symbol": "600519.SH",
+							},
 						},
 					},
 				},
 			},
-			BreakingRetriever: &liveRetriever{
-				id:     "news",
-				method: capevent.AcquisitionAPI,
-				err: errors.New(
-					"news provider unavailable",
-				),
+			BreakingRetrievers: []capevent.Retriever{
+				&liveRetriever{
+					id:     "news_ok",
+					method: capevent.AcquisitionAPI,
+					docs: []capevent.RawDocument{
+						{
+							ID:           "news-ok",
+							Title:        "媒体候选证据",
+							Content:      "可用的媒体证据",
+							URL:          "https://media.example/ok",
+							Publisher:    "media-ok",
+							SourceType:   capevent.SourceIndustryMedia,
+							Authority:    capevent.AuthorityMedia,
+							EvidenceKind: capevent.EvidenceNewsReport,
+							PublishedAt:  &published,
+							AvailableAt:  &published,
+							RetrievedAt:  capturedAt,
+						},
+					},
+				},
+				&liveRetriever{
+					id:     "news_fail",
+					method: capevent.AcquisitionWebSearch,
+					err: errors.New(
+						"news provider unavailable",
+					),
+				},
 			},
 		},
 	)
@@ -492,7 +515,7 @@ func TestLiveAgentSurfacesProviderCaptureFailureAsRisk(
 	for _, risk := range result.Risk {
 		if strings.Contains(
 			risk,
-			"capture_breaking_news",
+			"capture_breaking_news@news_fail",
 		) &&
 			strings.Contains(
 				risk,
@@ -505,6 +528,29 @@ func TestLiveAgentSurfacesProviderCaptureFailureAsRisk(
 		t.Fatalf(
 			"capture failure risk missing: %+v",
 			result.Risk,
+		)
+	}
+
+	media, err := store.Query(
+		context.Background(),
+		capevent.EvidenceSnapshotQuery{
+			AsOf: capturedAt,
+			SourceTypes: []capevent.SourceType{
+				capevent.SourceIndustryMedia,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"query successful sibling snapshot: %v",
+			err,
+		)
+	}
+	if len(media) != 1 ||
+		media[0].ID != "news-ok" {
+		t.Fatalf(
+			"successful sibling snapshots = %+v",
+			media,
 		)
 	}
 }
