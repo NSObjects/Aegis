@@ -27,8 +27,10 @@ type EvidenceRelation struct {
 	Method          string
 	Score           float64
 	Threshold       float64
-	Containment     float64
-	Jaccard         float64
+	Containment          float64
+	Jaccard              float64
+	ContainmentThreshold float64
+	JaccardThreshold     float64
 }
 
 type NearDuplicateMatcher struct {
@@ -99,8 +101,10 @@ func (m NearDuplicateMatcher) matchPrepared(
 			Method:          "content_hash",
 			Score:           1,
 			Threshold:       1,
-			Containment:     1,
-			Jaccard:         1,
+			Containment:          1,
+			Jaccard:              1,
+			ContainmentThreshold: 1,
+			JaccardThreshold:     1,
 		}, true
 	}
 
@@ -156,8 +160,10 @@ func (m NearDuplicateMatcher) matchPrepared(
 		Method:          "char_shingle_containment_jaccard",
 		Score:           containment,
 		Threshold:       minContainment,
-		Containment:     containment,
-		Jaccard:         jaccard,
+		Containment:          containment,
+		Jaccard:              jaccard,
+		ContainmentThreshold: minContainment,
+		JaccardThreshold:     minJaccard,
 	}
 	if containment < minContainment ||
 		jaccard < minJaccard {
