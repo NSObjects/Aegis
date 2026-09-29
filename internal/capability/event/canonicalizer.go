@@ -482,9 +482,7 @@ func finalizeCanonicalDocument(
 		},
 	)
 
-	active := doc.Versions[
-		len(doc.Versions)-1
-	]
+	active := doc.Versions[len(doc.Versions)-1]
 	applyActiveVersion(
 		doc,
 		active,
