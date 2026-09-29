@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -453,47 +454,19 @@ func run(
 	}
 	eventCutoff := time.Now().In(location)
 
+	workflowInput, err := newLiveResearchInput(
+		symbol,
+		marketQuery,
+		eventCutoff,
+		eventLookback,
+	)
+	if err != nil {
+		return err
+	}
+
 	result, err := workflow.Run(
 		ctx,
-		research.Input{
-			Symbol:      symbol,
-			MarketQuery: marketQuery,
-			EventInput: eventagent.Input{
-				Task: eventcap.ResearchTask{
-					ID: fmt.Sprintf(
-						"live-event-%s-%d",
-						symbol,
-						eventCutoff.UnixNano(),
-					),
-					Symbol: symbol,
-					Objective:
-						"研究该标的近期公告、新闻与重要事件，并形成可追溯的事件上下文。",
-					InformationNeed:
-						eventcap.NeedEventEvidence,
-					AsOf: eventCutoff,
-					TimeRange: eventcap.TimeRange{
-						Start: eventCutoff.Add(
-							-eventLookback,
-						),
-						End: eventCutoff,
-					},
-					Requirements:
-						eventcap.ResearchRequirements{
-							PITSafe: true,
-							PreferredSourceTypes:
-								[]eventcap.SourceType{
-									eventcap.SourceOfficial,
-									eventcap.SourceIndustryMedia,
-									eventcap.SourceMainstreamMedia,
-								},
-							MinDocuments: 1,
-							MinIndependentSources: 1,
-						},
-				},
-				Query:
-					"研究请求时点之前的近期公司公告、新闻与重要事件。",
-			},
-		},
+		workflowInput,
 	)
 	if err != nil {
 		return err
@@ -514,4 +487,69 @@ func run(
 	fmt.Println(string(data))
 
 	return nil
+}
+
+
+func newLiveResearchInput(
+	symbol string,
+	marketQuery string,
+	cutoff time.Time,
+	lookback time.Duration,
+) (research.Input, error) {
+	symbol = strings.ToUpper(
+		strings.TrimSpace(symbol),
+	)
+	if symbol == "" {
+		return research.Input{}, fmt.Errorf(
+			"research symbol is required",
+		)
+	}
+	if cutoff.IsZero() {
+		return research.Input{}, fmt.Errorf(
+			"event publication cutoff is required",
+		)
+	}
+	if lookback <= 0 {
+		return research.Input{}, fmt.Errorf(
+			"event lookback must be positive",
+		)
+	}
+
+	return research.Input{
+		Symbol:      symbol,
+		MarketQuery: strings.TrimSpace(marketQuery),
+		EventInput: eventagent.Input{
+			Task: eventcap.ResearchTask{
+				ID: fmt.Sprintf(
+					"live-event-%s-%d",
+					symbol,
+					cutoff.UnixNano(),
+				),
+				Symbol: symbol,
+				Objective:
+					"研究该标的近期公告、新闻与重要事件，并形成可追溯的事件上下文。",
+				InformationNeed:
+					eventcap.NeedEventEvidence,
+				AsOf: cutoff,
+				TimeRange: eventcap.TimeRange{
+					Start: cutoff.Add(-lookback),
+					End:   cutoff,
+				},
+				Requirements:
+					eventcap.ResearchRequirements{
+						PITSafe: true,
+						PreferredSourceTypes:
+							[]eventcap.SourceType{
+								eventcap.SourceOfficial,
+								eventcap.SourceIndustryMedia,
+								eventcap.SourceMainstreamMedia,
+							},
+						MinDocuments:          1,
+						MinIndependentSources: 1,
+					},
+			},
+			Query:
+				"研究请求时点之前的近期公司公告、新闻与重要事件。",
+		},
+	}, nil
 }
