@@ -3,7 +3,6 @@ package event
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -121,7 +120,6 @@ func TestCLSNewsRetrieverRunsThroughTaskRunner(t *testing.T) {
 
 	task := ResearchTask{
 		ID:              "task-cls-news",
-		Symbol:          "600519.SH",
 		InformationNeed: NeedBreakingNews,
 		AsOf:            asOf,
 		TimeRange: TimeRange{
@@ -283,7 +281,7 @@ func TestCLSNewsRetrieverCompanyCategory(t *testing.T) {
 	}
 }
 
-func TestCLSNewsRetrieverDoesNotPretendToBeSymbolAware(
+func TestCLSNewsRetrieverRejectsSymbolScopedTask(
 	t *testing.T,
 ) {
 	location := clsShanghaiLocation
@@ -292,19 +290,9 @@ func TestCLSNewsRetrieverDoesNotPretendToBeSymbolAware(
 	)
 
 	client := httpDoerFunc(
-		func(req *http.Request) (*http.Response, error) {
-			if req.URL.Query().Has("symbol") {
-				t.Fatal("CLS telegraph request must not invent symbol filtering")
-			}
-			return jsonHTTPResponse(
-				http.StatusOK,
-				map[string]any{
-					"errno": 0,
-					"data": map[string]any{
-						"roll_data": []map[string]any{},
-					},
-				},
-			), nil
+		func(*http.Request) (*http.Response, error) {
+			t.Fatal("HTTP should not be called for symbol-scoped CLS task")
+			return nil, nil
 		},
 	)
 
@@ -319,8 +307,15 @@ func TestCLSNewsRetrieverDoesNotPretendToBeSymbolAware(
 			AsOf:            asOf,
 		},
 	)
-	if err != nil {
-		t.Fatalf("Retrieve() error = %v", err)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"does not support symbol-scoped task",
+		) {
+		t.Fatalf(
+			"error = %v, want symbol-scope rejection",
+			err,
+		)
 	}
 }
 
@@ -380,15 +375,3 @@ func TestCLSQueryIsBounded(t *testing.T) {
 	}
 }
 
-func signedQueryWithoutSign(
-	query url.Values,
-) map[string]string {
-	params := make(map[string]string)
-	for key, values := range query {
-		if key == "sign" || len(values) == 0 {
-			continue
-		}
-		params[key] = values[0]
-	}
-	return params
-}
