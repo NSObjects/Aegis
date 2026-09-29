@@ -32,13 +32,11 @@ func (m *fakeToolCallingChatModel) Stream(
 func (m *fakeToolCallingChatModel) WithTools(
 	tools []*schema.ToolInfo,
 ) (model.ToolCallingChatModel, error) {
-	clone := &fakeToolCallingChatModel{
-		tools: append(
-			[]*schema.ToolInfo(nil),
-			tools...,
-		),
-	}
-	return clone, nil
+	m.tools = append(
+		[]*schema.ToolInfo(nil),
+		tools...,
+	)
+	return m, nil
 }
 
 func TestResearchPlanToolInfo(t *testing.T) {
@@ -79,7 +77,15 @@ func TestNewPlannerAndReplanner(t *testing.T) {
 	if planner == nil {
 		t.Fatal("planner is nil")
 	}
+	if len(chatModel.tools) != 1 ||
+		chatModel.tools[0] != &ResearchPlanToolInfo {
+		t.Fatalf(
+			"planner tools = %v, want ResearchPlanToolInfo",
+			chatModel.tools,
+		)
+	}
 
+	chatModel.tools = nil
 	replanner, err := NewReplanner(
 		context.Background(),
 		chatModel,
@@ -92,6 +98,15 @@ func TestNewPlannerAndReplanner(t *testing.T) {
 	}
 	if replanner == nil {
 		t.Fatal("replanner is nil")
+	}
+	if len(chatModel.tools) != 2 {
+		t.Fatalf(
+			"replanner tools = %d, want 2",
+			len(chatModel.tools),
+		)
+	}
+	if chatModel.tools[0] != &ResearchPlanToolInfo {
+		t.Fatal("replanner must use ResearchPlanToolInfo as plan tool")
 	}
 }
 
