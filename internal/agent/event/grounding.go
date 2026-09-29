@@ -85,7 +85,7 @@ func ResolveEvidenceGroundings(
 			)
 		}
 		if strings.Index(
-			document.Content[start+len(quote):],
+			document.Content[start+1:],
 			quote,
 		) >= 0 {
 			return nil, fmt.Errorf(
