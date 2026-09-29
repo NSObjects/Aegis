@@ -23,8 +23,9 @@ type TaskRunOutput struct {
 // AcquisitionAttempt and converted into task coverage semantics instead of
 // automatically aborting the research task.
 type TaskRunner struct {
-	Now           func() time.Time
-	SnapshotStore EvidenceSnapshotStore
+	Now            func() time.Time
+	SnapshotStore  EvidenceSnapshotStore
+	SourceResolver SourceIdentityResolver
 }
 
 func (r TaskRunner) Run(
@@ -94,6 +95,18 @@ func (r TaskRunner) Run(
 		finishedAt,
 		rawDocuments,
 	)
+	sourceResolver := r.SourceResolver
+	if sourceResolver == nil {
+		sourceResolver = DefaultSourceIdentityResolver()
+	}
+	for index := range rawDocuments {
+		rawDocuments[index] = ApplySourceIdentity(
+			rawDocuments[index],
+			sourceResolver.Resolve(
+				rawDocuments[index],
+			),
+		)
+	}
 	for _, document := range rawDocuments {
 		attempt.DocumentRefs = appendUnique(
 			attempt.DocumentRefs,

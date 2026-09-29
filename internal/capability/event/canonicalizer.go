@@ -145,10 +145,12 @@ func canonicalDocumentFromRaw(
 		Source: DocumentSource{
 			Publisher:    publisher,
 			URL:          normalizeDocumentURL(raw.URL),
-			SourceType:   raw.SourceType,
-			Authority:    raw.Authority,
-			EvidenceKind: raw.EvidenceKind,
-			IsPrimary:    raw.IsPrimary,
+			SourceType:       raw.SourceType,
+			Authority:        raw.Authority,
+			EvidenceKind:     raw.EvidenceKind,
+			IsPrimary:        raw.IsPrimary,
+			CanonicalDomain:  strings.TrimSpace(raw.CanonicalDomain),
+			ResolutionReason: strings.TrimSpace(raw.ResolutionReason),
 		},
 		Versions: []DocumentVersion{version},
 	}
@@ -430,6 +432,12 @@ func mergeDocumentSource(
 	}
 	if dst.EvidenceKind == "" {
 		dst.EvidenceKind = src.EvidenceKind
+	}
+	if dst.CanonicalDomain == "" {
+		dst.CanonicalDomain = src.CanonicalDomain
+	}
+	if dst.ResolutionReason == "" {
+		dst.ResolutionReason = src.ResolutionReason
 	}
 	dst.IsPrimary = dst.IsPrimary ||
 		src.IsPrimary
