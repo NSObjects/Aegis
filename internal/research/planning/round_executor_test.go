@@ -225,7 +225,6 @@ func TestPlanExecuteAgentCompletesSatisfiedRound(
 	}
 	selector := &roundTestSelector{}
 	resolverCalls := 0
-	artifacts := make([]ResearchRoundArtifact, 0, 2)
 
 	agent, err := NewPlanExecuteAgent(
 		context.Background(),
@@ -389,6 +388,7 @@ func TestPlanExecuteAgentReplansRemainingEvidenceAndAccumulatesRounds(
 	}
 	selector := &roundTestSelector{}
 	resolverCalls := 0
+	artifacts := make([]ResearchRoundArtifact, 0, 2)
 
 	agent, err := NewPlanExecuteAgent(
 		context.Background(),
