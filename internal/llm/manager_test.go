@@ -108,3 +108,108 @@ func TestNewUnsupportedProvider(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+
+func TestDeepSeekResponseFormatModes(t *testing.T) {
+	jsonMode, err := deepSeekResponseFormat(
+		deepSeekResponseJSON,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(jsonMode) != "json_object" {
+		t.Fatalf(
+			"json response mode = %q",
+			jsonMode,
+		)
+	}
+
+	toolMode, err := deepSeekResponseFormat(
+		deepSeekResponseTool,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(toolMode) != "text" {
+		t.Fatalf(
+			"tool response mode = %q",
+			toolMode,
+		)
+	}
+
+	if _, err := deepSeekResponseFormat(
+		deepSeekResponseMode("invalid"),
+	); err == nil {
+		t.Fatal(
+			"expected invalid response mode error",
+		)
+	}
+}
+
+func TestManagerGetToolCallingCachesDedicatedProfile(
+	t *testing.T,
+) {
+	t.Setenv(
+		"TEST_DEEPSEEK_TOOL_API_KEY",
+		"test-key",
+	)
+
+	manager := NewManager(
+		map[string]config.ModelConfig{
+			"event": {
+				Provider: config.ProviderDeepSeek,
+				Model: "deepseek-chat",
+				APIKeyEnv:
+					"TEST_DEEPSEEK_TOOL_API_KEY",
+			},
+		},
+	)
+
+	first, err := manager.GetToolCalling(
+		context.Background(),
+		"event",
+	)
+	if err != nil {
+		t.Fatalf(
+			"GetToolCalling() error = %v",
+			err,
+		)
+	}
+	second, err := manager.GetToolCalling(
+		context.Background(),
+		"event",
+	)
+	if err != nil {
+		t.Fatalf(
+			"second GetToolCalling() error = %v",
+			err,
+		)
+	}
+	if first != second {
+		t.Fatal(
+			"expected cached tool-calling model instance",
+		)
+	}
+
+	jsonModel, err := manager.Get(
+		context.Background(),
+		"event",
+	)
+	if err != nil {
+		t.Fatalf(
+			"Get() error = %v",
+			err,
+		)
+	}
+	if jsonModel == nil {
+		t.Fatal("expected JSON model")
+	}
+	if len(manager.models) != 1 ||
+		len(manager.toolCallingModels) != 1 {
+		t.Fatalf(
+			"manager caches json=%d tool=%d",
+			len(manager.models),
+			len(manager.toolCallingModels),
+		)
+	}
+}
