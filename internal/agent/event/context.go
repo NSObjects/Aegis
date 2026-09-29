@@ -83,6 +83,10 @@ type Event struct {
 type Context struct {
 	Symbol        string   `json:"symbol"`
 	RequestedAsOf string   `json:"requested_as_of"`
+	// EvidenceAsOf is the observation/freeze cutoff when it differs from the
+	// caller's requested research cutoff. Live capture sets this to capture
+	// completion while preserving RequestedAsOf as the original request time.
+	EvidenceAsOf  string   `json:"evidence_as_of,omitempty"`
 	Status        Status   `json:"status"`
 	Events        []Event  `json:"events,omitempty"`
 	Evidence      []string `json:"evidence,omitempty"`
