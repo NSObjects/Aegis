@@ -81,7 +81,8 @@ type Config struct {
 }
 
 type Workflow struct {
-	runnable compose.Runnable[Input, *decision.Decision]
+	runnable       compose.Runnable[Input, *decision.Decision]
+	normalizeInput func(Input) (Input, error)
 }
 
 type marketResult struct {
@@ -384,7 +385,8 @@ func New(
 	}
 
 	return &Workflow{
-		runnable: runnable,
+		runnable:       runnable,
+		normalizeInput: normalizeWorkflowInput,
 	}, nil
 }
 
@@ -398,9 +400,11 @@ func (w *Workflow) Run(
 		)
 	}
 
-	normalized, err := normalizeWorkflowInput(
-		input,
-	)
+	normalize := w.normalizeInput
+	if normalize == nil {
+		normalize = normalizeLegacyWorkflowInput
+	}
+	normalized, err := normalize(input)
 	if err != nil {
 		return nil, err
 	}
@@ -453,5 +457,20 @@ func normalizeWorkflowInput(
 		)
 	}
 
+	return input, nil
+}
+
+
+func normalizeLegacyWorkflowInput(
+	input Input,
+) (Input, error) {
+	input.Symbol = strings.ToUpper(
+		strings.TrimSpace(input.Symbol),
+	)
+	if input.Symbol == "" {
+		return Input{}, errors.New(
+			"research symbol is required",
+		)
+	}
 	return input, nil
 }
