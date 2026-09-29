@@ -130,6 +130,7 @@ func (p *ResearchPlan) Validate() error {
 					"research plan step %q official disclosure must use direct scope",
 					step.ID,
 				)
+			}
 		case event.NeedBreakingNews:
 			if step.Scope != event.AcquisitionScopeCandidate {
 				return fmt.Errorf(
