@@ -110,7 +110,7 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 					ResearchRoundExecutorConfig{
 					Compiler: planning.Compiler{
 						Channels: planning.ChannelBindings{
-							OfficialDisclosure:
+							OfficialDisclosureProviders:
 								[]capevent.Retriever{
 									&capevent.SnapshotRetriever{
 										Store: store,
@@ -122,7 +122,7 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 											},
 									},
 								},
-							BreakingNews:
+							BreakingNewsProviders:
 								[]capevent.Retriever{
 									&capevent.SnapshotRetriever{
 										Store: store,
