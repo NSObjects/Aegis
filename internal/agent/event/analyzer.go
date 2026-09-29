@@ -48,9 +48,10 @@ type EventClusterResult struct {
 }
 
 type MaterialityInput struct {
-	EventID string
-	Type    EventType
-	Facts   []Fact
+	EventID         string
+	Type            EventType
+	Facts           []Fact
+	EvidenceSupport capevent.EvidenceSupport
 }
 
 type EventFactExtractor interface {
@@ -81,6 +82,7 @@ type AnalyzeInput struct {
 	Task           capevent.ResearchTask
 	ResearchStatus capevent.ResearchTaskStatus
 	Documents      []capevent.CanonicalDocument
+	Corroboration  capevent.CorroborationResult
 }
 
 type Analyzer struct {
@@ -140,6 +142,14 @@ func (a Analyzer) Analyze(
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	corroboration := input.Corroboration
+	if len(corroboration.Clusters) == 0 &&
+		len(input.Documents) > 0 {
+		corroboration =
+			(capevent.EvidenceCorroborator{}).
+				Corroborate(input.Documents)
 	}
 
 	if a.Extractor == nil {
@@ -236,15 +246,35 @@ func (a Analyzer) Analyze(
 			clusterFacts,
 			documentByID,
 		)
+		support, supportErr :=
+			(capevent.EvidenceSupportAnalyzer{}).
+				Analyze(
+					item.EvidenceDocumentIDs,
+					input.Documents,
+					corroboration,
+				)
+		if supportErr != nil {
+			return nil, fmt.Errorf(
+				"analyze event %q evidence support: %w",
+				eventID,
+				supportErr,
+			)
+		}
+		item.EvidenceSupport = support
+		item.SourceCount =
+			support.IndependentSourceCount
+		item.HasPrimarySource =
+			support.PrimarySourcePresent
 
 		materiality, analyzeErr :=
 			a.Materiality.AnalyzeMateriality(
 				ctx,
 				task,
 				MaterialityInput{
-					EventID: eventID,
-					Type:    item.Type,
-					Facts:   clusterFacts,
+					EventID:         eventID,
+					Type:            item.Type,
+					Facts:           clusterFacts,
+					EvidenceSupport: support,
 				},
 			)
 		if analyzeErr != nil {
@@ -636,27 +666,6 @@ func buildEventFactView(
 	evidenceIDs = uniqueSortedStrings(
 		evidenceIDs,
 	)
-	sourceKeys := make(map[string]struct{})
-	hasPrimary := false
-	for _, documentID := range evidenceIDs {
-		document := documents[documentID]
-		sourceKey := strings.TrimSpace(
-			document.Source.Publisher,
-		)
-		if sourceKey == "" {
-			sourceKey = sourceHost(
-				document.Source.URL,
-			)
-		}
-		if sourceKey == "" {
-			sourceKey = documentID
-		}
-		sourceKeys[strings.ToLower(sourceKey)] =
-			struct{}{}
-		hasPrimary = hasPrimary ||
-			document.Source.IsPrimary
-	}
-
 	return Event{
 		ID:                  eventID,
 		Type:                eventType,
@@ -665,8 +674,8 @@ func buildEventFactView(
 		FactSummary:         strings.Join(uniqueStringsPreserveOrder(summaries), "\n"),
 		Entities:            uniqueSortedStrings(entities),
 		EvidenceDocumentIDs: evidenceIDs,
-		SourceCount:         len(sourceKeys),
-		HasPrimarySource:    hasPrimary,
+		SourceCount:         0,
+		HasPrimarySource:    false,
 		FactConfidence:      confidenceSum / float64(len(facts)),
 	}
 }
