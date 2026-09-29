@@ -740,6 +740,16 @@ func contextRisks(
 ) []string {
 	values := make([]string, 0)
 	for _, item := range events {
+		if len(item.Contradictions) > 0 {
+			values = append(
+				values,
+				fmt.Sprintf(
+					"event %s has %d unresolved grounded claim contradiction(s)",
+					item.ID,
+					len(item.Contradictions),
+				),
+			)
+		}
 		values = append(
 			values,
 			item.Materiality.Risks...,
