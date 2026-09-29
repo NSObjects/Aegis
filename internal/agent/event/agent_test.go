@@ -596,7 +596,7 @@ func TestNewsEventAgentStructuralResearchErrorStopsBeforeAnalyzer(
 	if err == nil ||
 		!strings.Contains(
 			err.Error(),
-			"breaking news channel binding",
+			"breaking news channel requires at least one retriever binding",
 		) {
 		t.Fatalf(
 			"error = %v, want compiler structural error",
