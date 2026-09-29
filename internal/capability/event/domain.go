@@ -56,6 +56,7 @@ type AcquisitionStatus string
 
 const (
 	AcquisitionSucceeded AcquisitionStatus = "succeeded"
+	AcquisitionPartial   AcquisitionStatus = "partial"
 	AcquisitionFailed    AcquisitionStatus = "failed"
 	AcquisitionTimeout   AcquisitionStatus = "timeout"
 )
@@ -158,10 +159,10 @@ type ResearchGap struct {
 }
 
 type ResearchTaskResult struct {
-	TaskID     string
-	Status     ResearchTaskStatus
-	Documents  []string
-	Attempts   []string
-	Gaps       []ResearchGap
+	TaskID      string
+	Status      ResearchTaskStatus
+	Documents   []string
+	Attempts    []string
+	Gaps        []ResearchGap
 	CompletedAt time.Time
 }
