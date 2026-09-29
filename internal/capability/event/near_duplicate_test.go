@@ -3,6 +3,7 @@ package event
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNearDuplicateMatcherMatchesEditedChineseReprint(
@@ -167,6 +168,42 @@ func TestNearDuplicateMatcherRejectsShortDocuments(
 	if matched {
 		t.Fatalf(
 			"short documents matched: %+v",
+			relation,
+		)
+	}
+}
+
+func TestNearDuplicateMatcherRejectsDistantTemplateReuse(
+	t *testing.T,
+) {
+	body := strings.Repeat(
+		"公司公告显示经营保持稳定渠道库存合理销售计划正常推进投资者应关注相关风险",
+		5,
+	)
+	left := nearDuplicateTestDocument(
+		"doc-old",
+		"a.example",
+		body,
+	)
+	right := nearDuplicateTestDocument(
+		"doc-new",
+		"b.example",
+		"最新公告导语"+body,
+	)
+	oldTime := time.Date(
+		2026, 1, 1, 9, 0, 0, 0, time.UTC,
+	)
+	newTime := oldTime.Add(30 * 24 * time.Hour)
+	left.PublishedAt = cloneTime(&oldTime)
+	right.PublishedAt = cloneTime(&newTime)
+
+	relation, matched := (NearDuplicateMatcher{}).Match(
+		left,
+		right,
+	)
+	if matched {
+		t.Fatalf(
+			"distant template reuse matched: %+v",
 			relation,
 		)
 	}
