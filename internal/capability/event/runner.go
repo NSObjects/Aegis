@@ -138,6 +138,10 @@ func normalizeRawDocuments(
 		if documents[index].RetrievedAt.IsZero() {
 			documents[index].RetrievedAt = retrievedAt
 		}
+		if documents[index].FirstSeenAt == nil {
+			firstSeenAt := documents[index].RetrievedAt
+			documents[index].FirstSeenAt = &firstSeenAt
+		}
 
 		documents[index].ID = strings.TrimSpace(
 			documents[index].ID,
