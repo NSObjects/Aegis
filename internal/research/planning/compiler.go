@@ -8,8 +8,8 @@ import (
 )
 
 type ChannelBindings struct {
-	OfficialDisclosure event.Retriever
-	BreakingNews       event.Retriever
+	OfficialDisclosure []event.Retriever
+	BreakingNews       []event.Retriever
 	Selector           event.EvidenceSelector
 }
 
@@ -39,11 +39,7 @@ func (c Compiler) Compile(
 	)
 
 	compiled := event.AcquisitionPlan{
-		Steps: make(
-			[]event.AcquisitionStep,
-			0,
-			len(plan.Steps),
-		),
+		Steps:    make([]event.AcquisitionStep, 0),
 		Selector: c.Channels.Selector,
 	}
 
@@ -51,10 +47,9 @@ func (c Compiler) Compile(
 		if _, duplicate := seenNeeds[
 			step.Need,
 		]; duplicate {
-			// One ResearchPlan need maps to one concrete bound channel in
-			// this compiler. Repeating the same need cannot acquire new
-			// evidence; it only replays the same retriever and creates
-			// duplicate candidate identities. Preserve the first step.
+			// Planner semantics allow at most one logical step per evidence
+			// need. A logical need can still fan out to every concrete
+			// retriever bound to that channel.
 			continue
 		}
 		seenNeeds[step.Need] = struct{}{}
@@ -67,50 +62,75 @@ func (c Compiler) Compile(
 					step.ID,
 				)
 			}
-			if c.Channels.OfficialDisclosure == nil {
+
+			retrievers, err := validateChannelRetrievers(
+				"official disclosure",
+				c.Channels.OfficialDisclosure,
+			)
+			if err != nil {
 				return event.AcquisitionPlan{}, fmt.Errorf(
-					"research plan step %q requires official disclosure channel binding",
+					"research plan step %q: %w",
 					step.ID,
+					err,
 				)
 			}
 
-			compiled.Steps = append(
-				compiled.Steps,
-				event.AcquisitionStep{
-					ID:    step.ID,
-					Scope: event.AcquisitionScopeDirect,
-					Task: event.ResearchTask{
-						Symbol:          root.Symbol,
-						InformationNeed: event.NeedOfficialDisclosure,
+			for _, retriever := range retrievers {
+				compiled.Steps = append(
+					compiled.Steps,
+					event.AcquisitionStep{
+						ID: providerStepID(
+							step.ID,
+							retriever.ID(),
+							len(retrievers),
+						),
+						Scope: event.AcquisitionScopeDirect,
+						Task: event.ResearchTask{
+							Symbol:          root.Symbol,
+							InformationNeed: event.NeedOfficialDisclosure,
+						},
+						Retriever: retriever,
 					},
-					Retriever: c.Channels.OfficialDisclosure,
-				},
-			)
+				)
+			}
 
 		case event.NeedBreakingNews:
 			hasCandidate = true
-			if c.Channels.BreakingNews == nil {
+
+			retrievers, err := validateChannelRetrievers(
+				"breaking news",
+				c.Channels.BreakingNews,
+			)
+			if err != nil {
 				return event.AcquisitionPlan{}, fmt.Errorf(
-					"research plan step %q requires breaking news channel binding",
+					"research plan step %q: %w",
 					step.ID,
+					err,
 				)
 			}
 
-			compiled.Steps = append(
-				compiled.Steps,
-				event.AcquisitionStep{
-					ID:    step.ID,
-					Scope: event.AcquisitionScopeCandidate,
-					Task: event.ResearchTask{
-						// Broad breaking-news retrieval is intentionally
-						// symbol-less. Root-symbol relevance is decided only
-						// by EvidenceSelector after acquisition.
-						Symbol:          "",
-						InformationNeed: event.NeedBreakingNews,
+			for _, retriever := range retrievers {
+				compiled.Steps = append(
+					compiled.Steps,
+					event.AcquisitionStep{
+						ID: providerStepID(
+							step.ID,
+							retriever.ID(),
+							len(retrievers),
+						),
+						Scope: event.AcquisitionScopeCandidate,
+						Task: event.ResearchTask{
+							// Broad breaking-news retrieval is intentionally
+							// symbol-less. Root-symbol relevance is decided only
+							// by EvidenceSelector after all candidate providers
+							// have contributed their documents.
+							Symbol:          "",
+							InformationNeed: event.NeedBreakingNews,
+						},
+						Retriever: retriever,
 					},
-					Retriever: c.Channels.BreakingNews,
-				},
-			)
+				)
+			}
 
 		default:
 			return event.AcquisitionPlan{}, fmt.Errorf(
@@ -128,4 +148,79 @@ func (c Compiler) Compile(
 	}
 
 	return compiled, nil
+}
+
+func validateChannelRetrievers(
+	channel string,
+	retrievers []event.Retriever,
+) ([]event.Retriever, error) {
+	if len(retrievers) == 0 {
+		return nil, fmt.Errorf(
+			"%s channel requires at least one retriever binding",
+			channel,
+		)
+	}
+
+	validated := make(
+		[]event.Retriever,
+		0,
+		len(retrievers),
+	)
+	seenIDs := make(
+		map[string]struct{},
+		len(retrievers),
+	)
+
+	for index, retriever := range retrievers {
+		if retriever == nil {
+			return nil, fmt.Errorf(
+				"%s channel retriever %d is nil",
+				channel,
+				index,
+			)
+		}
+
+		retrieverID := strings.TrimSpace(
+			retriever.ID(),
+		)
+		if retrieverID == "" {
+			return nil, fmt.Errorf(
+				"%s channel retriever %d id is required",
+				channel,
+				index,
+			)
+		}
+		if retriever.Method() == "" {
+			return nil, fmt.Errorf(
+				"%s channel retriever %q acquisition method is required",
+				channel,
+				retrieverID,
+			)
+		}
+		if _, duplicate := seenIDs[retrieverID]; duplicate {
+			return nil, fmt.Errorf(
+				"%s channel retriever id %q is duplicated",
+				channel,
+				retrieverID,
+			)
+		}
+		seenIDs[retrieverID] = struct{}{}
+		validated = append(
+			validated,
+			retriever,
+		)
+	}
+
+	return validated, nil
+}
+
+func providerStepID(
+	baseID string,
+	retrieverID string,
+	providerCount int,
+) string {
+	if providerCount <= 1 {
+		return baseID
+	}
+	return baseID + "@" + strings.TrimSpace(retrieverID)
 }
