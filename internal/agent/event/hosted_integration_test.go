@@ -625,7 +625,10 @@ func TestLiveEventProvidersHostedIntegration(
 	cninfoDocumentCount := 0
 	cninfoEnrichedCount := 0
 	cninfoBodyRiskCount := 0
+	cninfoResolvedCount := 0
+	clsResolvedCount := 0
 	tavilyDocumentCount := 0
+	tavilyResolvedCount := 0
 
 	for _, step := range output.Steps {
 		statuses[step.StepID] =
@@ -634,6 +637,27 @@ func TestLiveEventProvidersHostedIntegration(
 		if step.StepID == "hosted_tavily" {
 			tavilyDocumentCount =
 				len(step.Run.RawDocuments)
+			for _, document :=
+				range step.Run.RawDocuments {
+				if strings.TrimSpace(
+					document.CanonicalDomain,
+				) != "" &&
+					strings.TrimSpace(
+						document.ResolutionReason,
+					) != "" {
+					tavilyResolvedCount++
+				}
+			}
+		}
+
+		if step.StepID == "hosted_cls" {
+			for _, document :=
+				range step.Run.RawDocuments {
+				if document.CanonicalDomain ==
+					"cls.cn" {
+					clsResolvedCount++
+				}
+			}
 		}
 
 		if step.StepID == "hosted_cninfo" {
@@ -641,6 +665,10 @@ func TestLiveEventProvidersHostedIntegration(
 				len(step.Run.RawDocuments)
 			for _, document :=
 				range step.Run.RawDocuments {
+				if document.CanonicalDomain ==
+					"cninfo.com.cn" {
+					cninfoResolvedCount++
+				}
 				enriched, _ :=
 					document.RawMetadata["body_enriched"].(bool)
 				switch {
@@ -670,6 +698,26 @@ func TestLiveEventProvidersHostedIntegration(
 				step.Run.Attempt.ErrorMessage,
 			)
 		}
+	}
+
+	if cninfoResolvedCount != cninfoDocumentCount {
+		t.Fatalf(
+			"hosted Cninfo source identity resolved %d/%d documents",
+			cninfoResolvedCount,
+			cninfoDocumentCount,
+		)
+	}
+	if clsResolvedCount == 0 {
+		t.Fatal(
+			"hosted CLS source identity did not resolve cls.cn",
+		)
+	}
+	if tavilyResolvedCount != tavilyDocumentCount {
+		t.Fatalf(
+			"hosted Tavily source identity resolved %d/%d documents",
+			tavilyResolvedCount,
+			tavilyDocumentCount,
+		)
 	}
 
 	if tavilyDocumentCount == 0 {
@@ -743,7 +791,10 @@ func TestLiveEventProvidersHostedIntegration(
 		CLSStatus           capevent.AcquisitionStatus `json:"cls_status"`
 		TavilyStatus        capevent.AcquisitionStatus `json:"tavily_status"`
 		TavilyDocuments     int                       `json:"tavily_document_count"`
+		TavilyResolved      int                       `json:"tavily_resolved_count"`
 		CninfoDocuments     int                       `json:"cninfo_document_count"`
+		CninfoResolved      int                       `json:"cninfo_resolved_count"`
+		CLSResolved         int                       `json:"cls_resolved_count"`     int                       `json:"cninfo_document_count"`
 		CninfoEnriched      int                       `json:"cninfo_enriched_count"`
 		CninfoBodyRiskCount int                       `json:"cninfo_body_risk_count"`
 		SnapshotCount       int                       `json:"snapshot_file_count"`
@@ -754,7 +805,10 @@ func TestLiveEventProvidersHostedIntegration(
 		CLSStatus:           statuses["hosted_cls"],
 		TavilyStatus:        statuses["hosted_tavily"],
 		TavilyDocuments:     tavilyDocumentCount,
+		TavilyResolved:      tavilyResolvedCount,
 		CninfoDocuments:     cninfoDocumentCount,
+		CninfoResolved:      cninfoResolvedCount,
+		CLSResolved:         clsResolvedCount,
 		CninfoEnriched:      cninfoEnrichedCount,
 		CninfoBodyRiskCount: cninfoBodyRiskCount,
 		SnapshotCount:       snapshotCount,
