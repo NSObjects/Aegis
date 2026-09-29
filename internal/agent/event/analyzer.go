@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -678,18 +677,6 @@ func buildEventFactView(
 		HasPrimarySource:    false,
 		FactConfidence:      confidenceSum / float64(len(facts)),
 	}
-}
-
-func sourceHost(
-	rawURL string,
-) string {
-	parsed, err := url.Parse(
-		strings.TrimSpace(rawURL),
-	)
-	if err != nil {
-		return ""
-	}
-	return strings.ToLower(parsed.Hostname())
 }
 
 func contextEvidenceIDs(
