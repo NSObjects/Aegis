@@ -126,6 +126,7 @@ Rules:
 - Do not perform relevance filtering in the plan.
 - Do not invent provider names, URLs, crawler details, or tool implementation.
 - Keep the plan minimal: include only evidence channels justified by the objective and known gaps.
+- Include each evidence need at most once in a round. Do not create multiple official_disclosure steps or multiple breaking_news steps with different wording.
 - The plan is compiled later into deterministic Aegis AcquisitionPlan steps.`,
 		),
 	)
