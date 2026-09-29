@@ -52,10 +52,10 @@ func TestCompilerBuildsSingleProviderAcquisitionPlan(
 
 	compiled, err := (Compiler{
 		Channels: ChannelBindings{
-			OfficialDisclosure: []event.Retriever{
+			OfficialDisclosureProviders: []event.Retriever{
 				official,
 			},
-			BreakingNews: []event.Retriever{
+			BreakingNewsProviders: []event.Retriever{
 				news,
 			},
 			Selector: selector,
@@ -159,7 +159,7 @@ func TestCompilerFansOutNeedAcrossProviders(
 ) {
 	compiled, err := (Compiler{
 		Channels: ChannelBindings{
-			BreakingNews: []event.Retriever{
+			BreakingNewsProviders: []event.Retriever{
 				compilerRetriever{
 					id:     "cls_news",
 					method: event.AcquisitionAPI,
@@ -236,7 +236,7 @@ func TestCompilerOfficialFanOutPreservesRootSymbol(
 ) {
 	compiled, err := (Compiler{
 		Channels: ChannelBindings{
-			OfficialDisclosure: []event.Retriever{
+			OfficialDisclosureProviders: []event.Retriever{
 				compilerRetriever{
 					id:     "cninfo",
 					method: event.AcquisitionAPI,
@@ -298,7 +298,7 @@ func TestCompilerRejectsMissingBindings(t *testing.T) {
 			name: "missing official channel",
 			compiler: Compiler{
 				Channels: ChannelBindings{
-					BreakingNews: []event.Retriever{
+					BreakingNewsProviders: []event.Retriever{
 						compilerRetriever{
 							id:     "news",
 							method: event.AcquisitionAPI,
@@ -321,7 +321,7 @@ func TestCompilerRejectsMissingBindings(t *testing.T) {
 			name: "missing news channel",
 			compiler: Compiler{
 				Channels: ChannelBindings{
-					OfficialDisclosure: []event.Retriever{
+					OfficialDisclosureProviders: []event.Retriever{
 						compilerRetriever{
 							id:     "official",
 							method: event.AcquisitionAPI,
@@ -454,7 +454,7 @@ func TestCompilerRequiresSelectorForCandidatePlan(
 ) {
 	_, err := (Compiler{
 		Channels: ChannelBindings{
-			BreakingNews: []event.Retriever{
+			BreakingNewsProviders: []event.Retriever{
 				compilerRetriever{
 					id:     "news",
 					method: event.AcquisitionAPI,
@@ -493,7 +493,7 @@ func TestCompilerOfficialDisclosureRequiresRootSymbol(
 ) {
 	_, err := (Compiler{
 		Channels: ChannelBindings{
-			OfficialDisclosure: []event.Retriever{
+			OfficialDisclosureProviders: []event.Retriever{
 				compilerRetriever{
 					id:     "official",
 					method: event.AcquisitionAPI,
@@ -550,7 +550,7 @@ func TestCompilerCoalescesRepeatedNeedBeforeProviderFanOut(
 ) {
 	compiled, err := (Compiler{
 		Channels: ChannelBindings{
-			BreakingNews: []event.Retriever{
+			BreakingNewsProviders: []event.Retriever{
 				compilerRetriever{
 					id:     "snapshot_news",
 					method: event.AcquisitionSnapshotStore,
