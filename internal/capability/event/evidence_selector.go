@@ -24,6 +24,49 @@ type EvidenceTargetResolver interface {
 	) (EvidenceTarget, error)
 }
 
+
+type MapEvidenceTargetResolver map[string]EvidenceTarget
+
+var _ EvidenceTargetResolver = MapEvidenceTargetResolver{}
+
+func (r MapEvidenceTargetResolver) Resolve(
+	_ context.Context,
+	task ResearchTask,
+) (EvidenceTarget, error) {
+	symbol := strings.ToUpper(
+		strings.TrimSpace(task.Symbol),
+	)
+	if symbol == "" {
+		return EvidenceTarget{}, errors.New(
+			"evidence target task symbol is required",
+		)
+	}
+
+	target, ok := r[symbol]
+	if !ok {
+		for configuredSymbol, candidate := range r {
+			if strings.EqualFold(
+				strings.TrimSpace(configuredSymbol),
+				symbol,
+			) {
+				target = candidate
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		return EvidenceTarget{}, fmt.Errorf(
+			"evidence target %q is not configured",
+			symbol,
+		)
+	}
+	if strings.TrimSpace(target.Symbol) == "" {
+		target.Symbol = symbol
+	}
+	return target, nil
+}
+
 type SemanticEvidenceMatch struct {
 	RawDocumentID string
 	Relevant      bool
