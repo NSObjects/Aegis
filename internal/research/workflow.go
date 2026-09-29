@@ -1,22 +1,26 @@
 package research
 
 import (
+	eventagent "Aegis/internal/agent/event"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
-	"Aegis/internal/agent/trading"
 	"Aegis/internal/decision"
+	"Aegis/internal/research/synthesis"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/compose"
 )
 
 const (
 	marketNodeKey    = "market"
 	technicalNodeKey = "technical"
+	eventNodeKey     = "event"
+	synthesisNodeKey = "synthesis"
 	tradingNodeKey   = "trading"
 
 	defaultMarketQuery = "分析当前 A 股市场环境。"
@@ -25,6 +29,7 @@ const (
 type Input struct {
 	Symbol      string
 	MarketQuery string
+	EventInput  eventagent.Input
 }
 
 type marketAnalyzer interface {
@@ -43,10 +48,26 @@ type technicalAnalyzer interface {
 	) (*technical.Context, error)
 }
 
-type tradingAnalyzer interface {
+type eventAnalyzer interface {
 	Analyze(
 		ctx context.Context,
-		input trading.Input,
+		input eventagent.Input,
+		opts ...adk.AgentRunOption,
+	) (*eventagent.Context, error)
+}
+
+type researchSynthesizer interface {
+	Synthesize(
+		ctx context.Context,
+		input synthesis.Input,
+		opts ...model.Option,
+	) (*synthesis.Artifact, error)
+}
+
+type artifactTradingAnalyzer interface {
+	AnalyzeArtifact(
+		ctx context.Context,
+		artifact *synthesis.Artifact,
 		opts ...adk.AgentRunOption,
 	) (*decision.Decision, error)
 }
@@ -54,7 +75,9 @@ type tradingAnalyzer interface {
 type Config struct {
 	MarketAgent    marketAnalyzer
 	TechnicalAgent technicalAnalyzer
-	TradingAgent   tradingAnalyzer
+	EventAgent     eventAnalyzer
+	Synthesizer    researchSynthesizer
+	TradingAgent   artifactTradingAnalyzer
 }
 
 type Workflow struct {
@@ -72,6 +95,17 @@ type technicalResult struct {
 	TechnicalContext *technical.Context
 }
 
+type eventResult struct {
+	EventContext *eventagent.Context
+}
+
+type synthesisInput struct {
+	Symbol           string
+	MarketContext    *market.Context
+	TechnicalContext *technical.Context
+	EventContext     *eventagent.Context
+}
+
 func New(
 	ctx context.Context,
 	cfg Config,
@@ -81,20 +115,28 @@ func New(
 			"research market agent is required",
 		)
 	}
-
 	if cfg.TechnicalAgent == nil {
 		return nil, errors.New(
 			"research technical agent is required",
 		)
 	}
-
+	if cfg.EventAgent == nil {
+		return nil, errors.New(
+			"research event agent is required",
+		)
+	}
+	if cfg.Synthesizer == nil {
+		return nil, errors.New(
+			"research synthesizer is required",
+		)
+	}
 	if cfg.TradingAgent == nil {
 		return nil, errors.New(
-			"research trading agent is required",
+			"research artifact trading agent is required",
 		)
 	}
 
-	graph := compose.NewGraph[
+	workflow := compose.NewWorkflow[
 		Input,
 		*decision.Decision,
 	]()
@@ -103,17 +145,7 @@ func New(
 		func(
 			ctx context.Context,
 			input Input,
-		) (
-			*marketResult,
-			error,
-		) {
-			symbol := strings.TrimSpace(input.Symbol)
-			if symbol == "" {
-				return nil, errors.New(
-					"research symbol is required",
-				)
-			}
-
+		) (*marketResult, error) {
 			query := strings.TrimSpace(
 				input.MarketQuery,
 			)
@@ -132,10 +164,49 @@ func New(
 					err,
 				)
 			}
+			if err := market.Validate(
+				marketContext,
+			); err != nil {
+				return nil, fmt.Errorf(
+					"invalid market context: %w",
+					err,
+				)
+			}
 
 			return &marketResult{
-				Symbol:        symbol,
+				Symbol:        input.Symbol,
 				MarketContext: marketContext,
+			}, nil
+		},
+	)
+
+	eventNode := compose.InvokableLambda(
+		func(
+			ctx context.Context,
+			input Input,
+		) (*eventResult, error) {
+			eventContext, err :=
+				cfg.EventAgent.Analyze(
+					ctx,
+					input.EventInput,
+				)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"event research: %w",
+					err,
+				)
+			}
+			if err := eventagent.Validate(
+				eventContext,
+			); err != nil {
+				return nil, fmt.Errorf(
+					"invalid event context: %w",
+					err,
+				)
+			}
+
+			return &eventResult{
+				EventContext: eventContext,
 			}, nil
 		},
 	)
@@ -144,20 +215,10 @@ func New(
 		func(
 			ctx context.Context,
 			input *marketResult,
-		) (
-			*technicalResult,
-			error,
-		) {
+		) (*technicalResult, error) {
 			if input == nil {
 				return nil, errors.New(
 					"market research result is nil",
-				)
-			}
-
-			if err := market.Validate(input.MarketContext); err != nil {
-				return nil, fmt.Errorf(
-					"invalid market context before technical research: %w",
-					err,
 				)
 			}
 
@@ -176,6 +237,14 @@ func New(
 					err,
 				)
 			}
+			if err := technical.Validate(
+				technicalContext,
+			); err != nil {
+				return nil, fmt.Errorf(
+					"invalid technical context: %w",
+					err,
+				)
+			}
 
 			return &technicalResult{
 				Symbol:           input.Symbol,
@@ -185,28 +254,60 @@ func New(
 		},
 	)
 
+	synthesisNode := compose.InvokableLambda(
+		func(
+			ctx context.Context,
+			input *synthesisInput,
+		) (*synthesis.Artifact, error) {
+			if input == nil {
+				return nil, errors.New(
+					"research synthesis input is nil",
+				)
+			}
+
+			artifact, err :=
+				cfg.Synthesizer.Synthesize(
+					ctx,
+					synthesis.Input{
+						Symbol:    input.Symbol,
+						Market:    input.MarketContext,
+						Technical: input.TechnicalContext,
+						Event:     input.EventContext,
+					},
+				)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"research synthesis: %w",
+					err,
+				)
+			}
+			if err := synthesis.Validate(
+				artifact,
+			); err != nil {
+				return nil, fmt.Errorf(
+					"invalid research artifact: %w",
+					err,
+				)
+			}
+			return artifact, nil
+		},
+	)
+
 	tradingNode := compose.InvokableLambda(
 		func(
 			ctx context.Context,
-			input *technicalResult,
-		) (
-			*decision.Decision,
-			error,
-		) {
-			if input == nil {
+			artifact *synthesis.Artifact,
+		) (*decision.Decision, error) {
+			if artifact == nil {
 				return nil, errors.New(
-					"technical research result is nil",
+					"research artifact is nil",
 				)
 			}
 
 			result, err :=
-				cfg.TradingAgent.Analyze(
+				cfg.TradingAgent.AnalyzeArtifact(
 					ctx,
-					trading.Input{
-						Symbol:           input.Symbol,
-						MarketContext:    input.MarketContext,
-						TechnicalContext: input.TechnicalContext,
-					},
+					artifact,
 				)
 			if err != nil {
 				return nil, fmt.Errorf(
@@ -214,82 +315,62 @@ func New(
 					err,
 				)
 			}
-
 			return result, nil
 		},
 	)
 
-	if err := graph.AddLambdaNode(
+	workflow.AddLambdaNode(
 		marketNodeKey,
 		marketNode,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"add market graph node: %w",
-			err,
-		)
-	}
+	).AddInput(compose.START)
 
-	if err := graph.AddLambdaNode(
+	workflow.AddLambdaNode(
+		eventNodeKey,
+		eventNode,
+	).AddInput(compose.START)
+
+	workflow.AddLambdaNode(
 		technicalNodeKey,
 		technicalNode,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"add technical graph node: %w",
-			err,
-		)
-	}
+	).AddInput(marketNodeKey)
 
-	if err := graph.AddLambdaNode(
+	workflow.AddLambdaNode(
+		synthesisNodeKey,
+		synthesisNode,
+	).
+		AddInput(
+			technicalNodeKey,
+			compose.MapFields(
+				"Symbol",
+				"Symbol",
+			),
+			compose.MapFields(
+				"MarketContext",
+				"MarketContext",
+			),
+			compose.MapFields(
+				"TechnicalContext",
+				"TechnicalContext",
+			),
+		).
+		AddInput(
+			eventNodeKey,
+			compose.MapFields(
+				"EventContext",
+				"EventContext",
+			),
+		)
+
+	workflow.AddLambdaNode(
 		tradingNodeKey,
 		tradingNode,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"add trading graph node: %w",
-			err,
-		)
-	}
+	).AddInput(synthesisNodeKey)
 
-	if err := graph.AddEdge(
-		compose.START,
-		marketNodeKey,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"connect graph start to market: %w",
-			err,
-		)
-	}
-
-	if err := graph.AddEdge(
-		marketNodeKey,
-		technicalNodeKey,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"connect market to technical: %w",
-			err,
-		)
-	}
-
-	if err := graph.AddEdge(
-		technicalNodeKey,
+	workflow.End().AddInput(
 		tradingNodeKey,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"connect technical to trading: %w",
-			err,
-		)
-	}
+	)
 
-	if err := graph.AddEdge(
-		tradingNodeKey,
-		compose.END,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"connect trading to graph end: %w",
-			err,
-		)
-	}
-
-	runnable, err := graph.Compile(
+	runnable, err := workflow.Compile(
 		ctx,
 		compose.WithGraphName(
 			"aegis_research",
@@ -297,7 +378,7 @@ func New(
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"compile research graph: %w",
+			"compile research workflow: %w",
 			err,
 		)
 	}
@@ -310,28 +391,23 @@ func New(
 func (w *Workflow) Run(
 	ctx context.Context,
 	input Input,
-) (
-	*decision.Decision,
-	error,
-) {
+) (*decision.Decision, error) {
 	if w == nil || w.runnable == nil {
 		return nil, errors.New(
 			"research workflow is not initialized",
 		)
 	}
 
-	input.Symbol = strings.TrimSpace(
-		input.Symbol,
+	normalized, err := normalizeWorkflowInput(
+		input,
 	)
-	if input.Symbol == "" {
-		return nil, errors.New(
-			"research symbol is required",
-		)
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := w.runnable.Invoke(
 		ctx,
-		input,
+		normalized,
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -339,12 +415,43 @@ func (w *Workflow) Run(
 			err,
 		)
 	}
-
 	if result == nil {
 		return nil, errors.New(
 			"research workflow returned nil decision",
 		)
 	}
-
 	return result, nil
+}
+
+func normalizeWorkflowInput(
+	input Input,
+) (Input, error) {
+	input.Symbol = strings.ToUpper(
+		strings.TrimSpace(input.Symbol),
+	)
+	if input.Symbol == "" {
+		return Input{}, errors.New(
+			"research symbol is required",
+		)
+	}
+
+	eventSymbol := strings.ToUpper(
+		strings.TrimSpace(
+			input.EventInput.Task.Symbol,
+		),
+	)
+	if eventSymbol == "" {
+		return Input{}, errors.New(
+			"event research task symbol is required",
+		)
+	}
+	if eventSymbol != input.Symbol {
+		return Input{}, fmt.Errorf(
+			"event research task symbol %q does not match research symbol %q",
+			input.EventInput.Task.Symbol,
+			input.Symbol,
+		)
+	}
+
+	return input, nil
 }
