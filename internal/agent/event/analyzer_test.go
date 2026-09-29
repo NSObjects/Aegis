@@ -39,6 +39,30 @@ func (f clustererFunc) Cluster(
 	return f(ctx, task, facts)
 }
 
+type contradictionDetectorFunc func(
+	context.Context,
+	capevent.ResearchTask,
+	[]Fact,
+) (ContradictionDetectionResult, error)
+
+func (f contradictionDetectorFunc) DetectContradictions(
+	ctx context.Context,
+	task capevent.ResearchTask,
+	facts []Fact,
+) (ContradictionDetectionResult, error) {
+	return f(ctx, task, facts)
+}
+
+type noContradictionDetector struct{}
+
+func (noContradictionDetector) DetectContradictions(
+	context.Context,
+	capevent.ResearchTask,
+	[]Fact,
+) (ContradictionDetectionResult, error) {
+	return ContradictionDetectionResult{}, nil
+}
+
 type materialityFunc func(
 	context.Context,
 	capevent.ResearchTask,
@@ -83,6 +107,7 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 
 	var capturedFacts []Fact
 	analyzer := Analyzer{
+		Contradictions: noContradictionDetector{},
 		Extractor: extractorFunc(
 			func(
 				_ context.Context,
@@ -358,6 +383,7 @@ func TestAnalyzerNoEventPath(t *testing.T) {
 	clusterCalled := false
 	materialityCalled := false
 	analyzer := Analyzer{
+		Contradictions: noContradictionDetector{},
 		Extractor: extractorFunc(
 			func(
 				context.Context,
@@ -422,6 +448,7 @@ func TestAnalyzerInsufficientEvidenceSkipsModels(
 	)
 	called := false
 	analyzer := Analyzer{
+		Contradictions: noContradictionDetector{},
 		Extractor: extractorFunc(
 			func(
 				context.Context,
@@ -464,6 +491,7 @@ func TestAnalyzerRejectsInvalidFactEvidenceReference(
 		2026, 9, 29, 15, 0, 0, 0, time.UTC,
 	)
 	analyzer := Analyzer{
+		Contradictions: noContradictionDetector{},
 		Extractor: extractorFunc(
 			func(
 				context.Context,
@@ -526,6 +554,7 @@ func TestAnalyzerRejectsInvalidClusterCoverage(
 		2026, 9, 29, 15, 0, 0, 0, time.UTC,
 	)
 	analyzer := Analyzer{
+		Contradictions: noContradictionDetector{},
 		Extractor: extractorFunc(
 			func(
 				context.Context,
@@ -630,7 +659,7 @@ func TestAnalyzerRejectsFuturePITDocument(
 	)
 	future := asOf.Add(time.Minute)
 
-	_, err := (Analyzer{}).Analyze(
+	_, err := (Analyzer{Contradictions: noContradictionDetector{}}).Analyze(
 		context.Background(),
 		AnalyzeInput{
 			Task: capevent.ResearchTask{
@@ -728,7 +757,7 @@ func TestValidateClustersRequiresExactCoverage(t *testing.T) {
 }
 
 func TestAnalyzerRejectsInvalidUpstreamStatus(t *testing.T) {
-	_, err := (Analyzer{}).Analyze(
+	_, err := (Analyzer{Contradictions: noContradictionDetector{}}).Analyze(
 		context.Background(),
 		AnalyzeInput{
 			Task: capevent.ResearchTask{
@@ -798,6 +827,7 @@ func TestAnalyzerDoesNotCountReprintsAsIndependentSources(
 	}
 
 	analyzer := Analyzer{
+		Contradictions: noContradictionDetector{},
 		Extractor: extractorFunc(
 			func(
 				context.Context,
