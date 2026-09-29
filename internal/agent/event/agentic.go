@@ -57,11 +57,12 @@ type clusteringPrompt struct {
 }
 
 type materialityPrompt struct {
-	Symbol  string            `json:"symbol"`
-	AsOf    string            `json:"as_of"`
-	EventID string            `json:"event_id"`
-	Type    EventType         `json:"type"`
-	Facts   []materialityFact `json:"facts"`
+	Symbol          string                   `json:"symbol"`
+	AsOf            string                   `json:"as_of"`
+	EventID         string                   `json:"event_id"`
+	Type            EventType                `json:"type"`
+	Facts           []materialityFact        `json:"facts"`
+	EvidenceSupport capevent.EvidenceSupport `json:"evidence_support"`
 }
 
 type materialityFact struct {
@@ -211,9 +212,10 @@ func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 		materialityPrompt{
 			Symbol:  task.Symbol,
 			AsOf:    task.AsOf.UTC().Format(timeRFC3339),
-			EventID: input.EventID,
-			Type:    input.Type,
-			Facts:   facts,
+			EventID:         input.EventID,
+			Type:            input.Type,
+			Facts:           facts,
+			EvidenceSupport: input.EvidenceSupport,
 		},
 		&output,
 	); err != nil {
@@ -361,6 +363,11 @@ const materialityInstruction = "You are the interpretation stage of an investmen
 	"- direction must be POSITIVE, NEGATIVE, MIXED, NEUTRAL, or UNCERTAIN.\n" +
 	"- horizon must be IMMEDIATE, SHORT_TERM, MEDIUM_TERM, or UNKNOWN.\n" +
 	"- confidence must be between 0 and 1.\n" +
+	"- EvidenceSupport describes provenance and corroboration strength, not economic materiality.\n" +
+	"- Never raise or lower materiality level solely because EvidenceSupport changes.\n" +
+	"- Use EvidenceSupport to calibrate epistemic confidence and identify evidence/provenance risks.\n" +
+	"- PRIMARY_ONLY means primary evidence exists without cross-source corroboration; it is not inherently weak or immaterial.\n" +
+	"- CORROBORATED means multiple independent source identities support the event; syndicated reprints have already been collapsed.\n" +
 	"- If the supplied facts do not support a directional interpretation, use UNCERTAIN.\n" +
 	"- rationale should explain the interpretation from the supplied facts.\n" +
 	"- risks should capture uncertainty, missing context, or plausible interpretation limits.\n\n" +
