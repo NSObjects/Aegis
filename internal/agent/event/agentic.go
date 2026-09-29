@@ -141,7 +141,68 @@ func (a *AgenticEventFactExtractor) Extract(
 			err,
 		)
 	}
-	return output, nil
+	if groundingErr :=
+		validateFactExtractionGroundings(
+			output,
+			documents,
+		); groundingErr == nil {
+		return output, nil
+	} else {
+		var repaired FactExtractionResult
+		repairInstruction :=
+			factExtractionInstruction +
+				"\n\nThe previous extraction failed deterministic grounding validation: " +
+				groundingErr.Error() +
+				". Return the full corrected JSON. Preserve only supported facts and repair evidence_quotes so every quote is verbatim and unique within its identified document."
+		if err := generateStrictAgenticJSON(
+			ctx,
+			a.Model,
+			repairInstruction,
+			prompt,
+			&repaired,
+		); err != nil {
+			return FactExtractionResult{}, fmt.Errorf(
+				"event fact extraction grounding repair model: %w",
+				err,
+			)
+		}
+		if err := validateFactExtractionGroundings(
+			repaired,
+			documents,
+		); err != nil {
+			return FactExtractionResult{}, fmt.Errorf(
+				"event fact extraction grounding repair: %w",
+				err,
+			)
+		}
+		return repaired, nil
+	}
+}
+
+func validateFactExtractionGroundings(
+	extraction FactExtractionResult,
+	documents []capevent.CanonicalDocument,
+) error {
+	documentByID := make(
+		map[string]capevent.CanonicalDocument,
+		len(documents),
+	)
+	for _, document := range documents {
+		documentByID[document.ID] = document
+	}
+	for index, fact := range extraction.Facts {
+		if _, err := ResolveEvidenceGroundings(
+			fact.EvidenceQuotes,
+			documentByID,
+		); err != nil {
+			return fmt.Errorf(
+				"fact %d: %w",
+				index,
+				err,
+			)
+		}
+	}
+	return nil
 }
 
 func (a *AgenticEventClusterer) Cluster(
