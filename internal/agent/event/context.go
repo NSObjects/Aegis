@@ -1,5 +1,7 @@
 package event
 
+import capevent "Aegis/internal/capability/event"
+
 type Status string
 
 const (
@@ -75,8 +77,9 @@ type Event struct {
 	Entities            []string    `json:"entities,omitempty"`
 	EvidenceDocumentIDs []string    `json:"evidence_document_ids"`
 	SourceCount         int         `json:"source_count"`
-	HasPrimarySource    bool        `json:"has_primary_source"`
-	FactConfidence      float64     `json:"fact_confidence"`
+	HasPrimarySource    bool                     `json:"has_primary_source"`
+	EvidenceSupport     capevent.EvidenceSupport `json:"evidence_support"`
+	FactConfidence      float64                  `json:"fact_confidence"`
 	Materiality         Materiality `json:"materiality"`
 }
 

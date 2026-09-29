@@ -153,6 +153,7 @@ func (a *Agent) Analyze(
 			Documents: latest.
 				Canonicalization.
 				Documents,
+			Corroboration: latest.Corroboration,
 		},
 	)
 	if err != nil {

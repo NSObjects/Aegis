@@ -3,6 +3,8 @@ package event
 import (
 	capevent "Aegis/internal/capability/event"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"testing"
@@ -156,6 +158,13 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 						len(input.Facts),
 					)
 				}
+				if input.EvidenceSupport.SupportClass !=
+					capevent.EvidenceSupportPrimaryCorroborated {
+					t.Fatalf(
+						"materiality evidence support = %+v",
+						input.EvidenceSupport,
+					)
+				}
 				return Materiality{
 					Level:      MaterialityHigh,
 					Direction:  DirectionPositive,
@@ -218,6 +227,14 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 	}
 	if !item.HasPrimarySource {
 		t.Fatal("event should preserve primary-source provenance")
+	}
+	if item.EvidenceSupport.IndependentSourceCount != 2 ||
+		item.EvidenceSupport.SupportClass !=
+			capevent.EvidenceSupportPrimaryCorroborated {
+		t.Fatalf(
+			"evidence support = %+v",
+			item.EvidenceSupport,
+		)
 	}
 	if len(item.EvidenceDocumentIDs) != 2 {
 		t.Fatalf(
@@ -690,4 +707,158 @@ func TestAnalyzerRejectsInvalidUpstreamStatus(t *testing.T) {
 			err,
 		)
 	}
+}
+
+
+func TestAnalyzerDoesNotCountReprintsAsIndependentSources(
+	t *testing.T,
+) {
+	asOf := time.Date(
+		2026, 9, 29, 15, 0, 0, 0, time.UTC,
+	)
+	available := asOf.Add(-time.Hour)
+	body := strings.Repeat(
+		"公司公告披露重大合同签署情况以及履约安排",
+		10,
+	)
+	documents := []capevent.CanonicalDocument{
+		{
+			ID:          "doc_official",
+			Content:     body,
+			ContentHash: testContentHash(body),
+			Source: capevent.DocumentSource{
+				Publisher:       "issuer.example",
+				CanonicalDomain: "issuer.example",
+				Authority:       capevent.AuthorityIssuer,
+				EvidenceKind:    capevent.EvidenceDisclosure,
+				IsPrimary:       true,
+			},
+			AvailableAt: &available,
+		},
+		{
+			ID:          "doc_reprint",
+			Content:     body,
+			ContentHash: testContentHash(body),
+			Source: capevent.DocumentSource{
+				Publisher:       "media.example",
+				CanonicalDomain: "media.example",
+				Authority:       capevent.AuthorityMedia,
+				EvidenceKind:    capevent.EvidenceNewsReport,
+			},
+			AvailableAt: &available,
+		},
+	}
+
+	analyzer := Analyzer{
+		Extractor: extractorFunc(
+			func(
+				context.Context,
+				capevent.ResearchTask,
+				[]capevent.CanonicalDocument,
+			) (FactExtractionResult, error) {
+				return FactExtractionResult{
+					Confidence: 0.9,
+					Facts: []ExtractedFact{
+						{
+							Type:       EventContract,
+							Headline:   "重大合同",
+							Summary:    "公司披露重大合同。",
+							EvidenceDocumentIDs: []string{
+								"doc_official",
+								"doc_reprint",
+							},
+							Confidence: 0.9,
+						},
+					},
+				}, nil
+			},
+		),
+		Clusterer: clustererFunc(
+			func(
+				_ context.Context,
+				_ capevent.ResearchTask,
+				facts []Fact,
+			) (EventClusterResult, error) {
+				return EventClusterResult{
+					Clusters: []EventCluster{
+						{FactIDs: []string{facts[0].ID}},
+					},
+				}, nil
+			},
+		),
+		Materiality: materialityFunc(
+			func(
+				_ context.Context,
+				_ capevent.ResearchTask,
+				input MaterialityInput,
+			) (Materiality, error) {
+				if input.EvidenceSupport.
+					IndependentSourceCount != 1 ||
+					input.EvidenceSupport.
+						CollapsedReprintCount != 1 ||
+					input.EvidenceSupport.SupportClass !=
+						capevent.EvidenceSupportPrimaryOnly {
+					t.Fatalf(
+						"materiality support = %+v",
+						input.EvidenceSupport,
+					)
+				}
+				return Materiality{
+					Level:      MaterialityHigh,
+					Direction:  DirectionUncertain,
+					Horizon:    HorizonShortTerm,
+					Rationale:  "合同规模可能具有重要性。",
+					Confidence: 0.8,
+				}, nil
+			},
+		),
+	}
+
+	result, err := analyzer.Analyze(
+		context.Background(),
+		AnalyzeInput{
+			Task: capevent.ResearchTask{
+				ID:     "task-reprint",
+				Symbol: "600519.SH",
+				AsOf:   asOf,
+				Requirements: capevent.ResearchRequirements{
+					PITSafe: true,
+				},
+			},
+			ResearchStatus: capevent.TaskSatisfied,
+			Documents:      documents,
+			Corroboration: (capevent.EvidenceCorroborator{}).
+				Corroborate(documents),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Events) != 1 {
+		t.Fatalf(
+			"events = %d, want 1",
+			len(result.Events),
+		)
+	}
+	event := result.Events[0]
+	if event.SourceCount != 1 {
+		t.Fatalf(
+			"source_count = %d, want 1",
+			event.SourceCount,
+		)
+	}
+	if event.EvidenceSupport.
+		IndependentEvidenceCount != 1 ||
+		event.EvidenceSupport.
+			CollapsedReprintCount != 1 {
+		t.Fatalf(
+			"evidence support = %+v",
+			event.EvidenceSupport,
+		)
+	}
+}
+
+func testContentHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }

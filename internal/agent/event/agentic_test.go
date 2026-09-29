@@ -176,6 +176,20 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 				EventID: "event_1",
 				Type:    EventContract,
 				Facts:   facts,
+				EvidenceSupport: capevent.EvidenceSupport{
+					DocumentCount:            1,
+					IndependentEvidenceCount: 1,
+					IndependentSourceCount:   1,
+					PrimarySourcePresent:     true,
+					Authorities: []capevent.EvidenceAuthority{
+						capevent.AuthorityIssuer,
+					},
+					EvidenceKinds: []capevent.EvidenceKind{
+						capevent.EvidenceDisclosure,
+					},
+					SupportClass: capevent.
+						EvidenceSupportPrimaryOnly,
+				},
 			},
 		)
 	if err != nil {
@@ -211,6 +225,23 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 				input,
 			)
 		}
+	}
+
+	materialityPayload := eventAgenticTestText(
+		model.inputs[2][1],
+	)
+	if !strings.Contains(
+		materialityPayload,
+		`"support_class":"PRIMARY_ONLY"`,
+	) ||
+		!strings.Contains(
+			materialityPayload,
+			`"independent_source_count":1`,
+		) {
+		t.Fatalf(
+			"materiality payload lacks evidence support: %s",
+			materialityPayload,
+		)
 	}
 }
 
@@ -305,4 +336,24 @@ func TestAgenticStagesPropagateModelError(t *testing.T) {
 			err,
 		)
 	}
+}
+
+func eventAgenticTestText(
+	message *schema.AgenticMessage,
+) string {
+	if message == nil {
+		return ""
+	}
+	var builder strings.Builder
+	for _, block := range message.ContentBlocks {
+		if block == nil {
+			continue
+		}
+		if block.UserInputText != nil {
+			builder.WriteString(
+				block.UserInputText.Text,
+			)
+		}
+	}
+	return builder.String()
 }

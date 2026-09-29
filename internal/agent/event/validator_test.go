@@ -1,6 +1,7 @@
 package event
 
 import (
+	capevent "Aegis/internal/capability/event"
 	"strings"
 	"testing"
 )
@@ -21,7 +22,15 @@ func TestValidateEventContext(t *testing.T) {
 				},
 				SourceCount:      1,
 				HasPrimarySource: true,
-				FactConfidence:   0.9,
+				EvidenceSupport: capevent.EvidenceSupport{
+					DocumentCount:            1,
+					IndependentEvidenceCount: 1,
+					IndependentSourceCount:   1,
+					PrimarySourcePresent:     true,
+					SupportClass: capevent.
+						EvidenceSupportPrimaryOnly,
+				},
+				FactConfidence: 0.9,
 				Materiality: Materiality{
 					Level:      MaterialityMedium,
 					Direction:  DirectionUncertain,

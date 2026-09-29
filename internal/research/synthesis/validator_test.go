@@ -2,6 +2,7 @@ package synthesis
 
 import (
 	"Aegis/internal/agent/event"
+	capevent "Aegis/internal/capability/event"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 	"strings"
@@ -258,7 +259,15 @@ func validSynthesisInput() Input {
 					},
 					SourceCount:      1,
 					HasPrimarySource: true,
-					FactConfidence:   0.95,
+					EvidenceSupport: capevent.EvidenceSupport{
+						DocumentCount:            1,
+						IndependentEvidenceCount: 1,
+						IndependentSourceCount:   1,
+						PrimarySourcePresent:     true,
+						SupportClass: capevent.
+							EvidenceSupportPrimaryOnly,
+					},
+					FactConfidence: 0.95,
 					Materiality: event.Materiality{
 						Level:      event.MaterialityMedium,
 						Direction:  event.DirectionPositive,
