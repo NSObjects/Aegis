@@ -296,25 +296,53 @@ func TestCLSNewsRetrieverRejectsSymbolScopedTask(
 		},
 	)
 
-	_, err := (ClsNewsRetriever{
-		Client: client,
-	}).Retrieve(
+	output, err := (TaskRunner{}).Run(
 		context.Background(),
 		ResearchTask{
 			ID:              "task-symbol-news",
 			Symbol:          "600519.SH",
 			InformationNeed: NeedBreakingNews,
 			AsOf:            asOf,
+			Requirements: ResearchRequirements{
+				PITSafe:             true,
+				RequiredSourceTypes: []SourceType{SourceIndustryMedia},
+				MinDocuments:        1,
+			},
+		},
+		ClsNewsRetriever{
+			Client: client,
 		},
 	)
-	if err == nil ||
-		!strings.Contains(
-			err.Error(),
-			"does not support symbol-scoped task",
-		) {
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if output.Attempt.Status != AcquisitionFailed {
 		t.Fatalf(
-			"error = %v, want symbol-scope rejection",
-			err,
+			"attempt status = %q, want %q",
+			output.Attempt.Status,
+			AcquisitionFailed,
+		)
+	}
+	if !strings.Contains(
+		output.Attempt.ErrorMessage,
+		"does not support symbol-scoped task",
+	) {
+		t.Fatalf(
+			"attempt error = %q, want symbol-scope rejection",
+			output.Attempt.ErrorMessage,
+		)
+	}
+	if len(output.RawDocuments) != 0 {
+		t.Fatalf(
+			"raw documents = %d, want 0",
+			len(output.RawDocuments),
+		)
+	}
+	if output.Result.Status != TaskUnsatisfied {
+		t.Fatalf(
+			"task status = %q, want %q",
+			output.Result.Status,
+			TaskUnsatisfied,
 		)
 	}
 }
