@@ -152,9 +152,9 @@ func TestWorkflow_Run_HostedIntegration(t *testing.T) {
 		t.Fatalf("create trading agent: %v", err)
 	}
 
-	workflow, err := New(
+	workflow, err := NewLegacy(
 		ctx,
-		Config{
+		LegacyConfig{
 			MarketAgent: &hostedMarketAgent{
 				result: hostedMarketContext(),
 			},

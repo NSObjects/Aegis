@@ -223,9 +223,9 @@ func run(
 		return err
 	}
 
-	workflow, err := research.New(
+	workflow, err := research.NewLegacy(
 		ctx,
-		research.Config{
+		research.LegacyConfig{
 			MarketAgent:    marketAgent,
 			TechnicalAgent: technicalAgent,
 			TradingAgent:   tradingAgent,
