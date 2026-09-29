@@ -1,6 +1,7 @@
 package event
 
 import (
+	capevent "Aegis/internal/capability/event"
 	"errors"
 	"fmt"
 	"strings"
@@ -137,9 +138,29 @@ func validateEvent(v *Event) error {
 			"evidence_document_ids are required",
 		)
 	}
-	if v.SourceCount <= 0 {
+	if v.SourceCount < 0 {
 		return errors.New(
-			"source_count must be positive",
+			"source_count must not be negative",
+		)
+	}
+	if err := validateEvidenceSupport(
+		v.EvidenceSupport,
+	); err != nil {
+		return fmt.Errorf(
+			"evidence_support: %w",
+			err,
+		)
+	}
+	if v.SourceCount !=
+		v.EvidenceSupport.IndependentSourceCount {
+		return errors.New(
+			"source_count must equal evidence_support independent_source_count",
+		)
+	}
+	if v.HasPrimarySource !=
+		v.EvidenceSupport.PrimarySourcePresent {
+		return errors.New(
+			"has_primary_source must equal evidence_support primary_source_present",
 		)
 	}
 	if v.FactConfidence < 0 ||
@@ -156,6 +177,88 @@ func validateEvent(v *Event) error {
 		return err
 	}
 
+	return nil
+}
+
+func validateEvidenceSupport(
+	v capevent.EvidenceSupport,
+) error {
+	if v.DocumentCount <= 0 {
+		return errors.New(
+			"document_count must be positive",
+		)
+	}
+	if v.IndependentEvidenceCount <= 0 ||
+		v.IndependentEvidenceCount >
+			v.DocumentCount {
+		return errors.New(
+			"independent_evidence_count must be between 1 and document_count",
+		)
+	}
+	if v.IndependentSourceCount < 0 ||
+		v.IndependentSourceCount >
+			v.IndependentEvidenceCount {
+		return errors.New(
+			"independent_source_count must be between 0 and independent_evidence_count",
+		)
+	}
+	if v.CollapsedReprintCount !=
+		v.DocumentCount-
+			v.IndependentEvidenceCount {
+		return errors.New(
+			"collapsed_reprint_count is inconsistent",
+		)
+	}
+	if v.UnknownSourceCount < 0 ||
+		v.UnknownSourceCount >
+			v.IndependentEvidenceCount {
+		return errors.New(
+			"unknown_source_count is invalid",
+		)
+	}
+
+	switch v.SupportClass {
+	case capevent.EvidenceSupportUnknown:
+		if v.IndependentSourceCount != 0 ||
+			v.PrimarySourcePresent {
+			return errors.New(
+				"UNKNOWN support class is inconsistent",
+			)
+		}
+	case capevent.EvidenceSupportSingleSource:
+		if v.IndependentSourceCount != 1 ||
+			v.PrimarySourcePresent {
+			return errors.New(
+				"SINGLE_SOURCE support class is inconsistent",
+			)
+		}
+	case capevent.EvidenceSupportPrimaryOnly:
+		if !v.PrimarySourcePresent ||
+			v.IndependentSourceCount >= 2 {
+			return errors.New(
+				"PRIMARY_ONLY support class is inconsistent",
+			)
+		}
+	case capevent.EvidenceSupportCorroborated:
+		if v.IndependentSourceCount < 2 ||
+			v.PrimarySourcePresent {
+			return errors.New(
+				"CORROBORATED support class is inconsistent",
+			)
+		}
+	case capevent.EvidenceSupportPrimaryCorroborated:
+		if !v.PrimarySourcePresent ||
+			v.IndependentSourceCount < 2 {
+			return errors.New(
+				"PRIMARY_CORROBORATED support class is inconsistent",
+			)
+		}
+	default:
+		return fmt.Errorf(
+			"invalid support_class: %q",
+			v.SupportClass,
+		)
+	}
 	return nil
 }
 
