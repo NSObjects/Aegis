@@ -233,6 +233,7 @@ func TestNewsEventAgentTwoRoundResearchProducesNormalContext(
 				MaxIterations: 4,
 			},
 			Analyzer: Analyzer{
+			Contradictions: noContradictionDetector{},
 				Extractor: extractorFunc(
 					func(
 						_ context.Context,
@@ -393,6 +394,7 @@ func TestNewsEventAgentUnsatisfiedResearchProducesInsufficientEvidence(
 				MaxIterations: 2,
 			},
 			Analyzer: Analyzer{
+			Contradictions: noContradictionDetector{},
 				Extractor: extractorFunc(
 					func(
 						context.Context,
@@ -495,6 +497,7 @@ func TestNewsEventAgentSatisfiedResearchCanProduceNoEvent(
 				MaxIterations: 2,
 			},
 			Analyzer: Analyzer{
+			Contradictions: noContradictionDetector{},
 				Extractor: extractorFunc(
 					func(
 						context.Context,
@@ -576,6 +579,7 @@ func TestNewsEventAgentStructuralResearchErrorStopsBeforeAnalyzer(
 				MaxIterations: 2,
 			},
 			Analyzer: Analyzer{
+			Contradictions: noContradictionDetector{},
 				Extractor: extractorFunc(
 					func(
 						context.Context,
@@ -677,6 +681,7 @@ func TestNewsEventAgentConcurrentCallsKeepArtifactsIsolated(
 				MaxIterations: 2,
 			},
 			Analyzer: Analyzer{
+			Contradictions: noContradictionDetector{},
 				Extractor: extractorFunc(
 					func(
 						context.Context,
