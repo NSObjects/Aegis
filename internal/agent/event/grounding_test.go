@@ -111,6 +111,29 @@ func TestResolveEvidenceGroundingsRejectsAmbiguousQuote(
 	}
 }
 
+func TestResolveEvidenceGroundingsRejectsOverlappingAmbiguousQuote(
+	t *testing.T,
+) {
+	_, err := ResolveEvidenceGroundings(
+		[]EvidenceQuote{
+			{
+				DocumentID: "doc-a",
+				Quote:      "aa",
+			},
+		},
+		map[string]capevent.CanonicalDocument{
+			"doc-a": {
+				ID:      "doc-a",
+				Content: "aaa",
+			},
+		},
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestResolveEvidenceGroundingsRejectsEmptyQuote(
 	t *testing.T,
 ) {
