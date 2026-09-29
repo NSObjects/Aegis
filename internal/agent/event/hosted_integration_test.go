@@ -532,6 +532,9 @@ func TestLiveEventProvidersHostedIntegration(
 		cninfoLookback = 180 * 24 * time.Hour
 	}
 
+	providerTargetResolver :=
+		&capevent.CninfoEvidenceTargetResolver{}
+
 	root := capevent.ResearchTask{
 		ID:              "hosted-provider-capture",
 		Symbol:          symbol,
@@ -587,6 +590,24 @@ func TestLiveEventProvidersHostedIntegration(
 							MaxDays: maxCLSDays,
 						},
 				},
+				{
+					ID: "hosted_tavily",
+					Scope: capevent.
+						AcquisitionScopeDirect,
+					Task: capevent.ResearchTask{
+						InformationNeed:
+							capevent.NeedBreakingNews,
+					},
+					Retriever:
+						&capevent.TavilyWebSearchRetriever{
+							APIKey: os.Getenv(
+								"TAVILY_API_KEY",
+							),
+							TargetResolver:
+								providerTargetResolver,
+							MaxResults: 3,
+						},
+				},
 			},
 		},
 	)
@@ -604,10 +625,16 @@ func TestLiveEventProvidersHostedIntegration(
 	cninfoDocumentCount := 0
 	cninfoEnrichedCount := 0
 	cninfoBodyRiskCount := 0
+	tavilyDocumentCount := 0
 
 	for _, step := range output.Steps {
 		statuses[step.StepID] =
 			step.Run.Attempt.Status
+
+		if step.StepID == "hosted_tavily" {
+			tavilyDocumentCount =
+				len(step.Run.RawDocuments)
+		}
 
 		if step.StepID == "hosted_cninfo" {
 			cninfoDocumentCount =
@@ -643,6 +670,22 @@ func TestLiveEventProvidersHostedIntegration(
 				step.Run.Attempt.ErrorMessage,
 			)
 		}
+	}
+
+	if tavilyDocumentCount == 0 {
+		t.Fatalf(
+			"hosted Tavily capture returned no full-content web evidence; status=%s error=%q",
+			statuses["hosted_tavily"],
+			func() string {
+				for _, step := range output.Steps {
+					if step.StepID ==
+						"hosted_tavily" {
+						return step.Run.Attempt.ErrorMessage
+					}
+				}
+				return ""
+			}(),
+		)
 	}
 
 	if cninfoDocumentCount == 0 {
@@ -698,6 +741,8 @@ func TestLiveEventProvidersHostedIntegration(
 		TargetName          string                    `json:"target_name"`
 		CninfoStatus        capevent.AcquisitionStatus `json:"cninfo_status"`
 		CLSStatus           capevent.AcquisitionStatus `json:"cls_status"`
+		TavilyStatus        capevent.AcquisitionStatus `json:"tavily_status"`
+		TavilyDocuments     int                       `json:"tavily_document_count"`
 		CninfoDocuments     int                       `json:"cninfo_document_count"`
 		CninfoEnriched      int                       `json:"cninfo_enriched_count"`
 		CninfoBodyRiskCount int                       `json:"cninfo_body_risk_count"`
@@ -707,6 +752,8 @@ func TestLiveEventProvidersHostedIntegration(
 		TargetName:          target.Name,
 		CninfoStatus:        statuses["hosted_cninfo"],
 		CLSStatus:           statuses["hosted_cls"],
+		TavilyStatus:        statuses["hosted_tavily"],
+		TavilyDocuments:     tavilyDocumentCount,
 		CninfoDocuments:     cninfoDocumentCount,
 		CninfoEnriched:      cninfoEnrichedCount,
 		CninfoBodyRiskCount: cninfoBodyRiskCount,
