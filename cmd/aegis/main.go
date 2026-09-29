@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -341,6 +342,7 @@ func run(
 			SourceTypes: []eventcap.SourceType{
 				eventcap.SourceIndustryMedia,
 				eventcap.SourceMainstreamMedia,
+				eventcap.SourceOther,
 			},
 		}
 
@@ -420,6 +422,13 @@ func run(
 					[]eventcap.Retriever{
 						&eventcap.ClsNewsRetriever{
 							MaxDays: maxCLSDays,
+						},
+						&eventcap.TavilyWebSearchRetriever{
+							APIKey: os.Getenv(
+								"TAVILY_API_KEY",
+							),
+							TargetResolver:
+								targetResolver,
 						},
 					},
 			},
