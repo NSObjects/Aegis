@@ -147,33 +147,23 @@ func (r DomainSourceIdentityResolver) Resolve(
 		document,
 	)
 
-	if strings.TrimSpace(document.Publisher) == "" ||
-		strings.EqualFold(
-			strings.TrimSpace(document.Publisher),
-			host,
-		) ||
-		wasGeneric {
-		identity.Publisher = rule.Publisher
-	}
-	if document.SourceType == "" ||
-		document.SourceType == SourceOther {
-		identity.SourceType = rule.SourceType
-	}
-	if document.Authority == "" ||
-		document.Authority == AuthorityOther {
-		identity.Authority = rule.Authority
-	}
-	if document.EvidenceKind == "" ||
-		document.EvidenceKind == EvidenceOther {
-		identity.EvidenceKind = rule.EvidenceKind
-	}
 	if wasGeneric {
+		identity.Publisher = rule.Publisher
+		identity.SourceType = rule.SourceType
+		identity.Authority = rule.Authority
+		identity.EvidenceKind = rule.EvidenceKind
 		identity.IsPrimary = rule.IsPrimary
 	}
 
 	identity.CanonicalDomain = rule.Domain
-	identity.ResolutionReason =
-		"domain_registry:" + rule.Domain
+	if wasGeneric {
+		identity.ResolutionReason =
+			"domain_registry:" + rule.Domain
+	} else {
+		identity.ResolutionReason =
+			"domain_registry:" + rule.Domain +
+				";provider_semantics_preserved"
+	}
 	return identity
 }
 
