@@ -350,6 +350,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 	)
 	maxIndependentSources := 0
 	maxIndependentEvidence := 0
+	groundedFactCount := 0
+	groundingSpanCount := 0
 	for _, item := range result.Events {
 		supportClasses[
 			item.EvidenceSupport.SupportClass,
@@ -368,6 +370,11 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 				item.EvidenceSupport.
 					IndependentEvidenceCount
 		}
+		groundedFactCount += len(item.Facts)
+		for _, fact := range item.Facts {
+			groundingSpanCount +=
+				len(fact.Groundings)
+		}
 	}
 
 	diagnostic := struct {
@@ -382,6 +389,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		SupportClasses         map[capevent.EvidenceSupportClass]int `json:"event_support_classes,omitempty"`
 		MaxIndependentSources  int `json:"max_event_independent_source_count"`
 		MaxIndependentEvidence int `json:"max_event_independent_evidence_count"`
+		GroundedFactCount       int `json:"grounded_fact_count"`
+		GroundingSpanCount      int `json:"grounding_span_count"`
 	}{
 		Symbol:        result.Symbol,
 		RequestedAsOf: result.RequestedAsOf,
@@ -394,6 +403,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		SupportClasses:         supportClasses,
 		MaxIndependentSources:  maxIndependentSources,
 		MaxIndependentEvidence: maxIndependentEvidence,
+		GroundedFactCount:       groundedFactCount,
+		GroundingSpanCount:      groundingSpanCount,
 	}
 	data, err := json.MarshalIndent(
 		diagnostic,
