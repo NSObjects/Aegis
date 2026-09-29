@@ -118,10 +118,12 @@ type RawDocument struct {
 	Publisher string
 	Author    string
 
-	SourceType    SourceType
-	Authority     EvidenceAuthority
-	EvidenceKind  EvidenceKind
-	IsPrimary     bool
+	SourceType       SourceType
+	Authority        EvidenceAuthority
+	EvidenceKind     EvidenceKind
+	IsPrimary        bool
+	CanonicalDomain  string
+	ResolutionReason string
 
 	PublishedAt *time.Time
 	UpdatedAt   *time.Time
@@ -135,10 +137,12 @@ type RawDocument struct {
 type DocumentSource struct {
 	Publisher    string
 	URL          string
-	SourceType   SourceType
-	Authority    EvidenceAuthority
-	EvidenceKind EvidenceKind
-	IsPrimary    bool
+	SourceType       SourceType
+	Authority        EvidenceAuthority
+	EvidenceKind     EvidenceKind
+	IsPrimary        bool
+	CanonicalDomain  string
+	ResolutionReason string
 }
 
 type DocumentVersion struct {
