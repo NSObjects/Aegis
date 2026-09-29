@@ -7,6 +7,7 @@ import (
 	"Aegis/internal/research/planning"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -508,6 +509,11 @@ func TestLiveEventProvidersHostedIntegration(
 		maxCLSDays = 2
 	}
 
+	cninfoLookback := lookback
+	if cninfoLookback < 30*24*time.Hour {
+		cninfoLookback = 30 * 24 * time.Hour
+	}
+
 	root := capevent.ResearchTask{
 		ID:              "hosted-provider-capture",
 		Symbol:          symbol,
@@ -537,9 +543,18 @@ func TestLiveEventProvidersHostedIntegration(
 						Symbol: symbol,
 						InformationNeed:
 							capevent.NeedOfficialDisclosure,
+						TimeRange: capevent.TimeRange{
+							Start: cutoff.Add(
+								-cninfoLookback,
+							),
+							End: cutoff,
+						},
 					},
 					Retriever:
-						&capevent.CninfoAnnouncementRetriever{},
+						&capevent.CninfoAnnouncementRetriever{
+							PageSize: 10,
+							MaxPages: 1,
+						},
 				},
 				{
 					ID: "hosted_cls",
@@ -568,9 +583,41 @@ func TestLiveEventProvidersHostedIntegration(
 		map[string]capevent.AcquisitionStatus,
 		len(output.Steps),
 	)
+	cninfoDocumentCount := 0
+	cninfoEnrichedCount := 0
+	cninfoBodyRiskCount := 0
+
 	for _, step := range output.Steps {
 		statuses[step.StepID] =
 			step.Run.Attempt.Status
+
+		if step.StepID == "hosted_cninfo" {
+			cninfoDocumentCount =
+				len(step.Run.RawDocuments)
+			for _, document :=
+				range step.Run.RawDocuments {
+				enriched, _ :=
+					document.RawMetadata[
+						"body_enriched"
+					].(bool)
+				switch {
+				case enriched &&
+					strings.TrimSpace(
+						document.Content,
+					) != "":
+					cninfoEnrichedCount++
+				case !enriched &&
+					strings.TrimSpace(
+						fmt.Sprint(
+							document.RawMetadata[
+								"body_error"
+							],
+						),
+					) != "":
+					cninfoBodyRiskCount++
+				}
+			}
+		}
 		switch step.Run.Attempt.Status {
 		case capevent.AcquisitionSucceeded,
 			capevent.AcquisitionPartial:
@@ -582,6 +629,19 @@ func TestLiveEventProvidersHostedIntegration(
 				step.Run.Attempt.ErrorMessage,
 			)
 		}
+	}
+
+	if cninfoDocumentCount == 0 {
+		t.Fatalf(
+			"hosted Cninfo capture returned no announcements in %s; cannot verify PDF full-text enrichment",
+			cninfoLookback,
+		)
+	}
+	if cninfoEnrichedCount == 0 &&
+		cninfoBodyRiskCount == 0 {
+		t.Fatal(
+			"hosted Cninfo capture produced announcements but neither enriched PDF text nor explicit PDF enrichment risk",
+		)
 	}
 
 	resolver :=
@@ -620,17 +680,23 @@ func TestLiveEventProvidersHostedIntegration(
 	}
 
 	diagnostic := struct {
-		Symbol        string                                     `json:"symbol"`
-		TargetName    string                                     `json:"target_name"`
-		CninfoStatus  capevent.AcquisitionStatus          `json:"cninfo_status"`
-		CLSStatus     capevent.AcquisitionStatus          `json:"cls_status"`
-		SnapshotCount int                                        `json:"snapshot_file_count"`
+		Symbol              string                    `json:"symbol"`
+		TargetName          string                    `json:"target_name"`
+		CninfoStatus        capevent.AcquisitionStatus `json:"cninfo_status"`
+		CLSStatus           capevent.AcquisitionStatus `json:"cls_status"`
+		CninfoDocuments     int                       `json:"cninfo_document_count"`
+		CninfoEnriched      int                       `json:"cninfo_enriched_count"`
+		CninfoBodyRiskCount int                       `json:"cninfo_body_risk_count"`
+		SnapshotCount       int                       `json:"snapshot_file_count"`
 	}{
-		Symbol:        symbol,
-		TargetName:    target.Name,
-		CninfoStatus:  statuses["hosted_cninfo"],
-		CLSStatus:     statuses["hosted_cls"],
-		SnapshotCount: snapshotCount,
+		Symbol:              symbol,
+		TargetName:          target.Name,
+		CninfoStatus:        statuses["hosted_cninfo"],
+		CLSStatus:           statuses["hosted_cls"],
+		CninfoDocuments:     cninfoDocumentCount,
+		CninfoEnriched:      cninfoEnrichedCount,
+		CninfoBodyRiskCount: cninfoBodyRiskCount,
+		SnapshotCount:       snapshotCount,
 	}
 	data, err := json.MarshalIndent(
 		diagnostic,
