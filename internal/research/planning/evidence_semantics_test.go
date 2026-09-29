@@ -26,6 +26,7 @@ func TestResearchRoundResultPreservesEvidenceSemanticGaps(
 				},
 			},
 		},
+		event.CorroborationResult{},
 		event.AcquisitionPlanOutput{},
 		nil,
 	)
