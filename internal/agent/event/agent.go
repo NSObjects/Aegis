@@ -287,6 +287,22 @@ func cloneResearchRoundArtifact(
 		[]capevent.RejectedDocument(nil),
 		artifact.Canonicalization.Rejected...,
 	)
+	cloned.Corroboration.Clusters = append(
+		[]capevent.EvidenceCluster(nil),
+		artifact.Corroboration.Clusters...,
+	)
+	for index := range cloned.Corroboration.Clusters {
+		cloned.Corroboration.Clusters[index].DocumentIDs =
+			append(
+				[]string(nil),
+				artifact.Corroboration.Clusters[index].DocumentIDs...,
+			)
+		cloned.Corroboration.Clusters[index].SourceKeys =
+			append(
+				[]string(nil),
+				artifact.Corroboration.Clusters[index].SourceKeys...,
+			)
+	}
 	cloned.Result.Documents = append(
 		[]string(nil),
 		artifact.Result.Documents...,
