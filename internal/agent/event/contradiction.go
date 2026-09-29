@@ -50,12 +50,10 @@ func normalizeContradictions(
 		known[fact.ID] = struct{}{}
 	}
 
-	result := make(
-		[]ClaimContradiction,
-		0,
+	byPair := make(
+		map[string]ClaimContradiction,
 		len(detected),
 	)
-	seenPairs := make(map[string]struct{})
 	for index, raw := range detected {
 		if !validContradictionType(raw.Type) {
 			return nil, fmt.Errorf(
@@ -112,10 +110,22 @@ func normalizeContradictions(
 		}
 
 		pairKey := left + "\x00" + right
-		if _, duplicate := seenPairs[pairKey]; duplicate {
+		if existing, duplicate :=
+			byPair[pairKey]; duplicate {
+			if existing.Type != raw.Type {
+				return nil, fmt.Errorf(
+					"contradiction %d assigns multiple types to fact pair %q and %q",
+					index,
+					left,
+					right,
+				)
+			}
+			if rationale < existing.Rationale {
+				existing.Rationale = rationale
+				byPair[pairKey] = existing
+			}
 			continue
 		}
-		seenPairs[pairKey] = struct{}{}
 
 		item := ClaimContradiction{
 			Type:      raw.Type,
@@ -123,9 +133,17 @@ func normalizeContradictions(
 			Rationale: rationale,
 		}
 		item.ID = deterministicContradictionID(item)
-		result = append(result, item)
+		byPair[pairKey] = item
 	}
 
+	result := make(
+		[]ClaimContradiction,
+		0,
+		len(byPair),
+	)
+	for _, item := range byPair {
+		result = append(result, item)
+	}
 	sort.Slice(
 		result,
 		func(i int, j int) bool {
