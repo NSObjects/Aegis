@@ -451,3 +451,43 @@ func TestHybridEvidenceSelectorRejectsTargetSymbolMismatch(
 		)
 	}
 }
+
+func TestMapEvidenceTargetResolver(t *testing.T) {
+	resolver := MapEvidenceTargetResolver{
+		"600519.SH": {
+			Name:    "贵州茅台",
+			Aliases: []string{"茅台"},
+		},
+	}
+
+	target, err := resolver.Resolve(
+		context.Background(),
+		ResearchTask{
+			Symbol: "600519.sh",
+		},
+	)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if target.Symbol != "600519.SH" ||
+		target.Name != "贵州茅台" {
+		t.Fatalf("target = %+v", target)
+	}
+
+	_, err = resolver.Resolve(
+		context.Background(),
+		ResearchTask{
+			Symbol: "000001.SZ",
+		},
+	)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"is not configured",
+		) {
+		t.Fatalf(
+			"error = %v, want missing-target error",
+			err,
+		)
+	}
+}
