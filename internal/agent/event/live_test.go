@@ -163,6 +163,7 @@ func TestLiveAgentCapturesThenResearchesFrozenSnapshots(
 				MaxIterations: 2,
 			},
 			Analyzer: Analyzer{
+			Contradictions: noContradictionDetector{},
 				Extractor: extractorFunc(
 					func(
 						_ context.Context,
@@ -412,6 +413,7 @@ func TestLiveAgentSurfacesProviderCaptureFailureAsRisk(
 				},
 			},
 			Analyzer: Analyzer{
+			Contradictions: noContradictionDetector{},
 				Extractor: extractorFunc(
 					func(
 						context.Context,
