@@ -54,6 +54,15 @@ func (c EvidenceCorroborator) Corroborate(
 		parent[index] = index
 	}
 
+	prepared := make(
+		[]nearDuplicatePrepared,
+		len(documents),
+	)
+	for index, document := range documents {
+		prepared[index] =
+			c.NearDuplicateMatcher.prepare(document)
+	}
+
 	relations := make(
 		[]EvidenceRelation,
 		0,
@@ -63,9 +72,9 @@ func (c EvidenceCorroborator) Corroborate(
 			right < len(documents);
 			right++ {
 			relation, matched :=
-				c.NearDuplicateMatcher.Match(
-					documents[left],
-					documents[right],
+				c.NearDuplicateMatcher.matchPrepared(
+					prepared[left],
+					prepared[right],
 				)
 			if !matched {
 				continue
