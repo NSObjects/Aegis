@@ -127,6 +127,20 @@ func (r DomainSourceIdentityResolver) Resolve(
 		host,
 	)
 
+	if strings.TrimSpace(
+		document.CanonicalDomain,
+	) != "" &&
+		strings.TrimSpace(
+			document.ResolutionReason,
+		) != "" {
+		identity.CanonicalDomain = strings.ToLower(
+			strings.TrimSpace(
+				document.CanonicalDomain,
+			),
+		)
+		return identity
+	}
+
 	if host == "" {
 		identity.ResolutionReason =
 			"url_hostname_unavailable"
