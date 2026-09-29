@@ -187,9 +187,9 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 		t.Fatalf("create trading agent: %v", err)
 	}
 
-	workflow, err := New(
+	workflow, err := NewLegacy(
 		ctx,
-		Config{
+		LegacyConfig{
 			MarketAgent:    marketAgent,
 			TechnicalAgent: technicalAgent,
 			TradingAgent:   tradingAgent,
