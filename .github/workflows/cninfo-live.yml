@@ -1,0 +1,39 @@
+name: Cninfo Live Verification
+
+on:
+  push:
+    branches:
+      - "feat/v2.7.2-first-real-retriever"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cninfo-live-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  live-cninfo:
+    name: Live Cninfo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      AEGIS_LIVE_CNINFO: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run live Cninfo integration
+        run: |
+          go test ./internal/capability/event \
+            -run '^TestLiveCninfoAnnouncementRetriever$' \
+            -v \
+            -count=1
