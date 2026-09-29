@@ -82,6 +82,43 @@ func TestNormalizeContradictionsCollapsesReversedPair(
 			len(result),
 		)
 	}
+	if result[0].Rationale !=
+		"duplicate relation" {
+		t.Fatalf(
+			"rationale = %q, want deterministic lexical choice",
+			result[0].Rationale,
+		)
+	}
+}
+
+func TestNormalizeContradictionsRejectsMultipleTypesForPair(
+	t *testing.T,
+) {
+	_, err := normalizeContradictions(
+		[]Fact{
+			{ID: "fact_a"},
+			{ID: "fact_b"},
+		},
+		[]DetectedContradiction{
+			{
+				Type:      ContradictionValue,
+				FactIDs:   []string{"fact_a", "fact_b"},
+				Rationale: "value conflict",
+			},
+			{
+				Type:      ContradictionDirect,
+				FactIDs:   []string{"fact_b", "fact_a"},
+				Rationale: "direct conflict",
+			},
+		},
+	)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"multiple types",
+		) {
+		t.Fatalf("error = %v", err)
+	}
 }
 
 func TestNormalizeContradictionsRejectsInvalidRelations(
