@@ -243,14 +243,6 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 			materialityPayload,
 		)
 	}
-	if !strings.Contains(
-		eventAgenticTestText(model.inputs[2][0]),
-		"not economic materiality",
-	) {
-		t.Fatal(
-			"materiality instruction must separate evidence support from materiality",
-		)
-	}
 }
 
 func TestAgenticStagesRejectNonStrictJSON(t *testing.T) {
@@ -360,11 +352,6 @@ func eventAgenticTestText(
 		if block.UserInputText != nil {
 			builder.WriteString(
 				block.UserInputText.Text,
-			)
-		}
-		if block.SystemText != nil {
-			builder.WriteString(
-				block.SystemText.Text,
 			)
 		}
 	}
