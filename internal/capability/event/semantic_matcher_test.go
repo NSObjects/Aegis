@@ -33,6 +33,40 @@ func (m *semanticMatcherModel) Stream(
 	return nil, errors.New("not implemented")
 }
 
+func TestAgenticSemanticEvidenceMatcherAcceptsJSONModeWrapper(
+	t *testing.T,
+) {
+	matcher := &AgenticSemanticEvidenceMatcher{
+		Model: &semanticMatcherModel{
+			response: agenticTextMessage(
+				schema.AgenticRoleTypeAssistant,
+				`{"type":"json_object","matches":[{"raw_document_id":"candidate-1","relevant":false,"confidence":0.99,"reason":"unrelated"}]}`,
+			),
+		},
+	}
+
+	matches, err := matcher.Match(
+		context.Background(),
+		EvidenceTarget{
+			Symbol: "600519.SH",
+			Name:   "贵州茅台",
+		},
+		[]RawDocument{
+			{
+				ID: "candidate-1",
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Match() error = %v", err)
+	}
+	if len(matches) != 1 ||
+		matches[0].RawDocumentID != "candidate-1" ||
+		matches[0].Relevant {
+		t.Fatalf("matches = %+v", matches)
+	}
+}
+
 func TestAgenticSemanticEvidenceMatcher(t *testing.T) {
 	model := &semanticMatcherModel{
 		response: agenticTextMessage(
@@ -119,6 +153,14 @@ func TestAgenticSemanticEvidenceMatcherRejectsInvalidOutput(
 				"not json",
 			),
 			want: "invalid semantic evidence matcher JSON",
+		},
+		{
+			name: "unsupported response type",
+			response: agenticTextMessage(
+				schema.AgenticRoleTypeAssistant,
+				`{"type":"text","matches":[]}`,
+			),
+			want: "unsupported type",
 		},
 		{
 			name: "unknown field",
