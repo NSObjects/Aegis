@@ -33,6 +33,10 @@ func (c Compiler) Compile(
 	}
 
 	hasCandidate := false
+	seenNeeds := make(
+		map[event.InformationNeed]struct{},
+		len(plan.Steps),
+	)
 
 	compiled := event.AcquisitionPlan{
 		Steps: make(
@@ -44,6 +48,17 @@ func (c Compiler) Compile(
 	}
 
 	for _, step := range plan.Steps {
+		if _, duplicate := seenNeeds[
+			step.Need,
+		]; duplicate {
+			// One ResearchPlan need maps to one concrete bound channel in
+			// this compiler. Repeating the same need cannot acquire new
+			// evidence; it only replays the same retriever and creates
+			// duplicate candidate identities. Preserve the first step.
+			continue
+		}
+		seenNeeds[step.Need] = struct{}{}
+
 		switch step.Need {
 		case event.NeedOfficialDisclosure:
 			if strings.TrimSpace(root.Symbol) == "" {
