@@ -91,9 +91,11 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		)
 	}
 
+	targetResolver :=
+		&capevent.CninfoEvidenceTargetResolver{}
 	selector := &capevent.HybridEvidenceSelector{
 		TargetResolver:
-			&capevent.CninfoEvidenceTargetResolver{},
+			targetResolver,
 		SemanticMatcher:
 			&capevent.AgenticSemanticEvidenceMatcher{
 				Model: eventModel,
@@ -132,6 +134,7 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 											[]capevent.SourceType{
 												capevent.SourceIndustryMedia,
 												capevent.SourceMainstreamMedia,
+												capevent.SourceOther,
 											},
 									},
 								},
@@ -188,6 +191,13 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 				[]capevent.Retriever{
 					&capevent.ClsNewsRetriever{
 						MaxDays: maxCLSDays,
+					},
+					&capevent.TavilyWebSearchRetriever{
+						APIKey: os.Getenv(
+							"TAVILY_API_KEY",
+						),
+						TargetResolver:
+							targetResolver,
 					},
 				},
 		},
