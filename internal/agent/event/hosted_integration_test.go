@@ -155,6 +155,10 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 					&AgenticEventClusterer{
 						Model: eventModel,
 					},
+				Contradictions:
+					&AgenticClaimContradictionDetector{
+						Model: eventModel,
+					},
 				Materiality:
 					&AgenticEventMaterialityAnalyzer{
 						Model: eventModel,
