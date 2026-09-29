@@ -309,3 +309,60 @@ func TestCompilerRejectsNilPlan(t *testing.T) {
 		)
 	}
 }
+
+
+func TestCompilerCoalescesRepeatedEvidenceNeed(
+	t *testing.T,
+) {
+	news := compilerRetriever{
+		id:     "snapshot_news",
+		method: event.AcquisitionSnapshotStore,
+	}
+
+	compiled, err := (Compiler{
+		Channels: ChannelBindings{
+			BreakingNews: news,
+			Selector:     compilerSelector{},
+		},
+	}).Compile(
+		event.ResearchTask{
+			ID:     "root-task",
+			Symbol: "600519.SH",
+		},
+		&ResearchPlan{
+			Steps: []ResearchPlanStep{
+				{
+					ID:    "company-news",
+					Need:  event.NeedBreakingNews,
+					Scope: event.AcquisitionScopeCandidate,
+					Reason: "company event confirmation",
+				},
+				{
+					ID:    "industry-news",
+					Need:  event.NeedBreakingNews,
+					Scope: event.AcquisitionScopeCandidate,
+					Reason: "independent media confirmation",
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"Compile() error = %v",
+			err,
+		)
+	}
+	if len(compiled.Steps) != 1 {
+		t.Fatalf(
+			"compiled steps = %d, want one bound breaking-news channel",
+			len(compiled.Steps),
+		)
+	}
+	if compiled.Steps[0].ID !=
+		"company-news" {
+		t.Fatalf(
+			"compiled step id = %q, want first planner step",
+			compiled.Steps[0].ID,
+		)
+	}
+}
