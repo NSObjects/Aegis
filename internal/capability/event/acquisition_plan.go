@@ -69,7 +69,8 @@ type AcquisitionPlanOutput struct {
 // AcquisitionPlanRunner executes every planned evidence channel. It is not a
 // priority router and it does not stop after the first successful Retriever.
 type AcquisitionPlanRunner struct {
-	Now func() time.Time
+	Now           func() time.Time
+	SnapshotStore EvidenceSnapshotStore
 }
 
 func (r AcquisitionPlanRunner) Run(
@@ -133,7 +134,8 @@ func (r AcquisitionPlanRunner) Run(
 
 	for _, step := range preparedSteps {
 		run, runErr := (TaskRunner{
-			Now: now,
+			Now:           now,
+			SnapshotStore: r.SnapshotStore,
 		}).Run(
 			ctx,
 			step.Task,

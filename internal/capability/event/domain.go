@@ -76,7 +76,8 @@ const (
 	AcquisitionAPI       AcquisitionMethod = "api"
 	AcquisitionWebSearch AcquisitionMethod = "web_search"
 	AcquisitionCrawler   AcquisitionMethod = "crawler"
-	AcquisitionMCP       AcquisitionMethod = "mcp"
+	AcquisitionMCP           AcquisitionMethod = "mcp"
+	AcquisitionSnapshotStore AcquisitionMethod = "snapshot_store"
 )
 
 type AcquisitionStatus string
