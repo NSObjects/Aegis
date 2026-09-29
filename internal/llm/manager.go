@@ -13,14 +13,18 @@ import (
 type Manager struct {
 	mu sync.Mutex
 
-	configs map[string]config.ModelConfig
-	models  map[string]model.BaseModel[*schema.AgenticMessage]
+	configs           map[string]config.ModelConfig
+	models            map[string]model.BaseModel[*schema.AgenticMessage]
+	toolCallingModels map[string]model.ToolCallingChatModel
 }
 
 func NewManager(configs map[string]config.ModelConfig) *Manager {
 	return &Manager{
 		configs: configs,
 		models:  make(map[string]model.BaseModel[*schema.AgenticMessage]),
+		toolCallingModels: make(
+			map[string]model.ToolCallingChatModel,
+		),
 	}
 }
 
@@ -67,9 +71,43 @@ func (m *Manager) GetToolCalling(
 	model.ToolCallingChatModel,
 	error,
 ) {
-	base, err := m.Get(ctx, profile)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if existing, ok :=
+		m.toolCallingModels[profile]; ok {
+		return existing, nil
+	}
+
+	cfg, ok := m.configs[profile]
+	if !ok {
+		return nil, fmt.Errorf(
+			"model profile %q not found",
+			profile,
+		)
+	}
+
+	var base model.AgenticModel
+	var err error
+
+	switch cfg.Provider {
+	case config.ProviderDeepSeek:
+		base, err = newDeepSeekToolCalling(
+			ctx,
+			cfg,
+		)
+	default:
+		err = fmt.Errorf(
+			"unsupported provider: %q",
+			cfg.Provider,
+		)
+	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"create tool-calling model profile %q: %w",
+			profile,
+			err,
+		)
 	}
 
 	adapter, err := NewAgenticToolCallingAdapter(
@@ -82,6 +120,8 @@ func (m *Manager) GetToolCalling(
 			err,
 		)
 	}
+
+	m.toolCallingModels[profile] = adapter
 	return adapter, nil
 }
 
