@@ -61,6 +61,12 @@ func TestCninfoAnnouncementRetrieverRunsThroughTaskRunner(t *testing.T) {
 					},
 				), nil
 
+			case "https://static.cninfo.com.cn/finalpage/2026-09-24/1220000001.PDF":
+				return bytesHTTPResponse(
+					http.StatusOK,
+					[]byte("fake-pdf-one"),
+				), nil
+
 			case cninfoAnnouncementURL:
 				if req.Method != http.MethodPost {
 					t.Fatalf(
@@ -170,14 +176,24 @@ func TestCninfoAnnouncementRetrieverRunsThroughTaskRunner(t *testing.T) {
 			Now: func() time.Time {
 				return retrievedAt
 			},
+			PDFExtractor: PDFTextExtractorFunc(
+				func(
+					context.Context,
+					[]byte,
+				) (PDFTextExtraction, error) {
+					return PDFTextExtraction{
+						Text: "  公司   公告正文\n重大事项  ",
+					}, nil
+				},
+			),
 		},
 	)
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	if calls != 2 {
-		t.Fatalf("HTTP calls = %d, want 2", calls)
+	if calls != 3 {
+		t.Fatalf("HTTP calls = %d, want 3", calls)
 	}
 	if seenDateRange != "2026-09-23~2026-09-24" {
 		t.Fatalf(
@@ -240,6 +256,15 @@ func TestCninfoAnnouncementRetrieverRunsThroughTaskRunner(t *testing.T) {
 	}
 	if raw.Title != "贵州茅台 2026年公告" {
 		t.Fatalf("raw title = %q", raw.Title)
+	}
+	if raw.Content != "公司 公告正文 重大事项" {
+		t.Fatalf("raw content = %q", raw.Content)
+	}
+	if raw.RawMetadata["body_enriched"] != true {
+		t.Fatalf(
+			"body_enriched metadata = %v",
+			raw.RawMetadata["body_enriched"],
+		)
 	}
 	if raw.Publisher != cninfoPublisher {
 		t.Fatalf("publisher = %q", raw.Publisher)
@@ -343,6 +368,12 @@ func TestCninfoAnnouncementRetrieverPreservesDocumentsOnLaterPageFailure(
 					},
 				), nil
 
+			case "https://static.cninfo.com.cn/finalpage/2026-09-24/1210000001.PDF":
+				return bytesHTTPResponse(
+					http.StatusOK,
+					[]byte("fake-pdf-partial"),
+				), nil
+
 			case cninfoAnnouncementURL:
 				announcementPageCalls++
 				if announcementPageCalls == 1 {
@@ -407,6 +438,16 @@ func TestCninfoAnnouncementRetrieverPreservesDocumentsOnLaterPageFailure(
 			Now: func() time.Time {
 				return retrievedAt
 			},
+			PDFExtractor: PDFTextExtractorFunc(
+				func(
+					context.Context,
+					[]byte,
+				) (PDFTextExtraction, error) {
+					return PDFTextExtraction{
+						Text: "平安银行 公告正文",
+					}, nil
+				},
+			),
 		},
 	)
 	if err != nil {
@@ -489,6 +530,18 @@ func TestNormalizeCninfoSymbol(t *testing.T) {
 		"not-a-symbol",
 	); err == nil {
 		t.Fatal("invalid symbol should fail")
+	}
+}
+
+func bytesHTTPResponse(
+	status int,
+	payload []byte,
+) *http.Response {
+	return &http.Response{
+		StatusCode:    status,
+		Body:          io.NopCloser(strings.NewReader(string(payload))),
+		Header:        make(http.Header),
+		ContentLength: int64(len(payload)),
 	}
 }
 
