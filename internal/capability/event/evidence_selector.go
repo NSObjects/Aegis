@@ -68,10 +68,10 @@ func (r MapEvidenceTargetResolver) Resolve(
 }
 
 type SemanticEvidenceMatch struct {
-	RawDocumentID string
-	Relevant      bool
-	Confidence    float64
-	Reason        string
+	RawDocumentID string  `json:"raw_document_id"`
+	Relevant      bool    `json:"relevant"`
+	Confidence    float64 `json:"confidence"`
+	Reason        string  `json:"reason"`
 }
 
 type SemanticEvidenceMatcher interface {
