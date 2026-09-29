@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +23,8 @@ type TaskRunOutput struct {
 // AcquisitionAttempt and converted into task coverage semantics instead of
 // automatically aborting the research task.
 type TaskRunner struct {
-	Now func() time.Time
+	Now           func() time.Time
+	SnapshotStore EvidenceSnapshotStore
 }
 
 func (r TaskRunner) Run(
@@ -97,6 +99,22 @@ func (r TaskRunner) Run(
 			attempt.DocumentRefs,
 			document.ID,
 		)
+	}
+
+	if r.SnapshotStore != nil &&
+		len(rawDocuments) > 0 {
+		if err := r.SnapshotStore.Save(
+			ctx,
+			rawDocuments,
+		); err != nil {
+			return TaskRunOutput{
+				Attempt:      attempt,
+				RawDocuments: rawDocuments,
+			}, fmt.Errorf(
+				"persist evidence snapshots: %w",
+				err,
+			)
+		}
 	}
 
 	canonicalization, err := (Canonicalizer{}).Canonicalize(
