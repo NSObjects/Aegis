@@ -596,3 +596,98 @@ func TestAnalyzerRejectsFuturePITDocument(
 		)
 	}
 }
+
+func TestValidateClustersRequiresExactCoverage(t *testing.T) {
+	facts := []Fact{
+		{ID: "fact_a"},
+		{ID: "fact_b"},
+	}
+
+	tests := []struct {
+		name     string
+		clusters []EventCluster
+		want     string
+	}{
+		{
+			name: "unknown fact",
+			clusters: []EventCluster{
+				{FactIDs: []string{"fact_a", "unknown"}},
+				{FactIDs: []string{"fact_b"}},
+			},
+			want: "unknown fact",
+		},
+		{
+			name: "fact in multiple clusters",
+			clusters: []EventCluster{
+				{FactIDs: []string{"fact_a"}},
+				{FactIDs: []string{"fact_a", "fact_b"}},
+			},
+			want: "appears in multiple clusters",
+		},
+		{
+			name: "duplicate inside cluster",
+			clusters: []EventCluster{
+				{FactIDs: []string{"fact_a", "fact_a"}},
+				{FactIDs: []string{"fact_b"}},
+			},
+			want: "contains duplicate fact ids",
+		},
+		{
+			name: "missing fact",
+			clusters: []EventCluster{
+				{FactIDs: []string{"fact_a"}},
+			},
+			want: "coverage is missing fact",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := validateClusters(
+				facts,
+				test.clusters,
+			)
+			if err == nil ||
+				!strings.Contains(
+					err.Error(),
+					test.want,
+				) {
+				t.Fatalf(
+					"error = %v, want substring %q",
+					err,
+					test.want,
+				)
+			}
+		})
+	}
+}
+
+func TestAnalyzerRejectsInvalidUpstreamStatus(t *testing.T) {
+	_, err := (Analyzer{}).Analyze(
+		context.Background(),
+		AnalyzeInput{
+			Task: capevent.ResearchTask{
+				ID:     "task-invalid-status",
+				Symbol: "600519.SH",
+				AsOf: time.Date(
+					2026, 9, 29,
+					15, 0, 0, 0,
+					time.UTC,
+				),
+			},
+			ResearchStatus: capevent.ResearchTaskStatus(
+				"unknown",
+			),
+		},
+	)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"invalid upstream research status",
+		) {
+		t.Fatalf(
+			"error = %v, want invalid-status error",
+			err,
+		)
+	}
+}
