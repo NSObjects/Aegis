@@ -345,15 +345,43 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		)
 	}
 
+	supportClasses := make(
+		map[capevent.EvidenceSupportClass]int,
+	)
+	maxIndependentSources := 0
+	maxIndependentEvidence := 0
+	for _, item := range result.Events {
+		supportClasses[
+			item.EvidenceSupport.SupportClass,
+		]++
+		if item.EvidenceSupport.
+			IndependentSourceCount >
+			maxIndependentSources {
+			maxIndependentSources =
+				item.EvidenceSupport.
+					IndependentSourceCount
+		}
+		if item.EvidenceSupport.
+			IndependentEvidenceCount >
+			maxIndependentEvidence {
+			maxIndependentEvidence =
+				item.EvidenceSupport.
+					IndependentEvidenceCount
+		}
+	}
+
 	diagnostic := struct {
-		Symbol          string `json:"symbol"`
-		RequestedAsOf   string `json:"requested_as_of"`
-		EvidenceAsOf    string `json:"evidence_as_of"`
-		Status          Status `json:"status"`
-		EventCount      int    `json:"event_count"`
-		EvidenceCount   int    `json:"evidence_count"`
-		RiskCount       int    `json:"risk_count"`
-		SnapshotCount   int    `json:"snapshot_file_count"`
+		Symbol                 string `json:"symbol"`
+		RequestedAsOf          string `json:"requested_as_of"`
+		EvidenceAsOf           string `json:"evidence_as_of"`
+		Status                 Status `json:"status"`
+		EventCount             int    `json:"event_count"`
+		EvidenceCount          int    `json:"evidence_count"`
+		RiskCount              int    `json:"risk_count"`
+		SnapshotCount          int    `json:"snapshot_file_count"`
+		SupportClasses         map[capevent.EvidenceSupportClass]int `json:"event_support_classes,omitempty"`
+		MaxIndependentSources  int `json:"max_event_independent_source_count"`
+		MaxIndependentEvidence int `json:"max_event_independent_evidence_count"`
 	}{
 		Symbol:        result.Symbol,
 		RequestedAsOf: result.RequestedAsOf,
@@ -361,8 +389,11 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		Status:        result.Status,
 		EventCount:    len(result.Events),
 		EvidenceCount: len(result.Evidence),
-		RiskCount:     len(result.Risk),
-		SnapshotCount: snapshotCount,
+		RiskCount:              len(result.Risk),
+		SnapshotCount:          snapshotCount,
+		SupportClasses:         supportClasses,
+		MaxIndependentSources:  maxIndependentSources,
+		MaxIndependentEvidence: maxIndependentEvidence,
 	}
 	data, err := json.MarshalIndent(
 		diagnostic,
