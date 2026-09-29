@@ -51,6 +51,7 @@ type MaterialityInput struct {
 	EventID         string
 	Type            EventType
 	Facts           []Fact
+	Contradictions  []ClaimContradiction
 	EvidenceSupport capevent.EvidenceSupport
 }
 
@@ -70,6 +71,14 @@ type EventClusterer interface {
 	) (EventClusterResult, error)
 }
 
+type ClaimContradictionDetector interface {
+	DetectContradictions(
+		ctx context.Context,
+		task capevent.ResearchTask,
+		facts []Fact,
+	) (ContradictionDetectionResult, error)
+}
+
 type EventMaterialityAnalyzer interface {
 	AnalyzeMateriality(
 		ctx context.Context,
@@ -86,9 +95,10 @@ type AnalyzeInput struct {
 }
 
 type Analyzer struct {
-	Extractor   EventFactExtractor
-	Clusterer   EventClusterer
-	Materiality EventMaterialityAnalyzer
+	Extractor       EventFactExtractor
+	Clusterer       EventClusterer
+	Contradictions  ClaimContradictionDetector
+	Materiality     EventMaterialityAnalyzer
 }
 
 func (a Analyzer) Analyze(
@@ -222,6 +232,11 @@ func (a Analyzer) Analyze(
 	if err != nil {
 		return nil, err
 	}
+	if a.Contradictions == nil {
+		return nil, errors.New(
+			"event contradiction detector is required",
+		)
+	}
 	if a.Materiality == nil {
 		return nil, errors.New(
 			"event materiality analyzer is required",
@@ -246,6 +261,33 @@ func (a Analyzer) Analyze(
 			clusterFacts,
 			documentByID,
 		)
+		detection, detectionErr :=
+			a.Contradictions.DetectContradictions(
+				ctx,
+				task,
+				clusterFacts,
+			)
+		if detectionErr != nil {
+			return nil, fmt.Errorf(
+				"detect event %q contradictions: %w",
+				eventID,
+				detectionErr,
+			)
+		}
+		contradictions, contradictionErr :=
+			normalizeContradictions(
+				clusterFacts,
+				detection.Contradictions,
+			)
+		if contradictionErr != nil {
+			return nil, fmt.Errorf(
+				"event %q contradictions: %w",
+				eventID,
+				contradictionErr,
+			)
+		}
+		item.Contradictions = contradictions
+
 		support, supportErr :=
 			(capevent.EvidenceSupportAnalyzer{}).
 				Analyze(
@@ -274,6 +316,7 @@ func (a Analyzer) Analyze(
 					EventID:         eventID,
 					Type:            item.Type,
 					Facts:           clusterFacts,
+					Contradictions:  contradictions,
 					EvidenceSupport: support,
 				},
 			)
