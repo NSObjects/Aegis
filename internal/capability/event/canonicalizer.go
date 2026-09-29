@@ -246,39 +246,81 @@ func documentVersionID(
 	logicalKey string,
 	version DocumentVersion,
 ) string {
-	versionIdentity := version.ContentHash
-	switch {
-	case versionIdentity != "":
-		versionIdentity = "content\x00" +
-			versionIdentity
-	case version.UpdatedAt != nil:
-		versionIdentity = "updated\x00" +
-			version.UpdatedAt.UTC().
-				Format(time.RFC3339Nano)
-	case version.PublishedAt != nil:
-		versionIdentity = "published\x00" +
-			version.PublishedAt.UTC().
-				Format(time.RFC3339Nano)
-	case version.AvailableAt != nil:
-		versionIdentity = "available\x00" +
-			version.AvailableAt.UTC().
-				Format(time.RFC3339Nano)
-	case !version.SnapshotAt.IsZero():
-		versionIdentity = "snapshot\x00" +
-			version.SnapshotAt.UTC().
-				Format(time.RFC3339Nano)
-	default:
-		versionIdentity = "unknown"
+	identityParts := make([]string, 0, 3)
+
+	if payloadHash := versionPayloadHash(
+		version.Title,
+		version.Content,
+	); payloadHash != "" {
+		identityParts = append(
+			identityParts,
+			"payload="+payloadHash,
+		)
+	}
+
+	if version.UpdatedAt != nil {
+		identityParts = append(
+			identityParts,
+			"updated="+version.UpdatedAt.UTC().
+				Format(time.RFC3339Nano),
+		)
+	}
+
+	if len(identityParts) == 0 &&
+		version.PublishedAt != nil {
+		identityParts = append(
+			identityParts,
+			"published="+version.PublishedAt.UTC().
+				Format(time.RFC3339Nano),
+		)
+	}
+	if len(identityParts) == 0 &&
+		version.AvailableAt != nil {
+		identityParts = append(
+			identityParts,
+			"available="+version.AvailableAt.UTC().
+				Format(time.RFC3339Nano),
+		)
+	}
+	if len(identityParts) == 0 &&
+		!version.SnapshotAt.IsZero() {
+		identityParts = append(
+			identityParts,
+			"snapshot="+version.SnapshotAt.UTC().
+				Format(time.RFC3339Nano),
+		)
+	}
+	if len(identityParts) == 0 {
+		identityParts = append(
+			identityParts,
+			"unknown",
+		)
 	}
 
 	sum := sha256.Sum256(
 		[]byte(
 			logicalKey +
 				"\x00version\x00" +
-				versionIdentity,
+				strings.Join(identityParts, "\x00"),
 		),
 	)
 	return "ver_" + hex.EncodeToString(sum[:8])
+}
+
+func versionPayloadHash(
+	title string,
+	content string,
+) string {
+	title = strings.TrimSpace(title)
+	content = strings.TrimSpace(content)
+	if title == "" && content == "" {
+		return ""
+	}
+
+	sum := sha256.Sum256(
+		[]byte(title + "\x00" + content),
+	)
+	return hex.EncodeToString(sum[:])
 }
 
 func effectiveAvailableAt(
