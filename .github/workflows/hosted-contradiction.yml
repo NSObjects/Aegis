@@ -1,0 +1,65 @@
+# V2.7.25 feature-specific hosted verification
+name: Hosted Claim Contradiction
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/v2.7.25-claim-contradictions
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-claim-contradiction-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hosted-claim-contradiction:
+    name: DeepSeek Claim Contradiction
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Check hosted secret
+        id: hosted-secret
+        shell: bash
+        run: |
+          if [ -n "$DEEPSEEK_API_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEEPSEEK_API_KEY is unavailable; contradiction hosted verification is skipped."
+          fi
+
+      - name: Run hosted contradiction detector
+        if: steps.hosted-secret.outputs.available == 'true'
+        env:
+          AEGIS_HOSTED_EVENT: "1"
+        run: |
+          go test ./internal/agent/event \
+            -run '^TestLiveEventClaimContradictionHostedIntegration$' \
+            -count=1 \
+            -v
+
+      - name: Hosted verification skipped
+        if: steps.hosted-secret.outputs.available != 'true'
+        run: |
+          echo "Hosted contradiction verification did not run because DEEPSEEK_API_KEY is unavailable."
