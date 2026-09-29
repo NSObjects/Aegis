@@ -358,9 +358,13 @@ func run(
 						Compiler: planning.Compiler{
 							Channels: planning.ChannelBindings{
 								OfficialDisclosure:
-									officialSnapshots,
+									[]eventcap.Retriever{
+										officialSnapshots,
+									},
 								BreakingNews:
-									breakingSnapshots,
+									[]eventcap.Retriever{
+										breakingSnapshots,
+									},
 								Selector:
 									selector,
 							},
@@ -408,11 +412,15 @@ func run(
 						SnapshotStore:
 							snapshotStore,
 					},
-				OfficialRetriever:
-					&eventcap.CninfoAnnouncementRetriever{},
-				BreakingRetriever:
-					&eventcap.ClsNewsRetriever{
-						MaxDays: maxCLSDays,
+				OfficialRetrievers:
+					[]eventcap.Retriever{
+						&eventcap.CninfoAnnouncementRetriever{},
+					},
+				BreakingRetrievers:
+					[]eventcap.Retriever{
+						&eventcap.ClsNewsRetriever{
+							MaxDays: maxCLSDays,
+						},
 					},
 			},
 		)
