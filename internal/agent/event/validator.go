@@ -26,6 +26,17 @@ func Validate(v *Context) error {
 			err,
 		)
 	}
+	if strings.TrimSpace(v.EvidenceAsOf) != "" {
+		if _, err := time.Parse(
+			time.RFC3339,
+			v.EvidenceAsOf,
+		); err != nil {
+			return fmt.Errorf(
+				"evidence_as_of must be RFC3339: %w",
+				err,
+			)
+		}
+	}
 	if v.Confidence < 0 || v.Confidence > 1 {
 		return fmt.Errorf(
 			"confidence out of range: %f",
