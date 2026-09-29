@@ -16,6 +16,145 @@ import (
 	"time"
 )
 
+func TestLiveEventClaimContradictionHostedIntegration(
+	t *testing.T,
+) {
+	if os.Getenv("AEGIS_HOSTED_EVENT") != "1" {
+		t.Skip(
+			"set AEGIS_HOSTED_EVENT=1 to run hosted event integration",
+		)
+	}
+	if strings.TrimSpace(
+		os.Getenv("DEEPSEEK_API_KEY"),
+	) == "" {
+		t.Fatal(
+			"DEEPSEEK_API_KEY is required for hosted event integration",
+		)
+	}
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		time.Minute,
+	)
+	defer cancel()
+
+	modelName := strings.TrimSpace(
+		os.Getenv("DEEPSEEK_MODEL"),
+	)
+	if modelName == "" {
+		modelName = "deepseek-chat"
+	}
+	manager := llm.NewManager(
+		map[string]config.ModelConfig{
+			"event": {
+				Provider:  config.ProviderDeepSeek,
+				Model:     modelName,
+				APIKeyEnv: "DEEPSEEK_API_KEY",
+				BaseURL: strings.TrimSpace(
+					os.Getenv(
+						"DEEPSEEK_BASE_URL",
+					),
+				),
+			},
+		},
+	)
+	eventModel, err := manager.Get(
+		ctx,
+		"event",
+	)
+	if err != nil {
+		t.Fatalf(
+			"create hosted event model: %v",
+			err,
+		)
+	}
+
+	facts := []Fact{
+		{
+			ID:       "fact_revenue_100",
+			Type:     EventEarnings,
+			Headline: "2026H1 revenue",
+			Summary: "贵州茅台2026年上半年营业收入为100亿元。",
+			Groundings: []EvidenceGrounding{
+				{
+					DocumentID: "doc_a",
+					Quote: "2026年上半年营业收入为100亿元",
+					StartByte: 0,
+					EndByte: len(
+						"2026年上半年营业收入为100亿元",
+					),
+				},
+			},
+			EvidenceDocumentIDs: []string{"doc_a"},
+			Confidence:          0.9,
+		},
+		{
+			ID:       "fact_revenue_120",
+			Type:     EventEarnings,
+			Headline: "2026H1 revenue",
+			Summary: "贵州茅台2026年上半年营业收入为120亿元。",
+			Groundings: []EvidenceGrounding{
+				{
+					DocumentID: "doc_b",
+					Quote: "2026年上半年营业收入为120亿元",
+					StartByte: 0,
+					EndByte: len(
+						"2026年上半年营业收入为120亿元",
+					),
+				},
+			},
+			EvidenceDocumentIDs: []string{"doc_b"},
+			Confidence:          0.9,
+		},
+	}
+
+	detected, err :=
+		(&AgenticClaimContradictionDetector{
+			Model: eventModel,
+		}).DetectContradictions(
+			ctx,
+			capevent.ResearchTask{
+				Symbol: "600519.SH",
+				AsOf: time.Date(
+					2026, 9, 29,
+					15, 0, 0, 0,
+					time.UTC,
+				),
+			},
+			facts,
+		)
+	if err != nil {
+		t.Fatalf(
+			"hosted contradiction detector: %v",
+			err,
+		)
+	}
+	normalized, err := normalizeContradictions(
+		facts,
+		detected.Contradictions,
+	)
+	if err != nil {
+		t.Fatalf(
+			"normalize hosted contradictions: %v",
+			err,
+		)
+	}
+	if len(normalized) != 1 ||
+		normalized[0].Type !=
+			ContradictionValue {
+		t.Fatalf(
+			"hosted contradictions = %+v, want one VALUE_CONFLICT",
+			normalized,
+		)
+	}
+	t.Logf(
+		"hosted contradiction diagnostic: type=%s id=%s facts=%v",
+		normalized[0].Type,
+		normalized[0].ID,
+		normalized[0].FactIDs,
+	)
+}
+
 func TestLiveEventHostedIntegration(t *testing.T) {
 	if os.Getenv("AEGIS_HOSTED_EVENT") != "1" {
 		t.Skip(
