@@ -95,6 +95,12 @@ func TestAcquisitionPlanRunnerWithCninfoAndCLS(t *testing.T) {
 						},
 					},
 				), nil
+			case "https://static.cninfo.com.cn/finalpage/2026-09-29/1227000001.PDF":
+				return bytesHTTPResponse(
+					http.StatusOK,
+					[]byte("fake-plan-pdf"),
+				), nil
+
 			case cninfoAnnouncementURL:
 				return jsonHTTPResponse(
 					http.StatusOK,
@@ -230,6 +236,16 @@ func TestAcquisitionPlanRunnerWithCninfoAndCLS(t *testing.T) {
 						Now: func() time.Time {
 							return retrievedAt
 						},
+						PDFExtractor: PDFTextExtractorFunc(
+							func(
+								context.Context,
+								[]byte,
+							) (PDFTextExtraction, error) {
+								return PDFTextExtraction{
+									Text: "贵州茅台公告正文",
+								}, nil
+							},
+						),
 					},
 				},
 				{
