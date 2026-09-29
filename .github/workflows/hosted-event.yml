@@ -45,6 +45,40 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Download modules
+        run: go mod download
+
+      - name: Run hosted Cninfo + CLS smoke
+        env:
+          AEGIS_HOSTED_EVENT_PROVIDERS: "1"
+        run: |
+          go test ./internal/agent/event \
+            -run '^TestLiveEventProvidersHostedIntegration
+        shell: bash
+        run: |
+          if [ -n "$DEEPSEEK_API_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "DEEPSEEK_API_KEY is configured; hosted test will run."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEEPSEEK_API_KEY is not configured; hosted News/Event verification is explicitly skipped."
+          fi
+
+      - name: Run hosted News/Event E2E
+        if: steps.hosted-secret.outputs.available == 'true'
+        env:
+          AEGIS_HOSTED_EVENT: "1"
+        run: |
+          go test ./internal/agent/event             -run '^TestLiveEventHostedIntegration$'             -count=1             -v
+
+      - name: Hosted verification skipped
+        if: steps.hosted-secret.outputs.available != 'true'
+        run: |
+          echo "Hosted verification did not run because DEEPSEEK_API_KEY is unavailable."
+ \
+            -count=1 \
+            -v
+
       - name: Check hosted secret
         id: hosted-secret
         shell: bash
