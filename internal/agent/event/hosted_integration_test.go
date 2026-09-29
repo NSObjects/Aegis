@@ -597,9 +597,7 @@ func TestLiveEventProvidersHostedIntegration(
 			for _, document :=
 				range step.Run.RawDocuments {
 				enriched, _ :=
-					document.RawMetadata[
-						"body_enriched"
-					].(bool)
+					document.RawMetadata["body_enriched"].(bool)
 				switch {
 				case enriched &&
 					strings.TrimSpace(
@@ -609,9 +607,7 @@ func TestLiveEventProvidersHostedIntegration(
 				case !enriched &&
 					strings.TrimSpace(
 						fmt.Sprint(
-							document.RawMetadata[
-								"body_error"
-							],
+							document.RawMetadata["body_error"],
 						),
 					) != "":
 					cninfoBodyRiskCount++
