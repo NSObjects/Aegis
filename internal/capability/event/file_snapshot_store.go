@@ -334,7 +334,7 @@ func (s *FileEvidenceSnapshotStore) writeSnapshot(
 			"create evidence snapshot temp file: %w",
 			err,
 		)
-	)
+	}
 	tempName := temp.Name()
 	defer os.Remove(tempName)
 
