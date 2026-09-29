@@ -302,6 +302,7 @@ func (e *ResearchRoundExecutor) executeRound(
 	roundResult := buildResearchRoundResult(
 		state.Round,
 		result,
+		corroboration,
 		roundOutput,
 		currentAttempts,
 	)
@@ -428,6 +429,7 @@ func stripRawMetadata(
 func buildResearchRoundResult(
 	round int,
 	result event.ResearchTaskResult,
+	corroboration event.CorroborationResult,
 	output event.AcquisitionPlanOutput,
 	currentAttempts []event.AcquisitionAttempt,
 ) ResearchRoundResult {
@@ -487,8 +489,8 @@ func buildResearchRoundResult(
 		TaskID:                     result.TaskID,
 		Status:                     result.Status,
 		DocumentCount:              len(result.Documents),
-		ClusterCount:               len(output.Corroboration.Clusters),
-		IndependentSourceCount:     output.Corroboration.IndependentSourceCount,
+		ClusterCount:               len(corroboration.Clusters),
+		IndependentSourceCount:     corroboration.IndependentSourceCount,
 		RoundAcceptedDocumentCount: len(output.AcceptedRawDocuments),
 		CandidateCount:             len(output.CandidateRawDocuments),
 		SelectedCount:              selectedCount,
