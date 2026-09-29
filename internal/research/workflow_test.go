@@ -415,10 +415,12 @@ func TestWorkflowSynthesisWaitsForBothResearchBranches(
 
 	technicalAgent := &blockingTechnicalAgent{
 		result:  technicalContext,
+		started: make(chan struct{}),
 		release: technicalRelease,
 	}
 	eventAgent := &blockingEventAgent{
 		result:  eventContext,
+		started: make(chan struct{}),
 		release: eventRelease,
 	}
 	synthesizer := &signalingSynthesizer{
