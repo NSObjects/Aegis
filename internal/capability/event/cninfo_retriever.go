@@ -29,12 +29,6 @@ var (
 	cninfoHTMLTagPattern    = regexp.MustCompile("<[^>]+>")
 )
 
-// HTTPDoer is the minimal transport dependency needed by a real retriever.
-// Tests can inject a deterministic implementation without using the network.
-type HTTPDoer interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
 // CninfoAnnouncementRetriever retrieves official A-share announcement metadata
 // from Cninfo. It intentionally implements only one concrete acquisition path;
 // multi-source planning belongs above TaskRunner.
