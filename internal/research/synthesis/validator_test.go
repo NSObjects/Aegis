@@ -254,6 +254,28 @@ func validSynthesisInput() Input {
 					OccurredAt:  "2026-09-29T09:00:00Z",
 					Headline:    "合同事件",
 					FactSummary: "公司披露签订合同。",
+					Facts: []event.Fact{
+						{
+							ID:       "fact_contract",
+							Type:     event.EventContract,
+							Headline: "合同事件",
+							Summary:  "公司披露签订合同。",
+							Groundings: []event.EvidenceGrounding{
+								{
+									DocumentID: "doc_1",
+									Quote:      "公司披露签订合同。",
+									StartByte:  0,
+									EndByte: len(
+										"公司披露签订合同。",
+									),
+								},
+							},
+							EvidenceDocumentIDs: []string{
+								"doc_1",
+							},
+							Confidence: 0.95,
+						},
+					},
 					EvidenceDocumentIDs: []string{
 						"doc_1",
 					},
