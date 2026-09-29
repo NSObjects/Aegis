@@ -539,3 +539,85 @@ func TestCLSQueryIsBounded(t *testing.T) {
 	}
 }
 
+
+
+func TestCLSNewsRetrieverPreservesNumericIDAndDeduplicates(
+	t *testing.T,
+) {
+	location := clsShanghaiLocation
+	asOf := time.Date(
+		2026, 9, 29, 12, 0, 0, 0, location,
+	)
+	published := asOf.Add(-time.Hour)
+
+	client := httpDoerFunc(
+		func(*http.Request) (*http.Response, error) {
+			return jsonHTTPResponse(
+				http.StatusOK,
+				map[string]any{
+					"errno": 0,
+					"data": map[string]any{
+						"roll_data": []map[string]any{
+							{
+								"id":      2494511,
+								"title":   "重复快讯",
+								"content": "正文",
+								"ctime":   published.Unix(),
+							},
+							{
+								"id":      2494511,
+								"title":   "重复快讯",
+								"content": "正文",
+								"ctime":   published.Unix(),
+							},
+						},
+					},
+				},
+			), nil
+		},
+	)
+
+	documents, err := (ClsNewsRetriever{
+		Client: client,
+		Now: func() time.Time {
+			return asOf
+		},
+	}).Retrieve(
+		context.Background(),
+		ResearchTask{
+			ID:              "task-cls-numeric-id",
+			InformationNeed: NeedBreakingNews,
+			AsOf:            asOf,
+			TimeRange: TimeRange{
+				Start: clsStartOfDay(asOf),
+				End:   asOf,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"Retrieve() error = %v",
+			err,
+		)
+	}
+	if len(documents) != 1 {
+		t.Fatalf(
+			"documents = %d, want 1",
+			len(documents),
+		)
+	}
+	if documents[0].ID !=
+		"cls_news_2494511" {
+		t.Fatalf(
+			"document id = %q, want exact numeric provider id",
+			documents[0].ID,
+		)
+	}
+	if documents[0].URL !=
+		"https://www.cls.cn/detail/2494511" {
+		t.Fatalf(
+			"document url = %q",
+			documents[0].URL,
+		)
+	}
+}
