@@ -315,3 +315,61 @@ func TestAgenticToolCallingAdapterPropagatesModelError(
 		)
 	}
 }
+
+
+func TestAgenticToolCallingAdapterConvertsNormalizedDSMLToolCall(
+	t *testing.T,
+) {
+	base := &adapterAgenticModel{
+		response: &schema.AgenticMessage{
+			Role: schema.AgenticRoleTypeAssistant,
+			ContentBlocks: []*schema.ContentBlock{
+				schema.NewContentBlock(
+					&schema.AssistantGenText{
+						Text: `<DSML tool_calls><DSML invoke name="plan"><DSML parameter name="steps" string="false">["official"]</DSML parameter></DSML invoke></DSML tool_calls>`,
+					},
+				),
+			},
+		},
+	}
+
+	normalized := newDSMLNormalizingModel(
+		base,
+	)
+	adapter, err := NewAgenticToolCallingAdapter(
+		normalized,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := adapter.Generate(
+		context.Background(),
+		[]*schema.Message{
+			schema.UserMessage("plan"),
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"Generate() error = %v",
+			err,
+		)
+	}
+	if len(result.ToolCalls) != 1 {
+		t.Fatalf(
+			"tool calls = %+v",
+			result.ToolCalls,
+		)
+	}
+	call := result.ToolCalls[0]
+	if call.Function.Name != "plan" ||
+		!strings.Contains(
+			call.Function.Arguments,
+			`"steps":["official"]`,
+		) {
+		t.Fatalf(
+			"normalized tool call = %+v",
+			call,
+		)
+	}
+}
