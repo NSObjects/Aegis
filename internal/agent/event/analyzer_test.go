@@ -156,6 +156,13 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 						len(input.Facts),
 					)
 				}
+				if input.EvidenceSupport.SupportClass !=
+					capevent.EvidenceSupportPrimaryCorroborated {
+					t.Fatalf(
+						"materiality evidence support = %+v",
+						input.EvidenceSupport,
+					)
+				}
 				return Materiality{
 					Level:      MaterialityHigh,
 					Direction:  DirectionPositive,
@@ -218,6 +225,14 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 	}
 	if !item.HasPrimarySource {
 		t.Fatal("event should preserve primary-source provenance")
+	}
+	if item.EvidenceSupport.IndependentSourceCount != 2 ||
+		item.EvidenceSupport.SupportClass !=
+			capevent.EvidenceSupportPrimaryCorroborated {
+		t.Fatalf(
+			"evidence support = %+v",
+			item.EvidenceSupport,
+		)
 	}
 	if len(item.EvidenceDocumentIDs) != 2 {
 		t.Fatalf(
