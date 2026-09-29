@@ -230,6 +230,7 @@ func NewLegacy(
 	}
 
 	return &Workflow{
-		runnable: runnable,
+		runnable:       runnable,
+		normalizeInput: normalizeLegacyWorkflowInput,
 	}, nil
 }
