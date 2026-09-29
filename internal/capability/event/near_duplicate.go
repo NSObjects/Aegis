@@ -41,7 +41,6 @@ type NearDuplicateMatcher struct {
 type nearDuplicatePrepared struct {
 	Document     CanonicalDocument
 	SourceKey    string
-	Normalized   string
 	RuneCount    int
 	Shingles     map[string]struct{}
 }
@@ -69,7 +68,6 @@ func (m NearDuplicateMatcher) prepare(
 	return nearDuplicatePrepared{
 		Document:   document,
 		SourceKey:  corroborationSourceKey(document.Source),
-		Normalized: normalized,
 		RuneCount:  len([]rune(normalized)),
 		Shingles: characterShingles(
 			normalized,
