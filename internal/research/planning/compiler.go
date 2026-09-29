@@ -33,17 +33,6 @@ func (c Compiler) Compile(
 	}
 
 	hasCandidate := false
-	for _, step := range plan.Steps {
-		if step.Scope == event.AcquisitionScopeCandidate {
-			hasCandidate = true
-			break
-		}
-	}
-	if hasCandidate && c.Channels.Selector == nil {
-		return event.AcquisitionPlan{}, errors.New(
-			"research plan with candidate evidence requires selector binding",
-		)
-	}
 
 	compiled := event.AcquisitionPlan{
 		Steps: make(
@@ -84,6 +73,7 @@ func (c Compiler) Compile(
 			)
 
 		case event.NeedBreakingNews:
+			hasCandidate = true
 			if c.Channels.BreakingNews == nil {
 				return event.AcquisitionPlan{}, fmt.Errorf(
 					"research plan step %q requires breaking news channel binding",
@@ -114,6 +104,12 @@ func (c Compiler) Compile(
 				step.Need,
 			)
 		}
+	}
+
+	if hasCandidate && c.Channels.Selector == nil {
+		return event.AcquisitionPlan{}, errors.New(
+			"research plan with candidate evidence requires selector binding",
+		)
 	}
 
 	return compiled, nil
