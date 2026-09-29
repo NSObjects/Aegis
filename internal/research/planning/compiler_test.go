@@ -408,7 +408,7 @@ func TestCompilerRejectsInvalidProviderBindings(
 					method: event.AcquisitionWebSearch,
 				},
 			},
-			want: "retriever id "provider" is duplicated",
+			want: "retriever id \"provider\" is duplicated",
 		},
 	}
 
@@ -416,7 +416,7 @@ func TestCompilerRejectsInvalidProviderBindings(
 		t.Run(test.name, func(t *testing.T) {
 			_, err := (Compiler{
 				Channels: ChannelBindings{
-					BreakingNews: test.retrievers,
+					BreakingNewsProviders: test.retrievers,
 					Selector:     compilerSelector{},
 				},
 			}).Compile(
