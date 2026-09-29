@@ -2,14 +2,15 @@ package event
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 )
 
-type TaskEvaluator struct{}
+type TaskEvaluator struct {
+	Corroboration *CorroborationResult
+}
 
-func (TaskEvaluator) Evaluate(
+func (e TaskEvaluator) Evaluate(
 	task ResearchTask,
 	documents []CanonicalDocument,
 	attempts []AcquisitionAttempt,
@@ -63,7 +64,15 @@ func (TaskEvaluator) Evaluate(
 		)
 	}
 
-	independentSources := countIndependentSources(documents)
+	corroboration := CorroborationResult{}
+	if e.Corroboration != nil {
+		corroboration = *e.Corroboration
+	} else {
+		corroboration = (EvidenceCorroborator{}).Corroborate(
+			documents,
+		)
+	}
+	independentSources := corroboration.IndependentSourceCount
 	if required := task.Requirements.MinIndependentSources; required > 0 &&
 		independentSources < required {
 		result.Gaps = append(
@@ -176,49 +185,3 @@ func (TaskEvaluator) Evaluate(
 	return result
 }
 
-func countIndependentSources(
-	documents []CanonicalDocument,
-) int {
-	seenSources := make(map[string]struct{})
-	seenContent := make(map[string]struct{})
-	count := 0
-
-	for _, document := range documents {
-		contentKey := strings.TrimSpace(document.ContentHash)
-		_, duplicateContent := seenContent[contentKey]
-		if contentKey != "" {
-			seenContent[contentKey] = struct{}{}
-		}
-
-		sourceKey := strings.ToLower(
-			strings.TrimSpace(document.Source.Publisher),
-		)
-		if sourceKey == "" {
-			sourceKey = sourceHost(document.Source.URL)
-		}
-		if sourceKey == "" {
-			continue
-		}
-
-		if _, exists := seenSources[sourceKey]; exists {
-			continue
-		}
-		seenSources[sourceKey] = struct{}{}
-
-		if contentKey != "" && duplicateContent {
-			continue
-		}
-
-		count++
-	}
-
-	return count
-}
-
-func sourceHost(rawURL string) string {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil {
-		return ""
-	}
-	return strings.ToLower(parsed.Hostname())
-}
