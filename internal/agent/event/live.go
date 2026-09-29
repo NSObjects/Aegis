@@ -14,9 +14,15 @@ import (
 type LiveAgentConfig struct {
 	Analysis *Agent
 
-	CaptureRunner        capevent.AcquisitionPlanRunner
-	OfficialRetrievers   []capevent.Retriever
-	BreakingRetrievers   []capevent.Retriever
+	CaptureRunner capevent.AcquisitionPlanRunner
+
+	// Singular fields remain compatible with existing callers. New provider
+	// fan-out should use the plural slices; both forms are merged and validated.
+	OfficialRetriever capevent.Retriever
+	BreakingRetriever capevent.Retriever
+
+	OfficialRetrievers []capevent.Retriever
+	BreakingRetrievers []capevent.Retriever
 }
 
 type LiveAgent struct {
@@ -40,15 +46,17 @@ func NewLiveAgent(
 		)
 	}
 
-	official, err := validateLiveRetrieverSet(
+	official, err := resolveLiveRetrieverSet(
 		"official",
+		cfg.OfficialRetriever,
 		cfg.OfficialRetrievers,
 	)
 	if err != nil {
 		return nil, err
 	}
-	breaking, err := validateLiveRetrieverSet(
+	breaking, err := resolveLiveRetrieverSet(
 		"breaking-news",
+		cfg.BreakingRetriever,
 		cfg.BreakingRetrievers,
 	)
 	if err != nil {
@@ -210,10 +218,27 @@ func (a *LiveAgent) Analyze(
 	return result, nil
 }
 
-func validateLiveRetrieverSet(
+func resolveLiveRetrieverSet(
 	channel string,
-	retrievers []capevent.Retriever,
+	single capevent.Retriever,
+	providers []capevent.Retriever,
 ) ([]capevent.Retriever, error) {
+	retrievers := make(
+		[]capevent.Retriever,
+		0,
+		len(providers)+1,
+	)
+	if single != nil {
+		retrievers = append(
+			retrievers,
+			single,
+		)
+	}
+	retrievers = append(
+		retrievers,
+		providers...,
+	)
+
 	if len(retrievers) == 0 {
 		return nil, fmt.Errorf(
 			"live event %s retrievers are required",
