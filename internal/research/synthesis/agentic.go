@@ -55,97 +55,75 @@ func (s *AgenticSynthesizer) Synthesize(
 		)
 	}
 
-	response, err := s.Model.Generate(
-		ctx,
-		[]*schema.AgenticMessage{
-			schema.SystemAgenticMessage(
-				researchSynthesisInstruction,
-			),
-			schema.UserAgenticMessage(
-				string(payload),
-			),
-		},
-		opts...,
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"generate research synthesis: %w",
-			err,
-		)
+	messages := []*schema.AgenticMessage{
+		schema.SystemAgenticMessage(researchSynthesisInstruction),
+		schema.UserAgenticMessage(string(payload)),
 	}
-
-	raw := strings.TrimSpace(
-		assistantText(response),
-	)
-	if raw == "" {
-		return nil, errors.New(
-			"research synthesis model returned empty output",
-		)
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		response, err := s.Model.Generate(ctx, messages, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("generate research synthesis: %w", err)
+		}
+		raw := strings.TrimSpace(assistantText(response))
+		if raw == "" {
+			return nil, errors.New("research synthesis model returned empty output")
+		}
+		synthesized, err := decodeSynthesis(raw)
+		if err == nil {
+			artifact := &Artifact{
+				Symbol: strings.TrimSpace(input.Symbol),
+				Market: input.Market,
+				Technical: input.Technical,
+				Event: input.Event,
+				Synthesis: synthesized,
+			}
+			if validationErr := Validate(artifact); validationErr == nil {
+				return artifact, nil
+			} else {
+				err = fmt.Errorf("invalid research synthesis artifact: %w", validationErr)
+			}
+		}
+		lastErr = err
+		if attempt == 0 {
+			messages = append(messages,
+				response,
+				schema.UserAgenticMessage(fmt.Sprintf(
+					"Your previous JSON failed deterministic validation: %v. Return the complete corrected JSON object only. Preserve upstream facts and obey the original schema; in particular, every conflict must reference at least two distinct domains.",
+					err,
+				)),
+			)
+		}
 	}
+	return nil, lastErr
+}
 
-	// Some JSON-mode providers may add the documented response-format
-	// discriminator at the top level. Strip only that known transport
-	// metadata; keep strict decoding for every domain field.
+func decodeSynthesis(raw string) (Synthesis, error) {
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &envelope); err == nil {
 		if kind, ok := envelope["type"]; ok {
 			var value string
 			if err := json.Unmarshal(kind, &value); err != nil || value != "json_object" {
-				return nil, fmt.Errorf("decode research synthesis JSON: invalid type metadata: output=%q", raw)
+				return Synthesis{}, fmt.Errorf("decode research synthesis JSON: invalid type metadata: output=%q", raw)
 			}
 			delete(envelope, "type")
 			normalized, err := json.Marshal(envelope)
-			if err != nil {
-				return nil, fmt.Errorf("normalize research synthesis JSON: %w", err)
-			}
+			if err != nil { return Synthesis{}, fmt.Errorf("normalize research synthesis JSON: %w", err) }
 			raw = string(normalized)
 		}
 	}
-
 	var synthesized Synthesis
-	decoder := json.NewDecoder(
-		strings.NewReader(raw),
-	)
+	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(
-		&synthesized,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"decode research synthesis JSON: %w: output=%q",
-			err,
-			raw,
-		)
+	if err := decoder.Decode(&synthesized); err != nil {
+		return Synthesis{}, fmt.Errorf("decode research synthesis JSON: %w: output=%q", err, raw)
 	}
-
 	var trailing any
-	if err := decoder.Decode(&trailing);
-		err != io.EOF {
-		if err == nil {
-			err = errors.New(
-				"multiple JSON values",
-			)
-		}
-		return nil, fmt.Errorf(
-			"decode research synthesis JSON: %w: output=%q",
-			err,
-			raw,
-		)
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil { err = errors.New("multiple JSON values") }
+		return Synthesis{}, fmt.Errorf("decode research synthesis JSON: %w: output=%q", err, raw)
 	}
-
-	artifact := &Artifact{
-		Symbol:    strings.TrimSpace(input.Symbol),
-		Market:    input.Market,
-		Technical: input.Technical,
-		Event:     input.Event,
-		Synthesis: synthesized,
-	}
-	if err := Validate(artifact); err != nil {
-		return nil, fmt.Errorf(
-			"invalid research synthesis artifact: %w",
-			err,
-		)
-	}
-	return artifact, nil
+	return synthesized, nil
 }
 
 func assistantText(
