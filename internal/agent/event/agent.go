@@ -168,6 +168,9 @@ func (a *Agent) Analyze(
 			err,
 		)
 	}
+	if result.Status == StatusNormal && result.Synthesis == nil {
+		return nil, errors.New("event analyst NORMAL context requires final synthesis")
+	}
 	return result, nil
 }
 
