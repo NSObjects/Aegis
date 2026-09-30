@@ -39,6 +39,13 @@ type AgenticEventFactEvolutionDetector struct {
 var _ EventFactEvolutionDetector =
 	(*AgenticEventFactEvolutionDetector)(nil)
 
+type AgenticEventImpactMechanismAnalyzer struct {
+	Model model.BaseModel[*schema.AgenticMessage]
+}
+
+var _ EventImpactMechanismAnalyzer =
+	(*AgenticEventImpactMechanismAnalyzer)(nil)
+
 type AgenticEventMaterialityAnalyzer struct {
 	Model model.BaseModel[*schema.AgenticMessage]
 }
@@ -82,6 +89,14 @@ type factEvolutionPrompt struct {
 	Facts  []Fact `json:"facts"`
 }
 
+type impactMechanismPrompt struct {
+	Symbol         string               `json:"symbol"`
+	AsOf           string               `json:"as_of"`
+	Facts          []Fact               `json:"facts"`
+	Contradictions []ClaimContradiction `json:"contradictions,omitempty"`
+	FactRelations  []FactRelation       `json:"fact_relations,omitempty"`
+}
+
 type materialityPrompt struct {
 	Symbol          string                   `json:"symbol"`
 	AsOf            string                   `json:"as_of"`
@@ -90,6 +105,7 @@ type materialityPrompt struct {
 	Facts           []materialityFact        `json:"facts"`
 	Contradictions  []ClaimContradiction     `json:"contradictions,omitempty"`
 	FactRelations   []FactRelation           `json:"fact_relations,omitempty"`
+	ImpactMechanisms []ImpactMechanism        `json:"impact_mechanisms,omitempty"`
 	EvidenceSupport capevent.EvidenceSupport `json:"evidence_support"`
 }
 
@@ -329,6 +345,29 @@ func (a *AgenticEventFactEvolutionDetector) DetectFactEvolution(
 	return output, nil
 }
 
+func (a *AgenticEventImpactMechanismAnalyzer) AnalyzeImpactMechanisms(
+	ctx context.Context,
+	task capevent.ResearchTask,
+	facts []Fact,
+	contradictions []ClaimContradiction,
+	factRelations []FactRelation,
+) (ImpactMechanismDetectionResult, error) {
+	if a == nil || a.Model == nil {
+		return ImpactMechanismDetectionResult{}, errors.New("event impact mechanism analyzer model is required")
+	}
+	var output ImpactMechanismDetectionResult
+	if err := generateStrictAgenticJSON(
+		ctx, a.Model, impactMechanismInstruction,
+		impactMechanismPrompt{
+			Symbol:task.Symbol, AsOf:task.AsOf.UTC().Format(timeRFC3339), Facts:facts,
+			Contradictions:contradictions, FactRelations:factRelations,
+		}, &output,
+	); err != nil {
+		return ImpactMechanismDetectionResult{}, fmt.Errorf("event impact mechanism model: %w",err)
+	}
+	return output,nil
+}
+
 func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 	ctx context.Context,
 	task capevent.ResearchTask,
@@ -374,6 +413,7 @@ func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 			Facts:           facts,
 			Contradictions:  input.Contradictions,
 			FactRelations:   input.FactRelations,
+			ImpactMechanisms:input.ImpactMechanisms,
 			EvidenceSupport: input.EvidenceSupport,
 		},
 		&output,
@@ -549,6 +589,24 @@ const factEvolutionInstruction = "You are the fact temporal evolution stage of a
 	"- If no defensible relation exists, return an empty relations array.\n\n" +
 	"Output: {\"relations\":[{\"type\":\"UPDATES\",\"from_fact_id\":\"fact_new\",\"to_fact_id\":\"fact_old\",\"rationale\":\"string\"}]}"
 
+const impactMechanismInstruction = "You are the causal impact-mechanism stage of an investment research event analyst.\n\n" +
+	"Explain only defensible business/economic transmission channels from the supplied grounded event facts.\n\n" +
+	"Rules:\n" +
+	"- Return JSON only. Use only supplied fact IDs.\n" +
+	"- channel must be REVENUE, PROFIT, CASH_FLOW, COST, CAPACITY, DEMAND, SUPPLY, FINANCING, OWNERSHIP, REGULATORY, OPERATIONS, or REPUTATION.\n" +
+	"- direction must be POSITIVE, NEGATIVE, MIXED, NEUTRAL, or UNCERTAIN.\n" +
+	"- Every mechanism must cite one or more supporting_fact_ids from the supplied event.\n" +
+	"- A mechanism describes a business/economic transmission path, not a stock-price prediction.\n" +
+	"- Do not invent margins, conversion rates, probabilities, timing, volumes, revenue recognition, costs, or other numeric assumptions not present in the facts.\n" +
+	"- Do not assume a contract is profitable, a policy raises demand, financing is accretive, or reputation changes revenue unless the supplied facts support that step.\n" +
+	"- Use UNCERTAIN when a plausible channel exists but its directional effect is not supported.\n" +
+	"- Put material missing conditions or causal limits in uncertainty.\n" +
+	"- Contradictions remain unresolved; do not choose a winning fact.\n" +
+	"- FactRelations provide temporal semantics but do not prove the newer fact is true.\n" +
+	"- Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, price targets, or trading instructions.\n" +
+	"- If the supplied facts do not support a defensible mechanism, return an empty mechanisms array.\n\n" +
+	"Output: {\"mechanisms\":[{\"channel\":\"REVENUE\",\"direction\":\"POSITIVE\",\"supporting_fact_ids\":[\"fact_a\"],\"rationale\":\"string\",\"uncertainty\":\"string\"}]}"
+
 const materialityInstruction = "You are the interpretation stage of an investment research event analyst.\n\n" +
 	"Assess the potential materiality of exactly one already-extracted factual event cluster.\n\n" +
 	"Rules:\n" +
@@ -559,6 +617,8 @@ const materialityInstruction = "You are the interpretation stage of an investmen
 	"- Contradictions are unresolved mutually incompatible grounded claims. Do not choose a winning claim.\n" +
 	"- Contradiction presence is epistemic uncertainty, not economic materiality; never raise or lower materiality level solely because a contradiction exists.\n" +
 	"- FactRelations describe temporal/evolution semantics only. Relation existence is not economic materiality and does not prove the later claim is true.\n" +
+	"- ImpactMechanisms are runtime-grounded transmission hypotheses. Use them to explain supported business/economic pathways, but mechanism existence alone is not materiality.\n" +
+	"- Do not extend ImpactMechanisms with unsupported causal steps or numeric assumptions.\n" +
 	"- Use FactRelations only to distinguish earlier forecast/preliminary/state claims from later actual/final/update claims when the supplied relation supports that interpretation.\n" +
 	"- If an unresolved contradiction prevents a supported directional interpretation, use UNCERTAIN and expose the conflict in risks.\n" +
 	"- Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, price targets, or trading instructions.\n" +

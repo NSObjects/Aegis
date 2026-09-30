@@ -225,6 +225,7 @@ func TestLiveAgentCapturesThenResearchesFrozenSnapshots(
 						}, nil
 					},
 				),
+				Impact:        noImpactMechanismAnalyzer{},
 				Evolution:     noFactEvolutionDetector{},
 				Contradiction: noContradictionDetector{},
 				Materiality: materialityFunc(

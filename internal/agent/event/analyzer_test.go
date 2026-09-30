@@ -53,6 +53,18 @@ func (f contradictionDetectorFunc) DetectContradictions(
 	return f(ctx, task, facts)
 }
 
+type noImpactMechanismAnalyzer struct{}
+
+func (noImpactMechanismAnalyzer) AnalyzeImpactMechanisms(
+	context.Context,
+	capevent.ResearchTask,
+	[]Fact,
+	[]ClaimContradiction,
+	[]FactRelation,
+) (ImpactMechanismDetectionResult,error) {
+	return ImpactMechanismDetectionResult{Mechanisms:[]DetectedImpactMechanism{}},nil
+}
+
 type noFactEvolutionDetector struct{}
 
 func (noFactEvolutionDetector) DetectFactEvolution(
@@ -191,6 +203,7 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 				}, nil
 			},
 		),
+		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
@@ -473,6 +486,7 @@ func TestAnalyzerCarriesContradictionIntoMateriality(
 				}, nil
 			},
 		),
+		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: contradictionDetectorFunc(
 			func(
@@ -578,6 +592,7 @@ func TestAnalyzerNoEventPath(t *testing.T) {
 				return EventClusterResult{}, nil
 			},
 		),
+		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
@@ -781,6 +796,7 @@ func TestAnalyzerRejectsInvalidClusterCoverage(
 				}, nil
 			},
 		),
+		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
@@ -1043,6 +1059,7 @@ func TestAnalyzerDoesNotCountReprintsAsIndependentSources(
 				}, nil
 			},
 		),
+		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(

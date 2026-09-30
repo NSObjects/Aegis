@@ -53,6 +53,7 @@ type MaterialityInput struct {
 	Facts           []Fact
 	Contradictions  []ClaimContradiction
 	FactRelations   []FactRelation
+	ImpactMechanisms []ImpactMechanism
 	EvidenceSupport capevent.EvidenceSupport
 }
 
@@ -88,6 +89,16 @@ type EventFactEvolutionDetector interface {
 	) (FactEvolutionDetectionResult, error)
 }
 
+type EventImpactMechanismAnalyzer interface {
+	AnalyzeImpactMechanisms(
+		ctx context.Context,
+		task capevent.ResearchTask,
+		facts []Fact,
+		contradictions []ClaimContradiction,
+		factRelations []FactRelation,
+	) (ImpactMechanismDetectionResult, error)
+}
+
 type EventMaterialityAnalyzer interface {
 	AnalyzeMateriality(
 		ctx context.Context,
@@ -108,6 +119,7 @@ type Analyzer struct {
 	Clusterer      EventClusterer
 	Contradiction EventContradictionDetector
 	Evolution     EventFactEvolutionDetector
+	Impact        EventImpactMechanismAnalyzer
 	Materiality    EventMaterialityAnalyzer
 }
 
@@ -325,6 +337,21 @@ func (a Analyzer) Analyze(
 			item.FactRelations = relations
 		}
 
+		if a.Impact == nil {
+			return nil, errors.New("event impact mechanism analyzer is required")
+		}
+		impactDetection, impactErr := a.Impact.AnalyzeImpactMechanisms(
+			ctx, task, clusterFacts, item.Contradictions, item.FactRelations,
+		)
+		if impactErr != nil {
+			return nil, fmt.Errorf("analyze event %q impact mechanisms: %w", eventID, impactErr)
+		}
+		mechanisms, mechanismErr := normalizeImpactMechanisms(impactDetection.Mechanisms, clusterFacts)
+		if mechanismErr != nil {
+			return nil, fmt.Errorf("normalize event %q impact mechanisms: %w", eventID, mechanismErr)
+		}
+		item.ImpactMechanisms = mechanisms
+
 		support, supportErr :=
 			(capevent.EvidenceSupportAnalyzer{}).
 				Analyze(
@@ -355,6 +382,7 @@ func (a Analyzer) Analyze(
 					Facts:           clusterFacts,
 					Contradictions:  item.Contradictions,
 					FactRelations:   item.FactRelations,
+					ImpactMechanisms:item.ImpactMechanisms,
 					EvidenceSupport: support,
 				},
 			)
