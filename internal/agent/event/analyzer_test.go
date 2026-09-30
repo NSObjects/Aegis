@@ -518,7 +518,7 @@ func TestAnalyzerCarriesContradictionIntoMateriality(
 			Task: capevent.ResearchTask{
 				Symbol: "600519.SH",
 				AsOf:   asOf,
-				Requirements: capevent.EvidenceRequirements{
+				Requirements: capevent.ResearchRequirements{
 					PITSafe: true,
 				},
 			},
