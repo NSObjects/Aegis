@@ -43,8 +43,8 @@ func TestMaterialityPayloadContainsImpactMechanisms(t *testing.T) {
 	}}
 	fact:=groundedEvolutionFact("fact_contract","doc_contract","公司签订50亿元合同。")
 	mechanism:=ImpactMechanism{
-		ID:deterministicImpactMechanismID(ImpactRevenue,ImpactPositive,[]string{"fact_contract"}),
-		Channel:ImpactRevenue,Direction:ImpactPositive,SupportingFactIDs:[]string{"fact_contract"},
+		ID:deterministicImpactMechanismID(ImpactRevenue,DirectionPositive,[]string{"fact_contract"}),
+		Channel:ImpactRevenue,Direction:DirectionPositive,SupportingFactIDs:[]string{"fact_contract"},
 		Rationale:"contract creates a potential revenue source",Uncertainty:"delivery timing is uncertain",
 	}
 	_,err:=(&AgenticEventMaterialityAnalyzer{Model:model}).AnalyzeMateriality(
