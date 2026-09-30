@@ -53,6 +53,16 @@ func (f contradictionDetectorFunc) DetectContradictions(
 	return f(ctx, task, facts)
 }
 
+type noFactEvolutionDetector struct{}
+
+func (noFactEvolutionDetector) DetectFactEvolution(
+	context.Context,
+	capevent.ResearchTask,
+	[]Fact,
+) (FactEvolutionDetectionResult, error) {
+	return FactEvolutionDetectionResult{Relations: []DetectedFactRelation{}}, nil
+}
+
 type noContradictionDetector struct{}
 
 func (noContradictionDetector) DetectContradictions(
@@ -181,6 +191,7 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 				}, nil
 			},
 		),
+		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
 			func(
@@ -462,6 +473,7 @@ func TestAnalyzerCarriesContradictionIntoMateriality(
 				}, nil
 			},
 		),
+		Evolution:     noFactEvolutionDetector{},
 		Contradiction: contradictionDetectorFunc(
 			func(
 				_ context.Context,
@@ -566,6 +578,7 @@ func TestAnalyzerNoEventPath(t *testing.T) {
 				return EventClusterResult{}, nil
 			},
 		),
+		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
 			func(
@@ -768,6 +781,7 @@ func TestAnalyzerRejectsInvalidClusterCoverage(
 				}, nil
 			},
 		),
+		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
 			func(
@@ -1029,6 +1043,7 @@ func TestAnalyzerDoesNotCountReprintsAsIndependentSources(
 				}, nil
 			},
 		),
+		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
 			func(
