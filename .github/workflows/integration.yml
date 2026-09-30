@@ -87,10 +87,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
 
       - name: Verify integration secrets
         shell: bash
@@ -104,8 +100,6 @@ jobs:
             exit 1
           }
 
-      - name: Install Python dependencies
-        run: python -m pip install --upgrade pandas tushare
 
       - name: Run Technical Agent integration
         run: |
@@ -140,10 +134,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
 
       - name: Verify full E2E secrets
         shell: bash
@@ -152,8 +142,6 @@ jobs:
           test -n "$TUSHARE_TOKEN" || { echo "::error::Repository secret TUSHARE_TOKEN is required"; exit 1; }
           test -n "$TAVILY_API_KEY" || { echo "::error::Repository secret TAVILY_API_KEY is required"; exit 1; }
 
-      - name: Install Technical capability dependencies
-        run: python -m pip install --upgrade pandas tushare
 
       - name: Run full stateless hosted pipeline
         run: |
