@@ -99,4 +99,5 @@ type Context struct {
 	Evidence      []string `json:"evidence,omitempty"`
 	Risk          []string `json:"risk,omitempty"`
 	Confidence    float64  `json:"confidence"`
+	Synthesis     *AnalystSynthesis `json:"synthesis,omitempty"`
 }
