@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/model"
@@ -27,9 +28,10 @@ const (
 )
 
 type Input struct {
-	Symbol      string
-	MarketQuery string
-	EventInput  eventagent.Input
+	Symbol        string
+	RequestedAsOf time.Time
+	MarketQuery   string
+	EventInput    eventagent.Input
 }
 
 type marketAnalyzer interface {
@@ -229,7 +231,7 @@ func New(
 					technical.Input{
 						Symbol: input.Symbol,
 						RequestedAsOf:
-							input.MarketContext.AsOf,
+							input.RequestedAsOf.Format("20060102"),
 					},
 				)
 			if err != nil {
@@ -454,6 +456,19 @@ func normalizeWorkflowInput(
 			"event research task symbol %q does not match research symbol %q",
 			input.EventInput.Task.Symbol,
 			input.Symbol,
+		)
+	}
+	if input.RequestedAsOf.IsZero() {
+		return Input{}, errors.New("research requested_as_of is required")
+	}
+	if input.EventInput.Task.AsOf.IsZero() {
+		return Input{}, errors.New("event research task as_of is required")
+	}
+	if !input.EventInput.Task.AsOf.Equal(input.RequestedAsOf) {
+		return Input{}, fmt.Errorf(
+			"event research task as_of %q does not match research requested_as_of %q",
+			input.EventInput.Task.AsOf.Format(time.RFC3339Nano),
+			input.RequestedAsOf.Format(time.RFC3339Nano),
 		)
 	}
 
