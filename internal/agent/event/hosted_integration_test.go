@@ -90,7 +90,10 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 				ctx,
 				capevent.ResearchTask{
 					Symbol: "600519.SH",
-					AsOf:   time.Now().UTC(),
+					AsOf: time.Date(
+						2026, 9, 30, 0, 0, 0, 0,
+						time.UTC,
+					),
 				},
 				hostedConflictFacts,
 			)
