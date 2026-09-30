@@ -26,16 +26,6 @@ const (
 	ImpactReputation ImpactChannel = "REPUTATION"
 )
 
-type ImpactDirection string
-
-const (
-	ImpactPositive  ImpactDirection = "POSITIVE"
-	ImpactNegative  ImpactDirection = "NEGATIVE"
-	ImpactMixed     ImpactDirection = "MIXED"
-	ImpactNeutral   ImpactDirection = "NEUTRAL"
-	ImpactUncertain ImpactDirection = "UNCERTAIN"
-)
-
 type DetectedImpactMechanism struct {
 	Channel           ImpactChannel   `json:"channel"`
 	Direction         ImpactDirection `json:"direction"`
@@ -133,7 +123,7 @@ func validImpactChannel(v ImpactChannel) bool {
 
 func validImpactDirection(v ImpactDirection) bool {
 	switch v {
-	case ImpactPositive,ImpactNegative,ImpactMixed,ImpactNeutral,ImpactUncertain:return true
+	case DirectionPositive,DirectionNegative,DirectionMixed,DirectionNeutral,DirectionUncertain:return true
 	default:return false
 	}
 }
