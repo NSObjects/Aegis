@@ -25,7 +25,13 @@ func (r *HTTPResearcher) Research(ctx context.Context,req Request)(map[string]an
  cal,err:=r.api.query(ctx,"trade_cal",map[string]any{"exchange":exchange(symbol),"start_date":asof,"end_date":asof},"is_open","pretrade_date");if err!=nil{return nil,err};if len(cal)==0{return statusMap(symbol,asof,"NO_DATA","","trade calendar unavailable"),nil}
  effective:=asof;if str(cal[0]["is_open"])!="1"{effective=str(cal[0]["pretrade_date"])};if effective==""{return statusMap(symbol,asof,"NO_DATA","","cannot resolve effective trading date"),nil}
  target,err:=r.api.query(ctx,"daily",map[string]any{"ts_code":symbol,"trade_date":effective},"ts_code","trade_date");if err!=nil{return nil,err}
- if len(target)==0 {last,_:=r.lastTrade(ctx,symbol,asof,d.AddDate(0,0,-120).Format("20060102"));return statusMap(symbol,asof,"NO_DATA",last,"daily row unavailable; absence is not sufficient evidence of suspension"),nil}
+ fallback:=""
+ if len(target)==0 {
+  last,lastErr:=r.lastTrade(ctx,symbol,asof,d.AddDate(0,0,-120).Format("20060102"));if lastErr!=nil{return nil,lastErr}
+  if last=="" {return statusMap(symbol,asof,"NO_DATA","","no daily bar is available at or before requested_as_of; absence is not sufficient evidence of suspension"),nil}
+  effective=last
+  fallback=fmt.Sprintf("requested trading-day bar %s is unavailable; using latest available bar %s at or before requested_as_of; absence is not sufficient evidence of suspension",asof,last)
+ }
  start:=d.AddDate(0,0,-420).Format("20060102")
  daily,err:=r.api.query(ctx,"daily",map[string]any{"ts_code":symbol,"start_date":start,"end_date":effective},"ts_code","trade_date","open","high","low","close","pre_close","pct_chg","vol","amount");if err!=nil{return nil,err}
  adj,err:=r.api.query(ctx,"adj_factor",map[string]any{"ts_code":symbol,"start_date":start,"end_date":effective},"trade_date","adj_factor");if err!=nil{return nil,err}
@@ -34,7 +40,7 @@ func (r *HTTPResearcher) Research(ctx context.Context,req Request)(map[string]an
  sort.Slice(bars,func(i,j int)bool{return bars[i].Date<bars[j].Date});if len(bars)==0{return statusMap(symbol,asof,"NO_DATA","","daily and adjustment factor series do not overlap"),nil}
  latest:=bars[len(bars)-1];anchor:=latest.Adj;q:=make([]float64,len(bars));for i,b:=range bars{q[i]=b.Close*b.Adj/anchor}
  db,_:=r.api.query(ctx,"daily_basic",map[string]any{"ts_code":symbol,"trade_date":latest.Date},"turnover_rate");var turnover any=nil;if len(db)>0{turnover=num(db[0]["turnover_rate"])}
- warns:=[]string{};if len(bars)<requiredBars{warns=append(warns,fmt.Sprintf("insufficient_history: %d trading bars available; %d required",len(bars),requiredBars))}
+ warns:=[]string{};if fallback!=""{warns=append(warns,fallback)};if len(bars)<requiredBars{warns=append(warns,fmt.Sprintf("insufficient_history: %d trading bars available; %d required",len(bars),requiredBars))}
  return map[string]any{"symbol":symbol,"requested_as_of":asof,"effective_as_of":latest.Date,"last_trade_date":latest.Date,"status":"NORMAL",
   "price_basis":map[string]any{"snapshot":"RAW","technical":"PIT_QFQ","pit_anchor":latest.Date,"anchor_adj_factor":round(anchor,6)},
   "snapshot":map[string]any{"open":latest.Open,"high":latest.High,"low":latest.Low,"close":latest.Close,"pre_close":latest.PreClose,"change_percent":latest.Pct,"volume":latest.Vol,"amount":latest.Amount,"turnover_rate":turnover},
