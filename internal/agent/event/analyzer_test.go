@@ -39,6 +39,20 @@ func (f clustererFunc) Cluster(
 	return f(ctx, task, facts)
 }
 
+type contradictionDetectorFunc func(
+	context.Context,
+	capevent.ResearchTask,
+	[]Fact,
+) (ContradictionDetectionResult, error)
+
+func (f contradictionDetectorFunc) DetectContradictions(
+	ctx context.Context,
+	task capevent.ResearchTask,
+	facts []Fact,
+) (ContradictionDetectionResult, error) {
+	return f(ctx, task, facts)
+}
+
 type noContradictionDetector struct{}
 
 func (noContradictionDetector) DetectContradictions(
@@ -363,6 +377,163 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 		},
 	) {
 		t.Fatal("event ID must be independent of cluster fact order")
+	}
+}
+
+func TestAnalyzerCarriesContradictionIntoMateriality(
+	t *testing.T,
+) {
+	asOf := time.Date(
+		2026, 9, 29, 15, 0, 0, 0,
+		time.UTC,
+	)
+	available := asOf.Add(-time.Hour)
+	documents := []capevent.CanonicalDocument{
+		{
+			ID:      "doc_a",
+			Content: "合同金额为10亿元。",
+			Source: capevent.DocumentSource{
+				CanonicalDomain: "a.example",
+			},
+			AvailableAt: &available,
+		},
+		{
+			ID:      "doc_b",
+			Content: "合同金额为12亿元。",
+			Source: capevent.DocumentSource{
+				CanonicalDomain: "b.example",
+			},
+			AvailableAt: &available,
+		},
+	}
+	analyzer := Analyzer{
+		Extractor: extractorFunc(
+			func(
+				context.Context,
+				capevent.ResearchTask,
+				[]capevent.CanonicalDocument,
+			) (FactExtractionResult, error) {
+				return FactExtractionResult{
+					Confidence: 0.9,
+					Facts: []ExtractedFact{
+						{
+							Type:       EventContract,
+							Headline:   "合同金额",
+							Summary:    "合同金额为10亿元。",
+							Confidence: 0.9,
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc_a",
+									Quote: "合同金额为10亿元。",
+								},
+							},
+						},
+						{
+							Type:       EventContract,
+							Headline:   "合同金额",
+							Summary:    "合同金额为12亿元。",
+							Confidence: 0.9,
+							EvidenceQuotes: []EvidenceQuote{
+								{
+									DocumentID: "doc_b",
+									Quote: "合同金额为12亿元。",
+								},
+							},
+						},
+					},
+				}, nil
+			},
+		),
+		Clusterer: clustererFunc(
+			func(
+				_ context.Context,
+				_ capevent.ResearchTask,
+				facts []Fact,
+			) (EventClusterResult, error) {
+				return EventClusterResult{
+					Clusters: []EventCluster{
+						{
+							FactIDs: []string{
+								facts[0].ID,
+								facts[1].ID,
+							},
+						},
+					},
+				}, nil
+			},
+		),
+		Contradiction: contradictionDetectorFunc(
+			func(
+				_ context.Context,
+				_ capevent.ResearchTask,
+				facts []Fact,
+			) (ContradictionDetectionResult, error) {
+				return ContradictionDetectionResult{
+					Contradictions: []DetectedContradiction{
+						{
+							LeftFactID: facts[0].ID,
+							RightFactID: facts[1].ID,
+							Kind: ContradictionValue,
+							Rationale: "同一合同金额不一致",
+						},
+					},
+				}, nil
+			},
+		),
+		Materiality: materialityFunc(
+			func(
+				_ context.Context,
+				_ capevent.ResearchTask,
+				input MaterialityInput,
+			) (Materiality, error) {
+				if len(input.Contradictions) != 1 {
+					t.Fatalf(
+						"materiality contradictions = %+v",
+						input.Contradictions,
+					)
+				}
+				if !input.Contradictions[0].
+					IndependentEvidenceSides ||
+					!input.Contradictions[0].
+						IndependentSourceSides {
+					t.Fatalf(
+						"contradiction provenance = %+v",
+						input.Contradictions[0],
+					)
+				}
+				return Materiality{
+					Level:      MaterialityMedium,
+					Direction:  DirectionUncertain,
+					Horizon:    HorizonShortTerm,
+					Rationale:  "金额冲突尚未解决。",
+					Risks:      []string{"合同金额存在冲突"},
+					Confidence: 0.5,
+				}, nil
+			},
+		),
+	}
+	result, err := analyzer.Analyze(
+		context.Background(),
+		AnalyzeInput{
+			Task: capevent.ResearchTask{
+				Symbol: "600519.SH",
+				AsOf:   asOf,
+				Requirements: capevent.EvidenceRequirements{
+					PITSafe: true,
+				},
+			},
+			ResearchStatus: capevent.TaskSatisfied,
+			Documents:      documents,
+			Corroboration: (capevent.EvidenceCorroborator{}).
+				Corroborate(documents),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Events) != 1 ||
+		len(result.Events[0].Contradictions) != 1 {
+		t.Fatalf("events = %+v", result.Events)
 	}
 }
 
