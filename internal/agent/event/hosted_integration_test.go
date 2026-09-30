@@ -68,6 +68,92 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 			err,
 		)
 	}
+	contradictionDetector :=
+		&AgenticEventContradictionDetector{
+			Model: eventModel,
+		}
+	hostedConflictFacts := []Fact{
+		groundedContradictionFact(
+			"hosted_fact_amount_10",
+			"hosted_doc_amount_10",
+			"同一合同金额为10亿元。",
+		),
+		groundedContradictionFact(
+			"hosted_fact_amount_12",
+			"hosted_doc_amount_12",
+			"同一合同金额为12亿元。",
+		),
+	}
+	hostedConflict, err :=
+		contradictionDetector.
+			DetectContradictions(
+				ctx,
+				capevent.ResearchTask{
+					Symbol: "600519.SH",
+					AsOf:   time.Now().UTC(),
+				},
+				hostedConflictFacts,
+			)
+	if err != nil {
+		t.Fatalf(
+			"hosted contradiction detector: %v",
+			err,
+		)
+	}
+	if len(hostedConflict.Contradictions) != 1 ||
+		hostedConflict.Contradictions[0].Kind !=
+			ContradictionValue {
+		t.Fatalf(
+			"hosted contradiction result = %+v",
+			hostedConflict,
+		)
+	}
+	hostedNormalizedConflict, err :=
+		normalizeContradictions(
+			hostedConflict.Contradictions,
+			hostedConflictFacts,
+			capevent.CorroborationResult{
+				Clusters: []capevent.EvidenceCluster{
+					{
+						ClusterID:
+							"hosted_cluster_amount_10",
+						DocumentIDs: []string{
+							"hosted_doc_amount_10",
+						},
+						SourceKeys: []string{
+							"domain:source-a.example",
+						},
+					},
+					{
+						ClusterID:
+							"hosted_cluster_amount_12",
+						DocumentIDs: []string{
+							"hosted_doc_amount_12",
+						},
+						SourceKeys: []string{
+							"domain:source-b.example",
+						},
+					},
+				},
+			},
+		)
+	if err != nil {
+		t.Fatalf(
+			"normalize hosted contradiction: %v",
+			err,
+		)
+	}
+	if len(hostedNormalizedConflict) != 1 ||
+		!hostedNormalizedConflict[0].
+			IndependentEvidenceSides ||
+		!hostedNormalizedConflict[0].
+			IndependentSourceSides {
+		t.Fatalf(
+			"hosted normalized contradiction = %+v",
+			hostedNormalizedConflict,
+		)
+	}
+
 	planningModel, err := manager.GetToolCalling(
 		ctx,
 		"event",
@@ -155,6 +241,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 					&AgenticEventClusterer{
 						Model: eventModel,
 					},
+				Contradiction:
+					contradictionDetector,
 				Materiality:
 					&AgenticEventMaterialityAnalyzer{
 						Model: eventModel,
