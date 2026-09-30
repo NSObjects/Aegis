@@ -288,7 +288,8 @@ func TestNewsEventAgentTwoRoundResearchProducesNormalContext(
 						}, nil
 					},
 				),
-				Materiality: materialityFunc(
+				Contradiction: noContradictionDetector{},
+		Materiality: materialityFunc(
 					func(
 						_ context.Context,
 						_ capevent.ResearchTask,
