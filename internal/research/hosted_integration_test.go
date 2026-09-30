@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -50,10 +49,6 @@ func TestWorkflow_Run_HostedIntegration(t *testing.T) {
 	)
 	defer cancel()
 
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	appCfg := config.Config{
 		DefaultModel: "default",
@@ -106,20 +101,9 @@ func TestWorkflow_Run_HostedIntegration(t *testing.T) {
 		t.Fatalf("create trading model: %v", err)
 	}
 
-	researcher, err := technicalcap.NewScriptResearcher(
-		technicalcap.ScriptResearcherConfig{
-			ScriptPath: filepath.Join(
-				repoRoot,
-				"internal",
-				"capability",
-				"technical",
-				"scripts",
-				"stock_research.py",
-			),
-		},
-	)
+	researcher, err := technicalcap.NewHTTPResearcher(os.Getenv("TUSHARE_TOKEN"))
 	if err != nil {
-		t.Fatalf("create technical researcher: %v", err)
+		t.Fatalf("create Tushare HTTP technical researcher: %v", err)
 	}
 
 	researchTool, err := technicalcap.NewTool(researcher)

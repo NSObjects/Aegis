@@ -18,7 +18,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 )
 
-func TestWorkflow_Run_Integration(t *testing.T) {
+func TestLegacyWorkflow_Run_Integration(t *testing.T) {
 	if os.Getenv("AEGIS_INTEGRATION") != "1" {
 		t.Skip("set AEGIS_INTEGRATION=1 to run integration test")
 	}
@@ -42,10 +42,6 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	appCfg := config.Config{
 		DefaultModel: "default",
@@ -141,20 +137,9 @@ func TestWorkflow_Run_Integration(t *testing.T) {
 		t.Fatalf("create market agent: %v", err)
 	}
 
-	researcher, err := technicalcap.NewScriptResearcher(
-		technicalcap.ScriptResearcherConfig{
-			ScriptPath: filepath.Join(
-				repoRoot,
-				"internal",
-				"capability",
-				"technical",
-				"scripts",
-				"stock_research.py",
-			),
-		},
-	)
+	researcher, err := technicalcap.NewHTTPResearcher(os.Getenv("TUSHARE_TOKEN"))
 	if err != nil {
-		t.Fatalf("create technical researcher: %v", err)
+		t.Fatalf("create Tushare HTTP technical researcher: %v", err)
 	}
 
 	researchTool, err := technicalcap.NewTool(researcher)

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -249,20 +248,12 @@ func run(
 		return err
 	}
 
-	researcher, err := technicalcap.NewScriptResearcher(
-		technicalcap.ScriptResearcherConfig{
-			ScriptPath: filepath.Join(
-				"internal",
-				"capability",
-				"technical",
-				"scripts",
-				"stock_research.py",
-			),
-		},
+	researcher, err := technicalcap.NewHTTPResearcher(
+		os.Getenv("TUSHARE_TOKEN"),
 	)
 	if err != nil {
 		return fmt.Errorf(
-			"create technical researcher: %w",
+			"create Tushare HTTP technical researcher: %w",
 			err,
 		)
 	}
@@ -549,8 +540,9 @@ func newLiveResearchInput(
 	}
 
 	return research.Input{
-		Symbol:      symbol,
-		MarketQuery: strings.TrimSpace(marketQuery),
+		Symbol:        symbol,
+		RequestedAsOf: cutoff,
+		MarketQuery:   strings.TrimSpace(marketQuery),
 		EventInput: eventagent.Input{
 			Task: eventcap.ResearchTask{
 				ID: fmt.Sprintf(

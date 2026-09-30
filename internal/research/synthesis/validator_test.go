@@ -67,17 +67,15 @@ func TestValidateInputPreservesExistingTemporalBoundary(
 		)
 	}
 
+	input.Technical.RequestedAsOf = "20260930"
+	if err := ValidateInput(input); err != nil {
+		t.Fatalf("older market effective date should be PIT-safe: %v", err)
+	}
+
 	input.Technical.RequestedAsOf = "20260928"
 	err := ValidateInput(input)
-	if err == nil ||
-		!strings.Contains(
-			err.Error(),
-			"does not match market as_of",
-		) {
-		t.Fatalf(
-			"error = %v, want market/technical temporal mismatch",
-			err,
-		)
+	if err == nil || !strings.Contains(err.Error(), "is after technical requested_as_of") {
+		t.Fatalf("error = %v, want future market data rejection", err)
 	}
 }
 

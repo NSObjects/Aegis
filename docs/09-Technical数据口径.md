@@ -1,7 +1,7 @@
 # Technical Agent 个股技术研究数据口径
 
-> 状态：V2.6 当前规范
-> 更新时间：2026-09-24
+> 状态：V2.8 当前规范
+> 更新时间：2026-09-30
 >
 > 本文定义 Technical Agent / TechnicalContext 使用的个股行情与技术指标语义。数据源可以是 Skill、MCP、API、数据库或其他实现；本文不绑定具体 Provider。
 
@@ -31,17 +31,7 @@ Trading Agent 消费 TechnicalContext 做综合判断，不负责重新获取行
 
 本文中的确定性计算可以由 Go package、受控脚本、服务、MCP、API 或数据库 Capability 实现；具体 Provider 不是架构契约。
 
-当前第一套受控实现位于：
-
-```text
-internal/capability/technical/
-├── researcher.go
-├── script.go
-├── tool.go
-└── scripts/stock_research.py
-```
-
-其中 Agent 只依赖 `stock_technical_research` Tool；脚本路径和 Tushare 只属于第一套 Capability 实现。
+当前受控实现位于 `internal/capability/technical/`。Technical Agent 只依赖 `stock_technical_research` Tool；Capability 使用原生 Go HTTP client 调用 Tushare Pro HTTP API，并在 Go 内完成 PIT_QFQ 与确定性指标计算。
 
 ## 2. 时间语义
 
@@ -53,10 +43,11 @@ effective_as_of 表示实际用于日线研究的数据日期。
 
 1. requested_as_of 为正常交易日且标的有完整收盘数据时，effective_as_of = requested_as_of。
 2. requested_as_of 为交易所非交易日时，可回退最近已完成交易日。
-3. 交易所正常开市但标的停牌时，不得把上一交易日伪装成当日数据。
-4. 停牌必须显式标记，并保留 last_trade_date。
-5. 日线研究使用 final bar；盘中未完成日线不得冒充完整收盘数据。
-6. 不得使用 requested_as_of 之后的数据。
+3. requested_as_of 为交易日但当日 final bar 尚未发布时，可使用 <= requested_as_of 的最近可用 bar，并显式令 effective_as_of 指向该日期，同时记录 staleness warning。
+4. 缺少 requested_as_of 当日 daily row 本身不是停牌证据；只有显式停牌证据才允许标记 SUSPENDED。
+5. 停牌必须显式标记，并保留 last_trade_date。
+6. 日线研究使用 final bar；盘中未完成日线不得冒充完整收盘数据。
+7. 不得使用 requested_as_of 之后的数据。
 
 至少区分：
 
@@ -262,7 +253,7 @@ Trading Agent 不应：
 
 ## 12. 当前实现策略
 
-当前第一套实现：
+当前实现：
 
 ```text
 Technical Agent
@@ -271,33 +262,13 @@ stock_technical_research Tool
   ↓
 Researcher interface
   ↓
-ScriptResearcher
+HTTPResearcher (Go)
   ↓
-internal/capability/technical/scripts/stock_research.py
+TushareClient (Go HTTP)
   ↓
-Tushare
+Tushare Pro HTTP API
 ```
 
-该脚本进入 Git，属于 Capability 自有实现，不依赖 gitignored 的本地 Skill 文件。
+Capability 在 Go 内负责时间/状态解析、最近可用 final bar 回退、PIT_QFQ、MA / RSI / MACD / Return / Volume 等确定性计算。生产与 CI 均不再依赖 Python、pandas 或 Tushare Python SDK。
 
-未来可以增加：
-
-```text
-Researcher
-├── ScriptResearcher
-├── DuckDBResearcher
-├── MCPResearcher
-└── APIResearcher
-```
-
-但当前没有 Provider Registry。
-
-错误依赖方向：
-
-```text
-Trading Agent
-  ↓
-强绑定 stock_research.py
-```
-
-当出现第二个真实数据实现时，再根据重复模式抽象 Capability interface / routing；当前不提前建立大而全 Provider Registry。
+未来增加 DuckDB、MCP 或其他数据源时，应继续保持 `Researcher` 契约与 TechnicalContext 语义稳定；只有出现真实重复模式后再抽象 Provider Registry。

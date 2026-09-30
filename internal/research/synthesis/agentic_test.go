@@ -12,8 +12,10 @@ import (
 
 type synthesisModel struct {
 	response *schema.AgenticMessage
+	responses []*schema.AgenticMessage
 	err      error
 	input    []*schema.AgenticMessage
+	calls int
 }
 
 func (m *synthesisModel) Generate(
@@ -25,9 +27,9 @@ func (m *synthesisModel) Generate(
 		[]*schema.AgenticMessage(nil),
 		input...,
 	)
-	if m.err != nil {
-		return nil, m.err
-	}
+	if m.err != nil { return nil, m.err }
+	m.calls++
+	if len(m.responses) >= m.calls { return m.responses[m.calls-1], nil }
 	return m.response, nil
 }
 
@@ -148,6 +150,34 @@ func TestAgenticSynthesizerProducesValidatedArtifact(
 			userText,
 		)
 	}
+}
+
+func TestAgenticSynthesizerAcceptsJSONModeTypeMetadata(t *testing.T) {
+ synthesizer := &AgenticSynthesizer{Model:&synthesisModel{response:synthesisAssistantMessage(
+  `{"type":"json_object","summary":"跨域证据有限。","risks":["技术数据缺失"],"confidence":0.42}`,
+ )}}
+ artifact,err:=synthesizer.Synthesize(context.Background(),validSynthesisInput())
+ if err!=nil { t.Fatalf("Synthesize() error = %v",err) }
+ if artifact.Synthesis.Confidence!=0.42 { t.Fatalf("confidence = %v",artifact.Synthesis.Confidence) }
+}
+
+func TestAgenticSynthesizerRejectsUnexpectedTypeMetadata(t *testing.T) {
+ synthesizer := &AgenticSynthesizer{Model:&synthesisModel{response:synthesisAssistantMessage(
+  `{"type":"other","summary":"x","confidence":0.5}`,
+ )}}
+ _,err:=synthesizer.Synthesize(context.Background(),validSynthesisInput())
+ if err==nil || !strings.Contains(err.Error(),"invalid type metadata") { t.Fatalf("error = %v",err) }
+}
+
+func TestAgenticSynthesizerRepairsInvalidConflictOnce(t *testing.T) {
+ m:=&synthesisModel{responses:[]*schema.AgenticMessage{
+  synthesisAssistantMessage(`{"summary":"x","conflicts":[{"description":"bad","references":[{"domain":"EVENT","event_id":"event_contract"},{"domain":"EVENT","event_id":"event_contract"}]}],"confidence":0.5}`),
+  synthesisAssistantMessage(`{"summary":"x","conflicts":[{"description":"fixed","references":[{"domain":"TECHNICAL"},{"domain":"EVENT","event_id":"event_contract"}]}],"confidence":0.5}`),
+ }}
+ artifact,err:=(&AgenticSynthesizer{Model:m}).Synthesize(context.Background(),validSynthesisInput())
+ if err!=nil { t.Fatalf("Synthesize() error = %v",err) }
+ if m.calls!=2 { t.Fatalf("calls=%d, want 2",m.calls) }
+ if artifact.Synthesis.Conflicts[0].Description!="fixed" { t.Fatalf("conflict=%+v",artifact.Synthesis.Conflicts[0]) }
 }
 
 func TestAgenticSynthesizerRejectsInvalidModelOutput(
