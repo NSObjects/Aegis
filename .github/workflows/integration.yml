@@ -115,14 +115,18 @@ jobs:
             -count=1
 
   research:
-    name: Full Stateless Research E2E
+    name: Full Stateless Hosted E2E
     if: ${{ inputs.run_research }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     env:
+      AEGIS_INTEGRATION: "1"
+      AEGIS_FULL_STATELESS_E2E: "1"
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      DEEPSEEK_STRONG_MODEL: ${{ vars.DEEPSEEK_STRONG_MODEL }}
       TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
 
@@ -144,22 +148,13 @@ jobs:
       - name: Verify full E2E secrets
         shell: bash
         run: |
-          test -n "$DEEPSEEK_API_KEY" || {
-            echo "::error::Repository secret DEEPSEEK_API_KEY is required"
-            exit 1
-          }
-          test -n "$TUSHARE_TOKEN" || {
-            echo "::error::Repository secret TUSHARE_TOKEN is required"
-            exit 1
-          }
-          test -n "$TAVILY_API_KEY" || {
-            echo "::error::Repository secret TAVILY_API_KEY is required"
-            exit 1
-          }
+          test -n "$DEEPSEEK_API_KEY" || { echo "::error::Repository secret DEEPSEEK_API_KEY is required"; exit 1; }
+          test -n "$TUSHARE_TOKEN" || { echo "::error::Repository secret TUSHARE_TOKEN is required"; exit 1; }
+          test -n "$TAVILY_API_KEY" || { echo "::error::Repository secret TAVILY_API_KEY is required"; exit 1; }
 
       - name: Install Technical capability dependencies
         run: python -m pip install --upgrade pandas tushare
 
-      - name: Run full stateless production pipeline
+      - name: Run full stateless hosted pipeline
         run: |
-          go run ./cmd/aegis             -config configs/config.yaml             -skills skills             -symbol 600519.SH             -event-lookback 168h             -evidence-store "${{ runner.temp }}/aegis-evidence"
+          go test ./internal/research             -run '^TestWorkflow_Run_FullStatelessHostedIntegration$'             -v             -count=1
