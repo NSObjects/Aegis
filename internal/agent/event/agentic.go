@@ -52,6 +52,9 @@ type AgenticEventMaterialityAnalyzer struct {
 
 var _ EventMaterialityAnalyzer = (*AgenticEventMaterialityAnalyzer)(nil)
 
+type AgenticEventSynthesisAnalyzer struct { Model model.BaseModel[*schema.AgenticMessage] }
+var _ EventSynthesisAnalyzer = (*AgenticEventSynthesisAnalyzer)(nil)
+
 type factExtractionPrompt struct {
 	Symbol    string                   `json:"symbol"`
 	AsOf      string                   `json:"as_of"`
@@ -96,6 +99,8 @@ type impactMechanismPrompt struct {
 	Contradictions []ClaimContradiction `json:"contradictions,omitempty"`
 	FactRelations  []FactRelation       `json:"fact_relations,omitempty"`
 }
+
+type synthesisPrompt struct { Symbol string `json:"symbol"`; AsOf string `json:"as_of"`; Events []Event `json:"events"` }
 
 type materialityPrompt struct {
 	Symbol          string                   `json:"symbol"`
@@ -368,6 +373,13 @@ func (a *AgenticEventImpactMechanismAnalyzer) AnalyzeImpactMechanisms(
 	return output,nil
 }
 
+func (a *AgenticEventSynthesisAnalyzer) Synthesize(ctx context.Context, task capevent.ResearchTask, events []Event) (AnalystSynthesis,error) {
+	if a==nil || a.Model==nil { return AnalystSynthesis{},errors.New("event synthesis analyzer model is required") }
+	var output AnalystSynthesis
+	if err:=generateStrictAgenticJSON(ctx,a.Model,synthesisInstruction,synthesisPrompt{Symbol:task.Symbol,AsOf:task.AsOf.UTC().Format(timeRFC3339),Events:events},&output);err!=nil { return AnalystSynthesis{},fmt.Errorf("event synthesis model: %w",err) }
+	return output,nil
+}
+
 func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 	ctx context.Context,
 	task capevent.ResearchTask,
@@ -606,6 +618,21 @@ const impactMechanismInstruction = "You are the causal impact-mechanism stage of
 	"- Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, price targets, or trading instructions.\n" +
 	"- If the supplied facts do not support a defensible mechanism, return an empty mechanisms array.\n\n" +
 	"Output: {\"mechanisms\":[{\"channel\":\"REVENUE\",\"direction\":\"POSITIVE\",\"supporting_fact_ids\":[\"fact_a\"],\"rationale\":\"string\",\"uncertainty\":\"string\"}]}"
+
+const synthesisInstruction = "You are the final synthesis stage of a News/Event investment research analyst.\n\n" +
+	"Summarize only the supplied already-validated event objects. Do not add facts, evidence, causal steps, or outside knowledge.\n\n" +
+	"Rules:\n" +
+	"- Return JSON only.\n" +
+	"- key_event_ids must contain only supplied event IDs and identify the events that actually drive the conclusion.\n" +
+	"- overall_materiality must be LOW, MEDIUM, HIGH, or UNKNOWN.\n" +
+	"- overall_direction must be POSITIVE, NEGATIVE, MIXED, NEUTRAL, or UNCERTAIN.\n" +
+	"- dominant_impact_channels may contain only channels already present in supplied events' impact_mechanisms.\n" +
+	"- key_risks must be grounded in supplied materiality risks, contradictions, impact uncertainty, or evidence limitations.\n" +
+	"- Never resolve an unresolved contradiction by choosing a winning fact.\n" +
+	"- Never extend an impact mechanism with an unsupported causal step.\n" +
+	"- Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, price targets, expected returns, or portfolio actions.\n" +
+	"- confidence is epistemic confidence in this synthesis, between 0 and 1; it is not a probability of price movement.\n\n" +
+	"Output: {\"summary\":\"string\",\"overall_materiality\":\"MEDIUM\",\"overall_direction\":\"UNCERTAIN\",\"dominant_impact_channels\":[\"REVENUE\"],\"key_event_ids\":[\"event_id\"],\"key_risks\":[\"string\"],\"confidence\":0.7}"
 
 const materialityInstruction = "You are the interpretation stage of an investment research event analyst.\n\n" +
 	"Assess the potential materiality of exactly one already-extracted factual event cluster.\n\n" +

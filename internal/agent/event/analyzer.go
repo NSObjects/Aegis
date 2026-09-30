@@ -99,6 +99,10 @@ type EventImpactMechanismAnalyzer interface {
 	) (ImpactMechanismDetectionResult, error)
 }
 
+type EventSynthesisAnalyzer interface {
+	Synthesize(ctx context.Context, task capevent.ResearchTask, events []Event) (AnalystSynthesis,error)
+}
+
 type EventMaterialityAnalyzer interface {
 	AnalyzeMateriality(
 		ctx context.Context,
@@ -121,6 +125,7 @@ type Analyzer struct {
 	Evolution     EventFactEvolutionDetector
 	Impact        EventImpactMechanismAnalyzer
 	Materiality    EventMaterialityAnalyzer
+	Synthesis      EventSynthesisAnalyzer
 }
 
 func (a Analyzer) Analyze(
@@ -419,6 +424,11 @@ func (a Analyzer) Analyze(
 		},
 	)
 
+	if a.Synthesis == nil { return nil, errors.New("event synthesis analyzer is required") }
+	synthesis, synthesisErr := a.Synthesis.Synthesize(ctx,task,events)
+	if synthesisErr != nil { return nil, fmt.Errorf("synthesize event analyst conclusion: %w",synthesisErr) }
+	synthesis, synthesisErr = normalizeAnalystSynthesis(synthesis,events)
+	if synthesisErr != nil { return nil, fmt.Errorf("normalize event analyst synthesis: %w",synthesisErr) }
 	result := &Context{
 		Symbol:        task.Symbol,
 		RequestedAsOf: task.AsOf.UTC().Format(time.RFC3339),
@@ -427,6 +437,7 @@ func (a Analyzer) Analyze(
 		Evidence:      contextEvidenceIDs(events),
 		Risk:          contextRisks(events),
 		Confidence:    contextConfidence(events),
+		Synthesis:     &synthesis,
 	}
 	if err := Validate(result); err != nil {
 		return nil, fmt.Errorf(

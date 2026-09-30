@@ -401,6 +401,10 @@ func run(
 						&eventagent.AgenticEventMaterialityAnalyzer{
 							Model: eventModel,
 						},
+					Synthesis:
+						&eventagent.AgenticEventSynthesisAnalyzer{
+							Model: eventModel,
+						},
 				},
 			},
 		)

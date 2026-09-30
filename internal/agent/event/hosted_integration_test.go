@@ -80,6 +80,7 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		&AgenticEventImpactMechanismAnalyzer{
 			Model: eventModel,
 		}
+	synthesisAnalyzer := &AgenticEventSynthesisAnalyzer{Model:eventModel}
 	hostedConflictFacts := []Fact{
 		groundedContradictionFact(
 			"hosted_fact_amount_10",
@@ -295,6 +296,7 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 					&AgenticEventMaterialityAnalyzer{
 						Model: eventModel,
 					},
+				Synthesis: synthesisAnalyzer,
 			},
 		},
 	)
