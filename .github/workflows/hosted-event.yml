@@ -1,4 +1,3 @@
-# V2.7.25 hosted verification
 name: Hosted Event E2E
 
 on:
@@ -12,9 +11,6 @@ on:
         description: Event lookback duration
         required: false
         default: 72h
-  push:
-    branches:
-      - feat/v2.7.25-claim-contradiction
 
 permissions:
   contents: read
@@ -25,7 +21,7 @@ concurrency:
 
 jobs:
   hosted-event:
-    name: DeepSeek + Cninfo + CLS
+    name: DeepSeek + Cninfo + CLS + Tavily
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -33,6 +29,7 @@ jobs:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
       DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
       AEGIS_HOSTED_EVENT_SYMBOL: ${{ github.event.inputs.symbol || '600519.SH' }}
       AEGIS_HOSTED_EVENT_LOOKBACK: ${{ github.event.inputs.lookback || '72h' }}
 
@@ -49,7 +46,15 @@ jobs:
       - name: Download modules
         run: go mod download
 
-      - name: Run hosted Cninfo + CLS smoke
+      - name: Verify Tavily secret
+        shell: bash
+        run: |
+          test -n "$TAVILY_API_KEY" || {
+            echo "::error::Repository secret TAVILY_API_KEY is required"
+            exit 1
+          }
+
+      - name: Run hosted Cninfo + CLS + Tavily smoke
         env:
           AEGIS_HOSTED_EVENT_PROVIDERS: "1"
         run: |
