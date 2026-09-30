@@ -62,7 +62,6 @@ func TestValidateEventContext(t *testing.T) {
 		},
 		Evidence: []string{"doc_1"},
 		Confidence: 0.8,
-		Synthesis: &AnalystSynthesis{Summary:"公告影响仍需观察",OverallMateriality:MaterialityMedium,OverallDirection:DirectionUncertain,KeyEventIDs:[]string{"event_1"},Confidence:0.7},
 	}
 	if err := Validate(valid); err != nil {
 		t.Fatalf("Validate() error = %v", err)
