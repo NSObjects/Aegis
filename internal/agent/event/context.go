@@ -78,6 +78,7 @@ type Event struct {
 	Facts               []Fact               `json:"facts"`
 	Contradictions      []ClaimContradiction `json:"contradictions,omitempty"`
 	FactRelations       []FactRelation       `json:"fact_relations,omitempty"`
+	ImpactMechanisms    []ImpactMechanism    `json:"impact_mechanisms,omitempty"`
 	EvidenceDocumentIDs []string             `json:"evidence_document_ids"`
 	SourceCount         int         `json:"source_count"`
 	HasPrimarySource    bool                     `json:"has_primary_source"`
