@@ -83,6 +83,25 @@ func (s *AgenticSynthesizer) Synthesize(
 		)
 	}
 
+	// Some JSON-mode providers may add the documented response-format
+	// discriminator at the top level. Strip only that known transport
+	// metadata; keep strict decoding for every domain field.
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &envelope); err == nil {
+		if kind, ok := envelope["type"]; ok {
+			var value string
+			if err := json.Unmarshal(kind, &value); err != nil || value != "json_object" {
+				return nil, fmt.Errorf("decode research synthesis JSON: invalid type metadata: output=%q", raw)
+			}
+			delete(envelope, "type")
+			normalized, err := json.Marshal(envelope)
+			if err != nil {
+				return nil, fmt.Errorf("normalize research synthesis JSON: %w", err)
+			}
+			raw = string(normalized)
+		}
+	}
+
 	var synthesized Synthesis
 	decoder := json.NewDecoder(
 		strings.NewReader(raw),
