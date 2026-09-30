@@ -549,8 +549,9 @@ func newLiveResearchInput(
 	}
 
 	return research.Input{
-		Symbol:      symbol,
-		MarketQuery: strings.TrimSpace(marketQuery),
+		Symbol:        symbol,
+		RequestedAsOf: cutoff,
+		MarketQuery:   strings.TrimSpace(marketQuery),
 		EventInput: eventagent.Input{
 			Task: eventcap.ResearchTask{
 				ID: fmt.Sprintf(
