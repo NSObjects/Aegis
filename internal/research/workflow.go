@@ -175,6 +175,19 @@ func New(
 					err,
 				)
 			}
+			marketAsOf, err := time.Parse("20060102", marketContext.AsOf)
+			if err != nil {
+				return nil, fmt.Errorf("parse market as_of %q: %w", marketContext.AsOf, err)
+			}
+			cutoffDate := input.RequestedAsOf.In(time.FixedZone("research-cutoff", 8*60*60))
+			cutoffDay := time.Date(cutoffDate.Year(), cutoffDate.Month(), cutoffDate.Day(), 0, 0, 0, 0, time.UTC)
+			if marketAsOf.After(cutoffDay) {
+				return nil, fmt.Errorf(
+					"market as_of %q is after research requested_as_of %q",
+					marketContext.AsOf,
+					input.RequestedAsOf.Format(time.RFC3339Nano),
+				)
+			}
 
 			return &marketResult{
 				Symbol:        input.Symbol,
