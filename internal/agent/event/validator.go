@@ -193,6 +193,9 @@ func validateEvent(v *Event) error {
 			err,
 		)
 	}
+	if err := validateEventFactRelations(v.FactRelations, v.Facts); err != nil {
+		return fmt.Errorf("fact_relations: %w", err)
+	}
 	if v.EvidenceSupport.DocumentCount !=
 		len(eventEvidenceIDs) {
 		return errors.New(
@@ -340,6 +343,29 @@ func validateEventContradictions(
 			)
 		}
 		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateEventFactRelations(values []FactRelation, facts []Fact) error {
+	factIDs := make(map[string]struct{}, len(facts))
+	for _, fact := range facts { factIDs[fact.ID] = struct{}{} }
+	seenIDs := make(map[string]struct{}, len(values))
+	seenRelations := make(map[string]struct{}, len(values))
+	for index, item := range values {
+		if strings.TrimSpace(item.ID) == "" { return fmt.Errorf("relation %d id is required", index) }
+		if !validFactRelationType(item.Type) { return fmt.Errorf("relation %d has invalid type %q", index, item.Type) }
+		if item.FromFactID == item.ToFactID { return fmt.Errorf("relation %d cannot reference the same fact twice", index) }
+		if _, ok := factIDs[item.FromFactID]; !ok { return fmt.Errorf("relation %d references unknown event fact", index) }
+		if _, ok := factIDs[item.ToFactID]; !ok { return fmt.Errorf("relation %d references unknown event fact", index) }
+		if strings.TrimSpace(item.Rationale) == "" { return fmt.Errorf("relation %d rationale is required", index) }
+		expectedID := deterministicFactRelationID(item.Type, item.FromFactID, item.ToFactID)
+		if item.ID != expectedID { return fmt.Errorf("relation %d id is not deterministic", index) }
+		if _, duplicate := seenIDs[item.ID]; duplicate { return fmt.Errorf("relation %d duplicates relation id", index) }
+		seenIDs[item.ID] = struct{}{}
+		key := string(item.Type)+"\\x00"+item.FromFactID+"\\x00"+item.ToFactID
+		if _, duplicate := seenRelations[key]; duplicate { return fmt.Errorf("relation %d is duplicated", index) }
+		seenRelations[key] = struct{}{}
 	}
 	return nil
 }
