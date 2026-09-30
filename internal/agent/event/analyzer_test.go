@@ -53,6 +53,13 @@ func (f contradictionDetectorFunc) DetectContradictions(
 	return f(ctx, task, facts)
 }
 
+type synthesisFunc func(context.Context,capevent.ResearchTask,[]Event)(AnalystSynthesis,error)
+func (f synthesisFunc) Synthesize(ctx context.Context,task capevent.ResearchTask,events []Event)(AnalystSynthesis,error){return f(ctx,task,events)}
+func normalTestSynthesis(events []Event) AnalystSynthesis {
+	ids:=make([]string,0,len(events));for _,event:=range events{ids=append(ids,event.ID)}
+	return AnalystSynthesis{Summary:"validated event synthesis",OverallMateriality:MaterialityMedium,OverallDirection:DirectionUncertain,KeyEventIDs:ids,Confidence:0.7}
+}
+
 type noImpactMechanismAnalyzer struct{}
 
 func (noImpactMechanismAnalyzer) AnalyzeImpactMechanisms(
@@ -206,6 +213,7 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
+		Synthesis: synthesisFunc(func(_ context.Context,_ capevent.ResearchTask,events []Event)(AnalystSynthesis,error){return normalTestSynthesis(events),nil}),
 		Materiality: materialityFunc(
 			func(
 				_ context.Context,
@@ -506,6 +514,7 @@ func TestAnalyzerCarriesContradictionIntoMateriality(
 				}, nil
 			},
 		),
+		Synthesis: synthesisFunc(func(_ context.Context,_ capevent.ResearchTask,events []Event)(AnalystSynthesis,error){return normalTestSynthesis(events),nil}),
 		Materiality: materialityFunc(
 			func(
 				_ context.Context,
@@ -595,6 +604,7 @@ func TestAnalyzerNoEventPath(t *testing.T) {
 		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
+		Synthesis: synthesisFunc(func(_ context.Context,_ capevent.ResearchTask,events []Event)(AnalystSynthesis,error){return normalTestSynthesis(events),nil}),
 		Materiality: materialityFunc(
 			func(
 				context.Context,
@@ -799,6 +809,7 @@ func TestAnalyzerRejectsInvalidClusterCoverage(
 		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
+		Synthesis: synthesisFunc(func(_ context.Context,_ capevent.ResearchTask,events []Event)(AnalystSynthesis,error){return normalTestSynthesis(events),nil}),
 		Materiality: materialityFunc(
 			func(
 				context.Context,
@@ -1062,6 +1073,7 @@ func TestAnalyzerDoesNotCountReprintsAsIndependentSources(
 		Impact:        noImpactMechanismAnalyzer{},
 		Evolution:     noFactEvolutionDetector{},
 		Contradiction: noContradictionDetector{},
+		Synthesis: synthesisFunc(func(_ context.Context,_ capevent.ResearchTask,events []Event)(AnalystSynthesis,error){return normalTestSynthesis(events),nil}),
 		Materiality: materialityFunc(
 			func(
 				_ context.Context,
