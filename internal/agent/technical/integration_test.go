@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -38,11 +37,6 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 		3*time.Minute,
 	)
 	defer cancel()
-
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	appCfg := config.Config{
 		DefaultModel: "default",
@@ -88,25 +82,8 @@ func TestTechnicalAgent_Analyze_Integration(t *testing.T) {
 		)
 	}
 
-	researcher, err := technicalcap.NewScriptResearcher(
-		technicalcap.ScriptResearcherConfig{
-			ScriptPath: filepath.Join(
-				repoRoot,
-				"internal",
-				"capability",
-				"technical",
-				"scripts",
-				"stock_research.py",
-			),
-		},
-	)
-	if err != nil {
-		t.Fatalf(
-			"create technical researcher: %v",
-			err,
-		)
-	}
-
+	researcher, err := technicalcap.NewHTTPResearcher(os.Getenv("TUSHARE_TOKEN"))
+	if err != nil { t.Fatalf("create technical researcher: %v", err) }
 	researchTool, err := technicalcap.NewTool(
 		researcher,
 	)
@@ -322,28 +299,3 @@ func envOrDefault(
 	return fallback
 }
 
-func findRepoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	for {
-		goMod := filepath.Join(
-			dir,
-			"go.mod",
-		)
-
-		if _, err := os.Stat(goMod); err == nil {
-			return dir, nil
-		}
-
-		parent := filepath.Dir(dir)
-
-		if parent == dir {
-			return "", os.ErrNotExist
-		}
-
-		dir = parent
-	}
-}
