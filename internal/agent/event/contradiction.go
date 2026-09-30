@@ -60,10 +60,22 @@ func normalizeContradictions(
 
 	clusterByDocumentID := make(map[string]capevent.EvidenceCluster)
 	for _, cluster := range corroboration.Clusters {
-		for _, documentID := range cluster.DocumentIDs {
-			clusterByDocumentID[
-				strings.TrimSpace(documentID),
-			] = cluster
+		for _, rawDocumentID := range cluster.DocumentIDs {
+			documentID := strings.TrimSpace(
+				rawDocumentID,
+			)
+			if documentID == "" {
+				continue
+			}
+			if existing, duplicate :=
+				clusterByDocumentID[documentID]; duplicate &&
+				existing.ClusterID != cluster.ClusterID {
+				return nil, fmt.Errorf(
+					"contradiction provenance document %q belongs to multiple corroboration clusters",
+					documentID,
+				)
+			}
+			clusterByDocumentID[documentID] = cluster
 		}
 	}
 
