@@ -389,6 +389,10 @@ func run(
 						&eventagent.AgenticEventContradictionDetector{
 							Model: eventModel,
 						},
+					Evolution:
+						&eventagent.AgenticEventFactEvolutionDetector{
+							Model: eventModel,
+						},
 					Materiality:
 						&eventagent.AgenticEventMaterialityAnalyzer{
 							Model: eventModel,
