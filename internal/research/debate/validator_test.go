@@ -4,6 +4,7 @@ import (
 	"Aegis/internal/agent/event"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
+	capevent "Aegis/internal/capability/event"
 	"Aegis/internal/research/synthesis"
 	"strings"
 	"testing"
@@ -83,22 +84,23 @@ func TestValidateStateRejectsRebuttalToNonPriorArgument(t *testing.T) {
 func validArtifact() *synthesis.Artifact {
 	return &synthesis.Artifact{
 		Symbol: "600519.SH",
-		Market: &market.Context{
-			AsOf: "20260930",
-			Regime: market.RegimeRiskOn,
-			Confidence: .8,
-		},
-		Technical: &technical.Context{
-			Symbol: "600519.SH",
-			RequestedAsOf: "20260930",
-			EffectiveAsOf: "20260930",
-			Status: technical.StatusNormal,
-		},
+		Market: &market.Context{AsOf: "20260930", Regime: market.RegimeMixed, Evidence: []string{"market"}, Confidence: .8},
+		Technical: &technical.Context{Symbol: "600519.SH", RequestedAsOf: "20260930", EffectiveAsOf: "20260930", Status: technical.StatusNormal, Snapshot: &technical.Snapshot{Close: 1500}, Evidence: []string{"technical"}, Confidence: .8},
 		Event: &event.Context{
-			Symbol: "600519.SH",
-			Status: event.StatusNormal,
-			Events: []event.Event{{ID: "event-1", Type: event.EventOther, Headline: "event", FactSummary: "event", EvidenceDocumentIDs: []string{"doc-1"}, SourceCount: 1, FactConfidence: .7, Materiality: event.Materiality{Level: event.MaterialityLow, Direction: event.DirectionUncertain, Horizon: event.HorizonUnknown, Rationale: "test", Confidence: .7}}},
-			Confidence: .7,
+			Symbol: "600519.SH", RequestedAsOf: "2026-09-30T15:00:00Z", Status: event.StatusNormal,
+			Events: []event.Event{{
+				ID: "event-1", Type: event.EventOther, Headline: "event", FactSummary: "grounded event",
+				Facts: []event.Fact{{
+					ID: "fact-1", Type: event.EventOther, Headline: "event", Summary: "grounded event",
+					Groundings: []event.EvidenceGrounding{{DocumentID: "doc-1", Quote: "grounded event", StartByte: 0, EndByte: len("grounded event")}},
+					EvidenceDocumentIDs: []string{"doc-1"}, Confidence: .8,
+				}},
+				EvidenceDocumentIDs: []string{"doc-1"}, SourceCount: 1, HasPrimarySource: true,
+				EvidenceSupport: capevent.EvidenceSupport{DocumentCount: 1, IndependentEvidenceCount: 1, IndependentSourceCount: 1, PrimarySourcePresent: true, SupportClass: capevent.EvidenceSupportPrimaryOnly},
+				FactConfidence: .8,
+				Materiality: event.Materiality{Level: event.MaterialityLow, Direction: event.DirectionUncertain, Horizon: event.HorizonUnknown, Rationale: "test", Confidence: .7},
+			}},
+			Evidence: []string{"doc-1"}, Confidence: .7,
 		},
 		Synthesis: synthesis.Synthesis{Summary: "synthesis", Confidence: .7},
 	}
