@@ -124,6 +124,38 @@ func TestNormalizeContradictionsCollapsesReversedDuplicate(
 	if len(got) != 1 {
 		t.Fatalf("contradictions = %d, want 1", len(got))
 	}
+	if got[0].Rationale != "same conflict reversed" {
+		t.Fatalf(
+			"deterministic rationale = %q",
+			got[0].Rationale,
+		)
+	}
+
+	_, err = normalizeContradictions(
+		[]DetectedContradiction{
+			{
+				LeftFactID:  "fact_a",
+				RightFactID: "fact_b",
+				Kind:        ContradictionStatus,
+				Rationale:   "status conflict",
+			},
+			{
+				LeftFactID:  "fact_b",
+				RightFactID: "fact_a",
+				Kind:        ContradictionValue,
+				Rationale:   "value conflict",
+			},
+		},
+		facts,
+		corroboration,
+	)
+	if err == nil ||
+		!strings.Contains(
+			err.Error(),
+			"conflicting kind",
+		) {
+		t.Fatalf("conflicting kind error = %v", err)
+	}
 }
 
 func TestNormalizeContradictionsRejectsInvalidRelations(
