@@ -67,7 +67,7 @@ func normalizeContradictions(
 		}
 	}
 
-	seen := make(map[string]struct{}, len(detected))
+	seen := make(map[string]int, len(detected))
 	result := make([]ClaimContradiction, 0, len(detected))
 	for index, raw := range detected {
 		leftID := strings.TrimSpace(raw.LeftFactID)
@@ -112,10 +112,21 @@ func normalizeContradictions(
 			left, right = right, left
 		}
 		key := leftID + "\x00" + rightID
-		if _, duplicate := seen[key]; duplicate {
+		if existingIndex, duplicate := seen[key]; duplicate {
+			existing := &result[existingIndex]
+			if existing.Kind != raw.Kind {
+				return nil, fmt.Errorf(
+					"contradiction %d repeats fact pair with conflicting kind %q versus %q",
+					index,
+					raw.Kind,
+					existing.Kind,
+				)
+			}
+			if rationale < existing.Rationale {
+				existing.Rationale = rationale
+			}
 			continue
 		}
-		seen[key] = struct{}{}
 
 		leftEvidence := uniqueSortedStrings(
 			left.EvidenceDocumentIDs,
@@ -154,6 +165,7 @@ func normalizeContradictions(
 			)
 		}
 
+		seen[key] = len(result)
 		result = append(result, ClaimContradiction{
 			LeftFactID:               leftID,
 			RightFactID:              rightID,
