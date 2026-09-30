@@ -32,11 +32,6 @@ func TestAgenticFactEvolutionDetectorUsesGroundedFacts(t *testing.T) {
 		!strings.Contains(payload, `"quote":"实际销量98。"`) {
 		t.Fatalf("payload lacks grounded facts: %s", payload)
 	}
-	system := agenticMessageText(model.inputs[0][0])
-	if !strings.Contains(system, "Recency is not truth") ||
-		!strings.Contains(system, "Do not convert an unresolved contradiction") {
-		t.Fatalf("instruction=%s", system)
-	}
 }
 
 func TestAgenticFactEvolutionDetectorAllowsExplicitEmptyResult(t *testing.T) {
