@@ -52,6 +52,7 @@ type MaterialityInput struct {
 	Type            EventType
 	Facts           []Fact
 	Contradictions  []ClaimContradiction
+	FactRelations   []FactRelation
 	EvidenceSupport capevent.EvidenceSupport
 }
 
@@ -79,6 +80,14 @@ type EventContradictionDetector interface {
 	) (ContradictionDetectionResult, error)
 }
 
+type EventFactEvolutionDetector interface {
+	DetectFactEvolution(
+		ctx context.Context,
+		task capevent.ResearchTask,
+		facts []Fact,
+	) (FactEvolutionDetectionResult, error)
+}
+
 type EventMaterialityAnalyzer interface {
 	AnalyzeMateriality(
 		ctx context.Context,
@@ -98,6 +107,7 @@ type Analyzer struct {
 	Extractor      EventFactExtractor
 	Clusterer      EventClusterer
 	Contradiction EventContradictionDetector
+	Evolution     EventFactEvolutionDetector
 	Materiality    EventMaterialityAnalyzer
 }
 
@@ -290,6 +300,29 @@ func (a Analyzer) Analyze(
 				)
 			}
 			item.Contradictions = contradictions
+
+			if a.Evolution == nil {
+				return nil, errors.New(
+					"event fact evolution detector is required for multi-fact event clusters",
+				)
+			}
+			evolution, evolutionErr := a.Evolution.DetectFactEvolution(
+				ctx, task, clusterFacts,
+			)
+			if evolutionErr != nil {
+				return nil, fmt.Errorf(
+					"detect event %q fact evolution: %w", eventID, evolutionErr,
+				)
+			}
+			relations, relationErr := normalizeFactRelations(
+				evolution.Relations, clusterFacts,
+			)
+			if relationErr != nil {
+				return nil, fmt.Errorf(
+					"normalize event %q fact evolution: %w", eventID, relationErr,
+				)
+			}
+			item.FactRelations = relations
 		}
 
 		support, supportErr :=
@@ -321,6 +354,7 @@ func (a Analyzer) Analyze(
 					Type:            item.Type,
 					Facts:           clusterFacts,
 					Contradictions:  item.Contradictions,
+					FactRelations:   item.FactRelations,
 					EvidenceSupport: support,
 				},
 			)
