@@ -254,6 +254,69 @@ func TestAgenticEventUnderstandingStages(t *testing.T) {
 	}
 }
 
+func TestAgenticContradictionDetectorReturnsFactRelations(
+	t *testing.T,
+) {
+	model := &eventModel{
+		responses: []*schema.AgenticMessage{
+			assistantJSON(
+				`{"contradictions":[{"left_fact_id":"fact_a","right_fact_id":"fact_b","kind":"VALUE","rationale":"同一合同金额分别为10亿元和12亿元，不能同时成立。"}]}`,
+			),
+		},
+	}
+	detector := &AgenticEventContradictionDetector{
+		Model: model,
+	}
+	result, err := detector.DetectContradictions(
+		context.Background(),
+		capevent.ResearchTask{
+			Symbol: "600519.SH",
+			AsOf: time.Date(
+				2026, 9, 29, 15, 0, 0, 0,
+				time.UTC,
+			),
+		},
+		[]Fact{
+			groundedContradictionFact(
+				"fact_a",
+				"doc_a",
+				"合同金额为10亿元。",
+			),
+			groundedContradictionFact(
+				"fact_b",
+				"doc_b",
+				"合同金额为12亿元。",
+			),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Contradictions) != 1 ||
+		result.Contradictions[0].Kind !=
+			ContradictionValue {
+		t.Fatalf("result = %+v", result)
+	}
+	if len(model.inputs) != 1 {
+		t.Fatalf(
+			"model calls = %d, want 1",
+			len(model.inputs),
+		)
+	}
+	system := eventAgenticTestText(
+		model.inputs[0][0],
+	)
+	if !strings.Contains(
+		system,
+		"Do not decide which fact is true",
+	) {
+		t.Fatalf(
+			"contradiction instruction = %s",
+			system,
+		)
+	}
+}
+
 func TestAgenticFactExtractorRepairsAmbiguousGroundingOnce(
 	t *testing.T,
 ) {
