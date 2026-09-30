@@ -196,6 +196,9 @@ func validateEvent(v *Event) error {
 	if err := validateEventFactRelations(v.FactRelations, v.Facts); err != nil {
 		return fmt.Errorf("fact_relations: %w", err)
 	}
+	if err := validateEventImpactMechanisms(v.ImpactMechanisms, v.Facts); err != nil {
+		return fmt.Errorf("impact_mechanisms: %w", err)
+	}
 	if v.EvidenceSupport.DocumentCount !=
 		len(eventEvidenceIDs) {
 		return errors.New(
@@ -366,6 +369,26 @@ func validateEventFactRelations(values []FactRelation, facts []Fact) error {
 		key := string(item.Type)+"\\x00"+item.FromFactID+"\\x00"+item.ToFactID
 		if _, duplicate := seenRelations[key]; duplicate { return fmt.Errorf("relation %d is duplicated", index) }
 		seenRelations[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateEventImpactMechanisms(values []ImpactMechanism, facts []Fact) error {
+	factIDs:=make(map[string]struct{},len(facts))
+	for _,fact:=range facts { factIDs[fact.ID]=struct{}{} }
+	seen:=make(map[string]struct{},len(values))
+	for index,item:=range values {
+		if strings.TrimSpace(item.ID)=="" { return fmt.Errorf("impact mechanism %d id is required",index) }
+		if !validImpactChannel(item.Channel) { return fmt.Errorf("impact mechanism %d has invalid channel %q",index,item.Channel) }
+		if !validImpactDirection(item.Direction) { return fmt.Errorf("impact mechanism %d has invalid direction %q",index,item.Direction) }
+		if strings.TrimSpace(item.Rationale)=="" { return fmt.Errorf("impact mechanism %d rationale is required",index) }
+		ids:=uniqueSortedStrings(item.SupportingFactIDs)
+		if len(ids)==0 || !equalStringSlices(ids,item.SupportingFactIDs) { return fmt.Errorf("impact mechanism %d supporting fact ids must be non-empty, unique, and sorted",index) }
+		for _,id:=range ids { if _,ok:=factIDs[id];!ok { return fmt.Errorf("impact mechanism %d references unknown event fact",index) } }
+		expected:=deterministicImpactMechanismID(item.Channel,item.Direction,ids)
+		if item.ID!=expected { return fmt.Errorf("impact mechanism %d id is not deterministic",index) }
+		if _,dup:=seen[item.ID];dup { return fmt.Errorf("impact mechanism %d is duplicated",index) }
+		seen[item.ID]=struct{}{}
 	}
 	return nil
 }
