@@ -436,6 +436,42 @@ func TestAgenticStagesRejectNonStrictJSON(t *testing.T) {
 	}
 }
 
+func TestAgenticContradictionDetectorRejectsTruthWinnerField(
+	t *testing.T,
+) {
+	detector := &AgenticEventContradictionDetector{
+		Model: &eventModel{
+			responses: []*schema.AgenticMessage{
+				assistantJSON(
+					`{"contradictions":[{"left_fact_id":"fact_a","right_fact_id":"fact_b","kind":"VALUE","rationale":"conflict","winner_fact_id":"fact_a"}]}`,
+				),
+			},
+		},
+	}
+	_, err := detector.DetectContradictions(
+		context.Background(),
+		capevent.ResearchTask{
+			Symbol: "600519.SH",
+			AsOf: time.Date(
+				2026, 9, 29, 15, 0, 0, 0,
+				time.UTC,
+			),
+		},
+		[]Fact{
+			groundedContradictionFact(
+				"fact_a", "doc_a", "A",
+			),
+			groundedContradictionFact(
+				"fact_b", "doc_b", "B",
+			),
+		},
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestAgenticStagesPropagateModelError(t *testing.T) {
 	extractor := &AgenticEventFactExtractor{
 		Model: &eventModel{
