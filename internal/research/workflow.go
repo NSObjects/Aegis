@@ -89,6 +89,7 @@ type Workflow struct {
 
 type marketResult struct {
 	Symbol        string
+	RequestedAsOf time.Time
 	MarketContext *market.Context
 }
 
@@ -191,6 +192,7 @@ func New(
 
 			return &marketResult{
 				Symbol:        input.Symbol,
+				RequestedAsOf: input.RequestedAsOf,
 				MarketContext: marketContext,
 			}, nil
 		},
