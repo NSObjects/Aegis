@@ -75,8 +75,9 @@ type Event struct {
 	Headline            string      `json:"headline"`
 	FactSummary         string      `json:"fact_summary"`
 	Entities            []string    `json:"entities,omitempty"`
-	Facts               []Fact      `json:"facts"`
-	EvidenceDocumentIDs []string    `json:"evidence_document_ids"`
+	Facts               []Fact               `json:"facts"`
+	Contradictions      []ClaimContradiction `json:"contradictions,omitempty"`
+	EvidenceDocumentIDs []string             `json:"evidence_document_ids"`
 	SourceCount         int         `json:"source_count"`
 	HasPrimarySource    bool                     `json:"has_primary_source"`
 	EvidenceSupport     capevent.EvidenceSupport `json:"evidence_support"`

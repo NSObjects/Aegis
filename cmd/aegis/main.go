@@ -385,6 +385,10 @@ func run(
 						&eventagent.AgenticEventClusterer{
 							Model: eventModel,
 						},
+					Contradiction:
+						&eventagent.AgenticEventContradictionDetector{
+							Model: eventModel,
+						},
 					Materiality:
 						&eventagent.AgenticEventMaterialityAnalyzer{
 							Model: eventModel,

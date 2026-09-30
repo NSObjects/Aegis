@@ -68,6 +68,95 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 			err,
 		)
 	}
+	contradictionDetector :=
+		&AgenticEventContradictionDetector{
+			Model: eventModel,
+		}
+	hostedConflictFacts := []Fact{
+		groundedContradictionFact(
+			"hosted_fact_amount_10",
+			"hosted_doc_amount_10",
+			"同一合同金额为10亿元。",
+		),
+		groundedContradictionFact(
+			"hosted_fact_amount_12",
+			"hosted_doc_amount_12",
+			"同一合同金额为12亿元。",
+		),
+	}
+	hostedConflict, err :=
+		contradictionDetector.
+			DetectContradictions(
+				ctx,
+				capevent.ResearchTask{
+					Symbol: "600519.SH",
+					AsOf: time.Date(
+						2026, 9, 30, 0, 0, 0, 0,
+						time.UTC,
+					),
+				},
+				hostedConflictFacts,
+			)
+	if err != nil {
+		t.Fatalf(
+			"hosted contradiction detector: %v",
+			err,
+		)
+	}
+	if len(hostedConflict.Contradictions) != 1 ||
+		hostedConflict.Contradictions[0].Kind !=
+			ContradictionValue {
+		t.Fatalf(
+			"hosted contradiction result = %+v",
+			hostedConflict,
+		)
+	}
+	hostedNormalizedConflict, err :=
+		normalizeContradictions(
+			hostedConflict.Contradictions,
+			hostedConflictFacts,
+			capevent.CorroborationResult{
+				Clusters: []capevent.EvidenceCluster{
+					{
+						ClusterID:
+							"hosted_cluster_amount_10",
+						DocumentIDs: []string{
+							"hosted_doc_amount_10",
+						},
+						SourceKeys: []string{
+							"domain:source-a.example",
+						},
+					},
+					{
+						ClusterID:
+							"hosted_cluster_amount_12",
+						DocumentIDs: []string{
+							"hosted_doc_amount_12",
+						},
+						SourceKeys: []string{
+							"domain:source-b.example",
+						},
+					},
+				},
+			},
+		)
+	if err != nil {
+		t.Fatalf(
+			"normalize hosted contradiction: %v",
+			err,
+		)
+	}
+	if len(hostedNormalizedConflict) != 1 ||
+		!hostedNormalizedConflict[0].
+			IndependentEvidenceSides ||
+		!hostedNormalizedConflict[0].
+			IndependentSourceSides {
+		t.Fatalf(
+			"hosted normalized contradiction = %+v",
+			hostedNormalizedConflict,
+		)
+	}
+
 	planningModel, err := manager.GetToolCalling(
 		ctx,
 		"event",
@@ -155,6 +244,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 					&AgenticEventClusterer{
 						Model: eventModel,
 					},
+				Contradiction:
+					contradictionDetector,
 				Materiality:
 					&AgenticEventMaterialityAnalyzer{
 						Model: eventModel,
@@ -352,6 +443,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 	maxIndependentEvidence := 0
 	groundedFactCount := 0
 	groundingSpanCount := 0
+	contradictionCount := 0
+	independentContradictionCount := 0
 	for _, item := range result.Events {
 		supportClasses[
 			item.EvidenceSupport.SupportClass,
@@ -375,6 +468,15 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 			groundingSpanCount +=
 				len(fact.Groundings)
 		}
+		contradictionCount +=
+			len(item.Contradictions)
+		for _, contradiction :=
+			range item.Contradictions {
+			if contradiction.
+				IndependentEvidenceSides {
+				independentContradictionCount++
+			}
+		}
 	}
 
 	diagnostic := struct {
@@ -391,6 +493,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		MaxIndependentEvidence int `json:"max_event_independent_evidence_count"`
 		GroundedFactCount       int `json:"grounded_fact_count"`
 		GroundingSpanCount      int `json:"grounding_span_count"`
+		ContradictionCount      int `json:"contradiction_count"`
+		IndependentContradictionCount int `json:"independent_contradiction_count"`
 	}{
 		Symbol:        result.Symbol,
 		RequestedAsOf: result.RequestedAsOf,
@@ -405,6 +509,9 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		MaxIndependentEvidence: maxIndependentEvidence,
 		GroundedFactCount:       groundedFactCount,
 		GroundingSpanCount:      groundingSpanCount,
+		ContradictionCount:      contradictionCount,
+		IndependentContradictionCount:
+			independentContradictionCount,
 	}
 	data, err := json.MarshalIndent(
 		diagnostic,

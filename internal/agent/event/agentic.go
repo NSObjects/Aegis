@@ -25,6 +25,13 @@ type AgenticEventClusterer struct {
 
 var _ EventClusterer = (*AgenticEventClusterer)(nil)
 
+type AgenticEventContradictionDetector struct {
+	Model model.BaseModel[*schema.AgenticMessage]
+}
+
+var _ EventContradictionDetector =
+	(*AgenticEventContradictionDetector)(nil)
+
 type AgenticEventMaterialityAnalyzer struct {
 	Model model.BaseModel[*schema.AgenticMessage]
 }
@@ -56,12 +63,19 @@ type clusteringPrompt struct {
 	Facts  []Fact `json:"facts"`
 }
 
+type contradictionPrompt struct {
+	Symbol string `json:"symbol"`
+	AsOf   string `json:"as_of"`
+	Facts  []Fact `json:"facts"`
+}
+
 type materialityPrompt struct {
 	Symbol          string                   `json:"symbol"`
 	AsOf            string                   `json:"as_of"`
 	EventID         string                   `json:"event_id"`
 	Type            EventType                `json:"type"`
 	Facts           []materialityFact        `json:"facts"`
+	Contradictions  []ClaimContradiction     `json:"contradictions,omitempty"`
 	EvidenceSupport capevent.EvidenceSupport `json:"evidence_support"`
 }
 
@@ -235,6 +249,46 @@ func (a *AgenticEventClusterer) Cluster(
 	return output, nil
 }
 
+func (a *AgenticEventContradictionDetector) DetectContradictions(
+	ctx context.Context,
+	task capevent.ResearchTask,
+	facts []Fact,
+) (ContradictionDetectionResult, error) {
+	if a == nil || a.Model == nil {
+		return ContradictionDetectionResult{}, errors.New(
+			"event contradiction detector model is required",
+		)
+	}
+	if len(facts) < 2 {
+		return ContradictionDetectionResult{
+			Contradictions: make(
+				[]DetectedContradiction,
+				0,
+			),
+		}, nil
+	}
+
+	var output ContradictionDetectionResult
+	if err := generateStrictAgenticJSON(
+		ctx,
+		a.Model,
+		contradictionDetectionInstruction,
+		contradictionPrompt{
+			Symbol: task.Symbol,
+			AsOf: task.AsOf.UTC().
+				Format(timeRFC3339),
+			Facts: facts,
+		},
+		&output,
+	); err != nil {
+		return ContradictionDetectionResult{}, fmt.Errorf(
+			"event contradiction detection model: %w",
+			err,
+		)
+	}
+	return output, nil
+}
+
 func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 	ctx context.Context,
 	task capevent.ResearchTask,
@@ -278,6 +332,7 @@ func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 			EventID:         input.EventID,
 			Type:            input.Type,
 			Facts:           facts,
+			Contradictions:  input.Contradictions,
 			EvidenceSupport: input.EvidenceSupport,
 		},
 		&output,
@@ -420,6 +475,21 @@ const eventClusteringInstruction = "You are the event clustering stage of an inv
 	"- Duplicate reports of the same underlying event should be grouped together.\n\n" +
 	"Output: {\"clusters\":[{\"fact_ids\":[\"fact_x\",\"fact_y\"]}]}"
 
+const contradictionDetectionInstruction = "You are the claim contradiction detection stage of an investment research event analyst.\n\n" +
+	"The supplied facts have already been grounded to exact evidence spans and clustered as the same underlying real-world event. Identify only factual claims that cannot both be true under the same relevant subject, event, time, and measurement scope.\n\n" +
+	"Rules:\n" +
+	"- Return JSON only.\n" +
+	"- Use only supplied fact IDs.\n" +
+	"- Do not decide which fact is true, more credible, newer, or better sourced.\n" +
+	"- Do not output source quality, confidence scores, winners, or recommendations.\n" +
+	"- Do not mark later update vs earlier state, different reporting periods, different measurement/accounting scopes, estimate vs actual, omission, partial information, or merely different compatible details as contradictions.\n" +
+	"- A contradiction requires that both factual claims cannot simultaneously hold under the same scope.\n" +
+	"- kind must be VALUE, STATUS, DATE, QUANTITY, IDENTITY, or OTHER.\n" +
+	"- rationale must briefly state why the two claims are mutually incompatible without choosing a winner.\n" +
+	"- Return each conflicting pair at most once.\n" +
+	"- If there is no explicit contradiction, return an empty contradictions array.\n\n" +
+	"Output: {\"contradictions\":[{\"left_fact_id\":\"fact_a\",\"right_fact_id\":\"fact_b\",\"kind\":\"VALUE\",\"rationale\":\"string\"}]}"
+
 const materialityInstruction = "You are the interpretation stage of an investment research event analyst.\n\n" +
 	"Assess the potential materiality of exactly one already-extracted factual event cluster.\n\n" +
 	"Rules:\n" +
@@ -427,6 +497,9 @@ const materialityInstruction = "You are the interpretation stage of an investmen
 	"- Do not rewrite or add facts.\n" +
 	"- Use only the supplied facts.\n" +
 	"- Fact groundings are already runtime-verified exact spans. Treat them as provenance for the supplied fact, not as permission to infer additional facts from surrounding or outside text.\n" +
+	"- Contradictions are unresolved mutually incompatible grounded claims. Do not choose a winning claim.\n" +
+	"- Contradiction presence is epistemic uncertainty, not economic materiality; never raise or lower materiality level solely because a contradiction exists.\n" +
+	"- If an unresolved contradiction prevents a supported directional interpretation, use UNCERTAIN and expose the conflict in risks.\n" +
 	"- Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, price targets, or trading instructions.\n" +
 	"- level must be LOW, MEDIUM, HIGH, or UNKNOWN.\n" +
 	"- direction must be POSITIVE, NEGATIVE, MIXED, NEUTRAL, or UNCERTAIN.\n" +

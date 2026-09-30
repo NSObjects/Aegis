@@ -288,6 +288,7 @@ func TestNewsEventAgentTwoRoundResearchProducesNormalContext(
 						}, nil
 					},
 				),
+				Contradiction: noContradictionDetector{},
 				Materiality: materialityFunc(
 					func(
 						_ context.Context,

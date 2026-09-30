@@ -51,6 +51,7 @@ type MaterialityInput struct {
 	EventID         string
 	Type            EventType
 	Facts           []Fact
+	Contradictions  []ClaimContradiction
 	EvidenceSupport capevent.EvidenceSupport
 }
 
@@ -70,6 +71,14 @@ type EventClusterer interface {
 	) (EventClusterResult, error)
 }
 
+type EventContradictionDetector interface {
+	DetectContradictions(
+		ctx context.Context,
+		task capevent.ResearchTask,
+		facts []Fact,
+	) (ContradictionDetectionResult, error)
+}
+
 type EventMaterialityAnalyzer interface {
 	AnalyzeMateriality(
 		ctx context.Context,
@@ -86,9 +95,10 @@ type AnalyzeInput struct {
 }
 
 type Analyzer struct {
-	Extractor   EventFactExtractor
-	Clusterer   EventClusterer
-	Materiality EventMaterialityAnalyzer
+	Extractor      EventFactExtractor
+	Clusterer      EventClusterer
+	Contradiction EventContradictionDetector
+	Materiality    EventMaterialityAnalyzer
 }
 
 func (a Analyzer) Analyze(
@@ -246,6 +256,42 @@ func (a Analyzer) Analyze(
 			clusterFacts,
 			documentByID,
 		)
+
+		if len(clusterFacts) > 1 {
+			if a.Contradiction == nil {
+				return nil, errors.New(
+					"event contradiction detector is required for multi-fact event clusters",
+				)
+			}
+			detection, detectErr :=
+				a.Contradiction.DetectContradictions(
+					ctx,
+					task,
+					clusterFacts,
+				)
+			if detectErr != nil {
+				return nil, fmt.Errorf(
+					"detect event %q contradictions: %w",
+					eventID,
+					detectErr,
+				)
+			}
+			contradictions, normalizeErr :=
+				normalizeContradictions(
+					detection.Contradictions,
+					clusterFacts,
+					corroboration,
+				)
+			if normalizeErr != nil {
+				return nil, fmt.Errorf(
+					"normalize event %q contradictions: %w",
+					eventID,
+					normalizeErr,
+				)
+			}
+			item.Contradictions = contradictions
+		}
+
 		support, supportErr :=
 			(capevent.EvidenceSupportAnalyzer{}).
 				Analyze(
@@ -274,6 +320,7 @@ func (a Analyzer) Analyze(
 					EventID:         eventID,
 					Type:            item.Type,
 					Facts:           clusterFacts,
+					Contradictions:  item.Contradictions,
 					EvidenceSupport: support,
 				},
 			)
