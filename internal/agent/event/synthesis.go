@@ -41,6 +41,9 @@ func normalizeAnalystSynthesis(raw AnalystSynthesis, events []Event) (AnalystSyn
 	}
 	sort.Slice(channels,func(i,j int)bool{return channels[i]<channels[j]})
 	raw.DominantImpactChannels=channels
+	allowedChannels:=map[ImpactChannel]struct{}{}
+	for _,event:=range events { for _,mechanism:=range event.ImpactMechanisms { allowedChannels[mechanism.Channel]=struct{}{} } }
+	for _,channel:=range channels { if _,ok:=allowedChannels[channel];!ok { return AnalystSynthesis{},fmt.Errorf("analyst synthesis impact channel %q is not present in event mechanisms",channel) } }
 	raw.KeyRisks=uniqueSortedStrings(raw.KeyRisks)
 	return raw,nil
 }
