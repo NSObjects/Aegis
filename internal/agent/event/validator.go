@@ -184,6 +184,15 @@ func validateEvent(v *Event) error {
 			"evidence_document_ids are required",
 		)
 	}
+	if err := validateEventContradictions(
+		v.Contradictions,
+		v.Facts,
+	); err != nil {
+		return fmt.Errorf(
+			"contradictions: %w",
+			err,
+		)
+	}
 	if v.EvidenceSupport.DocumentCount !=
 		len(eventEvidenceIDs) {
 		return errors.New(
@@ -229,6 +238,109 @@ func validateEvent(v *Event) error {
 		return err
 	}
 
+	return nil
+}
+
+func validateEventContradictions(
+	values []ClaimContradiction,
+	facts []Fact,
+) error {
+	factByID := make(map[string]Fact, len(facts))
+	for _, fact := range facts {
+		factByID[fact.ID] = fact
+	}
+	seen := make(map[string]struct{}, len(values))
+	for index, item := range values {
+		if item.LeftFactID == "" ||
+			item.RightFactID == "" {
+			return fmt.Errorf(
+				"contradiction %d requires both fact ids",
+				index,
+			)
+		}
+		if item.LeftFactID >= item.RightFactID {
+			return fmt.Errorf(
+				"contradiction %d fact ids must be in canonical order",
+				index,
+			)
+		}
+		if !validContradictionKind(item.Kind) {
+			return fmt.Errorf(
+				"contradiction %d has invalid kind %q",
+				index,
+				item.Kind,
+			)
+		}
+		if strings.TrimSpace(item.Rationale) == "" {
+			return fmt.Errorf(
+				"contradiction %d rationale is required",
+				index,
+			)
+		}
+		left, leftOK := factByID[item.LeftFactID]
+		right, rightOK := factByID[item.RightFactID]
+		if !leftOK || !rightOK {
+			return fmt.Errorf(
+				"contradiction %d references unknown event fact",
+				index,
+			)
+		}
+		if !equalStringSlices(
+			uniqueSortedStrings(
+				item.LeftEvidenceDocumentIDs,
+			),
+			uniqueSortedStrings(
+				left.EvidenceDocumentIDs,
+			),
+		) {
+			return fmt.Errorf(
+				"contradiction %d left evidence is inconsistent",
+				index,
+			)
+		}
+		if !equalStringSlices(
+			uniqueSortedStrings(
+				item.RightEvidenceDocumentIDs,
+			),
+			uniqueSortedStrings(
+				right.EvidenceDocumentIDs,
+			),
+		) {
+			return fmt.Errorf(
+				"contradiction %d right evidence is inconsistent",
+				index,
+			)
+		}
+		expectedEvidence := uniqueSortedStrings(
+			append(
+				append(
+					[]string(nil),
+					left.EvidenceDocumentIDs...,
+				),
+				right.EvidenceDocumentIDs...,
+			),
+		)
+		if !equalStringSlices(
+			uniqueSortedStrings(
+				item.EvidenceDocumentIDs,
+			),
+			expectedEvidence,
+		) {
+			return fmt.Errorf(
+				"contradiction %d evidence union is inconsistent",
+				index,
+			)
+		}
+		key := item.LeftFactID +
+			"\x00" + item.RightFactID
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf(
+				"contradiction %d duplicates a fact pair",
+				index,
+			)
+		}
+		seen[key] = struct{}{}
+	}
 	return nil
 }
 
