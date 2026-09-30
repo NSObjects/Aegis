@@ -47,6 +47,7 @@ func Validate(v *Context) error {
 
 	switch v.Status {
 	case StatusNormal:
+		if v.Synthesis == nil { return errors.New("synthesis is required for NORMAL status") }
 		if len(v.Events) == 0 {
 			return errors.New(
 				"events are required for NORMAL status",
@@ -58,12 +59,14 @@ func Validate(v *Context) error {
 			)
 		}
 	case StatusNoEvent:
+		if v.Synthesis != nil { return errors.New("synthesis must be empty for NO_EVENT status") }
 		if len(v.Events) != 0 {
 			return errors.New(
 				"events must be empty for NO_EVENT status",
 			)
 		}
 	case StatusInsufficientEvidence:
+		if v.Synthesis != nil { return errors.New("synthesis must be empty for INSUFFICIENT_EVIDENCE status") }
 		if len(v.Events) != 0 {
 			return errors.New(
 				"events must be empty for INSUFFICIENT_EVIDENCE status",
@@ -100,6 +103,9 @@ func Validate(v *Context) error {
 		seenEventIDs[item.ID] = struct{}{}
 	}
 
+	if v.Status == StatusNormal {
+		if err := validateAnalystSynthesis(*v.Synthesis, v.Events); err != nil { return fmt.Errorf("synthesis: %w",err) }
+	}
 	return nil
 }
 
