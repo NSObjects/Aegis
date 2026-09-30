@@ -226,7 +226,7 @@ func TestLiveAgentCapturesThenResearchesFrozenSnapshots(
 					},
 				),
 				Contradiction: noContradictionDetector{},
-		Materiality: materialityFunc(
+				Materiality: materialityFunc(
 					func(
 						context.Context,
 						capevent.ResearchTask,
