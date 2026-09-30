@@ -150,6 +150,23 @@ func TestAgenticSynthesizerProducesValidatedArtifact(
 	}
 }
 
+func TestAgenticSynthesizerAcceptsJSONModeTypeMetadata(t *testing.T) {
+ synthesizer := &AgenticSynthesizer{Model:&synthesisModel{response:synthesisAssistantMessage(
+  `{"type":"json_object","summary":"跨域证据有限。","risks":["技术数据缺失"],"confidence":0.42}`,
+ )}}
+ artifact,err:=synthesizer.Synthesize(context.Background(),validSynthesisInput())
+ if err!=nil { t.Fatalf("Synthesize() error = %v",err) }
+ if artifact.Synthesis.Confidence!=0.42 { t.Fatalf("confidence = %v",artifact.Synthesis.Confidence) }
+}
+
+func TestAgenticSynthesizerRejectsUnexpectedTypeMetadata(t *testing.T) {
+ synthesizer := &AgenticSynthesizer{Model:&synthesisModel{response:synthesisAssistantMessage(
+  `{"type":"other","summary":"x","confidence":0.5}`,
+ )}}
+ _,err:=synthesizer.Synthesize(context.Background(),validSynthesisInput())
+ if err==nil || !strings.Contains(err.Error(),"invalid type metadata") { t.Fatalf("error = %v",err) }
+}
+
 func TestAgenticSynthesizerRejectsInvalidModelOutput(
 	t *testing.T,
 ) {
