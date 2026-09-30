@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 func ValidateInput(
@@ -63,12 +64,19 @@ func ValidateInput(
 		)
 	}
 
-	if input.Technical.RequestedAsOf !=
-		input.Market.AsOf {
+	marketAsOf, err := time.Parse("20060102", input.Market.AsOf)
+	if err != nil {
+		return fmt.Errorf("invalid market as_of %q: %w", input.Market.AsOf, err)
+	}
+	technicalRequestedAsOf, err := time.Parse("20060102", input.Technical.RequestedAsOf)
+	if err != nil {
+		return fmt.Errorf("invalid technical requested_as_of %q: %w", input.Technical.RequestedAsOf, err)
+	}
+	if marketAsOf.After(technicalRequestedAsOf) {
 		return fmt.Errorf(
-			"technical requested_as_of %q does not match market as_of %q",
-			input.Technical.RequestedAsOf,
+			"market as_of %q is after technical requested_as_of %q",
 			input.Market.AsOf,
+			input.Technical.RequestedAsOf,
 		)
 	}
 
