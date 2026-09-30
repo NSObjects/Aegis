@@ -47,7 +47,6 @@ func Validate(v *Context) error {
 
 	switch v.Status {
 	case StatusNormal:
-		if v.Synthesis == nil { return errors.New("synthesis is required for NORMAL status") }
 		if len(v.Events) == 0 {
 			return errors.New(
 				"events are required for NORMAL status",
@@ -103,7 +102,8 @@ func Validate(v *Context) error {
 		seenEventIDs[item.ID] = struct{}{}
 	}
 
-	if v.Status == StatusNormal {
+	if v.Synthesis != nil {
+		if v.Status != StatusNormal { return errors.New("synthesis is only valid for NORMAL status") }
 		if err := validateAnalystSynthesis(*v.Synthesis, v.Events); err != nil { return fmt.Errorf("synthesis: %w",err) }
 	}
 	return nil
