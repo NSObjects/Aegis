@@ -77,7 +77,7 @@ func TestWorkflow_Run_FullStatelessHostedIntegration(t *testing.T) {
 	});if err!=nil{t.Fatal(err)}
 	cutoff:=time.Now().UTC()
 	result,err:=workflow.Run(ctx,Input{
-		Symbol:"600519.SH",
+		Symbol:"600519.SH",RequestedAsOf:cutoff,
 		EventInput:eventagent.Input{Task:eventcap.ResearchTask{
 			ID:"full-stateless-e2e",Symbol:"600519.SH",Objective:"研究近期公告、新闻与重要事件并形成可追溯事件上下文",InformationNeed:eventcap.NeedEventEvidence,AsOf:cutoff,
 			TimeRange:eventcap.TimeRange{Start:cutoff.Add(-7*24*time.Hour),End:cutoff},
