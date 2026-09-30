@@ -39,6 +39,21 @@ func (f clustererFunc) Cluster(
 	return f(ctx, task, facts)
 }
 
+type noContradictionDetector struct{}
+
+func (noContradictionDetector) DetectContradictions(
+	context.Context,
+	capevent.ResearchTask,
+	[]Fact,
+) (ContradictionDetectionResult, error) {
+	return ContradictionDetectionResult{
+		Contradictions: make(
+			[]DetectedContradiction,
+			0,
+		),
+	}, nil
+}
+
 type materialityFunc func(
 	context.Context,
 	capevent.ResearchTask,
@@ -152,6 +167,7 @@ func TestAnalyzerBuildsValidatedEventContext(t *testing.T) {
 				}, nil
 			},
 		),
+		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
 			func(
 				_ context.Context,
@@ -379,6 +395,7 @@ func TestAnalyzerNoEventPath(t *testing.T) {
 				return EventClusterResult{}, nil
 			},
 		),
+		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
 			func(
 				context.Context,
@@ -580,6 +597,7 @@ func TestAnalyzerRejectsInvalidClusterCoverage(
 				}, nil
 			},
 		),
+		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
 			func(
 				context.Context,
@@ -840,6 +858,7 @@ func TestAnalyzerDoesNotCountReprintsAsIndependentSources(
 				}, nil
 			},
 		),
+		Contradiction: noContradictionDetector{},
 		Materiality: materialityFunc(
 			func(
 				_ context.Context,
