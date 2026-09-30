@@ -76,6 +76,10 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		&AgenticEventFactEvolutionDetector{
 			Model: eventModel,
 		}
+	impactAnalyzer :=
+		&AgenticEventImpactMechanismAnalyzer{
+			Model: eventModel,
+		}
 	hostedConflictFacts := []Fact{
 		groundedContradictionFact(
 			"hosted_fact_amount_10",
@@ -177,6 +181,23 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		t.Fatalf("hosted fact evolution result = %+v", hostedRelations)
 	}
 
+	hostedImpactFacts := []Fact{
+		groundedEvolutionFact("hosted_contract", "hosted_doc_contract", "公司签订一项金额50亿元的销售合同，合同将分期履行。"),
+	}
+	hostedImpact, err := impactAnalyzer.AnalyzeImpactMechanisms(
+		ctx,
+		capevent.ResearchTask{Symbol:"600519.SH",AsOf:time.Date(2026,9,30,0,0,0,0,time.UTC)},
+		hostedImpactFacts,nil,nil,
+	)
+	if err != nil { t.Fatalf("hosted impact mechanism analyzer: %v",err) }
+	hostedMechanisms, err := normalizeImpactMechanisms(hostedImpact.Mechanisms,hostedImpactFacts)
+	if err != nil { t.Fatalf("normalize hosted impact mechanisms: %v",err) }
+	for _, mechanism := range hostedMechanisms {
+		if mechanism.Channel == "" || len(mechanism.SupportingFactIDs)==0 {
+			t.Fatalf("invalid hosted impact mechanism: %+v",mechanism)
+		}
+	}
+
 	planningModel, err := manager.GetToolCalling(
 		ctx,
 		"event",
@@ -268,6 +289,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 					contradictionDetector,
 				Evolution:
 					evolutionDetector,
+				Impact:
+					impactAnalyzer,
 				Materiality:
 					&AgenticEventMaterialityAnalyzer{
 						Model: eventModel,
