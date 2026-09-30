@@ -72,6 +72,10 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 		&AgenticEventContradictionDetector{
 			Model: eventModel,
 		}
+	evolutionDetector :=
+		&AgenticEventFactEvolutionDetector{
+			Model: eventModel,
+		}
 	hostedConflictFacts := []Fact{
 		groundedContradictionFact(
 			"hosted_fact_amount_10",
@@ -155,6 +159,22 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 			"hosted normalized contradiction = %+v",
 			hostedNormalizedConflict,
 		)
+	}
+
+	hostedEvolutionFacts := []Fact{
+		groundedEvolutionFact("hosted_forecast", "hosted_doc_forecast", "公司预计全年销量为100万件。"),
+		groundedEvolutionFact("hosted_actual", "hosted_doc_actual", "公司披露全年实际销量为98万件。"),
+	}
+	hostedEvolution, err := evolutionDetector.DetectFactEvolution(
+		ctx,
+		capevent.ResearchTask{Symbol:"600519.SH", AsOf:time.Date(2026,9,30,0,0,0,0,time.UTC)},
+		hostedEvolutionFacts,
+	)
+	if err != nil { t.Fatalf("hosted fact evolution detector: %v", err) }
+	hostedRelations, err := normalizeFactRelations(hostedEvolution.Relations, hostedEvolutionFacts)
+	if err != nil { t.Fatalf("normalize hosted fact evolution: %v", err) }
+	if len(hostedRelations) > 0 && hostedRelations[0].Type != FactRelationRealizes {
+		t.Fatalf("hosted fact evolution result = %+v", hostedRelations)
 	}
 
 	planningModel, err := manager.GetToolCalling(
@@ -246,6 +266,8 @@ func TestLiveEventHostedIntegration(t *testing.T) {
 					},
 				Contradiction:
 					contradictionDetector,
+				Evolution:
+					evolutionDetector,
 				Materiality:
 					&AgenticEventMaterialityAnalyzer{
 						Model: eventModel,
