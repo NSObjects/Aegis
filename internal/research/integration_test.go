@@ -18,7 +18,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 )
 
-func TestWorkflow_Run_Integration(t *testing.T) {
+func TestLegacyWorkflow_Run_Integration(t *testing.T) {
 	if os.Getenv("AEGIS_INTEGRATION") != "1" {
 		t.Skip("set AEGIS_INTEGRATION=1 to run integration test")
 	}
