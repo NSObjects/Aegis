@@ -14,7 +14,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +27,6 @@ func TestWorkflow_Run_FullStatelessHostedIntegration(t *testing.T) {
 		if strings.TrimSpace(os.Getenv(name))=="" { t.Fatalf("%s is required",name) }
 	}
 	ctx,cancel:=context.WithTimeout(context.Background(),15*time.Minute);defer cancel()
-	root,err:=findRepoRoot();if err!=nil{t.Fatal(err)}
 	modelName:=envOrDefault("DEEPSEEK_MODEL","deepseek-chat")
 	strongName:=envOrDefault("DEEPSEEK_STRONG_MODEL",modelName)
 	cfg:=config.Config{DefaultModel:"default",Models:map[string]config.ModelConfig{
@@ -40,7 +38,7 @@ func TestWorkflow_Run_FullStatelessHostedIntegration(t *testing.T) {
 	strongModel,err:=models.Get(ctx,"strong");if err!=nil{t.Fatal(err)}
 	planningModel,err:=models.GetToolCalling(ctx,"default");if err!=nil{t.Fatal(err)}
 
-	researcher,err:=technicalcap.NewScriptResearcher(technicalcap.ScriptResearcherConfig{ScriptPath:filepath.Join(root,"internal","capability","technical","scripts","stock_research.py")});if err!=nil{t.Fatal(err)}
+	researcher,err:=technicalcap.NewHTTPResearcher(os.Getenv("TUSHARE_TOKEN"));if err!=nil{t.Fatal(err)}
 	researchTool,err:=technicalcap.NewTool(researcher);if err!=nil{t.Fatal(err)}
 	technicalAgent,err:=technical.New(ctx,technical.Config{Model:defaultModel,Tools:[]tool.BaseTool{researchTool},MaxIterations:30});if err!=nil{t.Fatal(err)}
 	tradingAgent,err:=trading.New(ctx,trading.Config{Model:strongModel,MaxIterations:30});if err!=nil{t.Fatal(err)}
