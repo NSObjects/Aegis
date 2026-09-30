@@ -14,7 +14,7 @@ on:
         default: true
         type: boolean
       run_research:
-        description: "Run the V2.6 hosted MarketContext → Technical → Trading pipeline"
+        description: "Run the full stateless production Research → Decision pipeline"
         required: true
         default: true
         type: boolean
@@ -115,18 +115,16 @@ jobs:
             -count=1
 
   research:
-    name: V2.6 Research Pipeline
+    name: Full Stateless Research E2E
     if: ${{ inputs.run_research }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     env:
-      AEGIS_INTEGRATION: "1"
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
-      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
-      DEEPSEEK_STRONG_MODEL: ${{ vars.DEEPSEEK_STRONG_MODEL }}
       TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
 
     steps:
       - name: Checkout
@@ -143,7 +141,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Verify integration secrets
+      - name: Verify full E2E secrets
         shell: bash
         run: |
           test -n "$DEEPSEEK_API_KEY" || {
@@ -154,13 +152,14 @@ jobs:
             echo "::error::Repository secret TUSHARE_TOKEN is required"
             exit 1
           }
+          test -n "$TAVILY_API_KEY" || {
+            echo "::error::Repository secret TAVILY_API_KEY is required"
+            exit 1
+          }
 
-      - name: Install Python dependencies
+      - name: Install Technical capability dependencies
         run: python -m pip install --upgrade pandas tushare
 
-      - name: Run V2.6 research pipeline integration
+      - name: Run full stateless production pipeline
         run: |
-          go test ./internal/research \
-            -run '^TestWorkflow_Run_HostedIntegration$' \
-            -v \
-            -count=1
+          go run ./cmd/aegis             -config configs/config.yaml             -skills skills             -symbol 600519.SH             -event-lookback 168h             -evidence-store "${{ runner.temp }}/aegis-evidence"
