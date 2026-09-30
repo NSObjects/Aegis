@@ -131,7 +131,10 @@ func TestNormalizeContradictionsRejectsInvalidRelations(
 ) {
 	facts := []Fact{
 		groundedContradictionFact(
-			"fact_a", "doc_a", "fact",
+			"fact_a", "doc_a", "fact A",
+		),
+		groundedContradictionFact(
+			"fact_b", "doc_b", "fact B",
 		),
 	}
 	corroboration := capevent.CorroborationResult{
@@ -140,6 +143,11 @@ func TestNormalizeContradictionsRejectsInvalidRelations(
 				ClusterID:   "cluster_a",
 				DocumentIDs: []string{"doc_a"},
 				SourceKeys:  []string{"domain:a.example"},
+			},
+			{
+				ClusterID:   "cluster_b",
+				DocumentIDs: []string{"doc_b"},
+				SourceKeys:  []string{"domain:b.example"},
 			},
 		},
 	}
@@ -176,7 +184,7 @@ func TestNormalizeContradictionsRejectsInvalidRelations(
 				Kind:        "TRUTH",
 				Rationale:   "x",
 			},
-			want: "outside the event cluster",
+			want: "invalid kind",
 		},
 	}
 	for _, tc := range cases {
