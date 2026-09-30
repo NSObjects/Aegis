@@ -77,6 +77,7 @@ type Event struct {
 	Entities            []string    `json:"entities,omitempty"`
 	Facts               []Fact               `json:"facts"`
 	Contradictions      []ClaimContradiction `json:"contradictions,omitempty"`
+	FactRelations       []FactRelation       `json:"fact_relations,omitempty"`
 	EvidenceDocumentIDs []string             `json:"evidence_document_ids"`
 	SourceCount         int         `json:"source_count"`
 	HasPrimarySource    bool                     `json:"has_primary_source"`

@@ -288,6 +288,7 @@ func TestNewsEventAgentTwoRoundResearchProducesNormalContext(
 						}, nil
 					},
 				),
+				Evolution:     noFactEvolutionDetector{},
 				Contradiction: noContradictionDetector{},
 				Materiality: materialityFunc(
 					func(

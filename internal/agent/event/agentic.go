@@ -32,6 +32,13 @@ type AgenticEventContradictionDetector struct {
 var _ EventContradictionDetector =
 	(*AgenticEventContradictionDetector)(nil)
 
+type AgenticEventFactEvolutionDetector struct {
+	Model model.BaseModel[*schema.AgenticMessage]
+}
+
+var _ EventFactEvolutionDetector =
+	(*AgenticEventFactEvolutionDetector)(nil)
+
 type AgenticEventMaterialityAnalyzer struct {
 	Model model.BaseModel[*schema.AgenticMessage]
 }
@@ -69,6 +76,12 @@ type contradictionPrompt struct {
 	Facts  []Fact `json:"facts"`
 }
 
+type factEvolutionPrompt struct {
+	Symbol string `json:"symbol"`
+	AsOf   string `json:"as_of"`
+	Facts  []Fact `json:"facts"`
+}
+
 type materialityPrompt struct {
 	Symbol          string                   `json:"symbol"`
 	AsOf            string                   `json:"as_of"`
@@ -76,6 +89,7 @@ type materialityPrompt struct {
 	Type            EventType                `json:"type"`
 	Facts           []materialityFact        `json:"facts"`
 	Contradictions  []ClaimContradiction     `json:"contradictions,omitempty"`
+	FactRelations   []FactRelation           `json:"fact_relations,omitempty"`
 	EvidenceSupport capevent.EvidenceSupport `json:"evidence_support"`
 }
 
@@ -289,6 +303,32 @@ func (a *AgenticEventContradictionDetector) DetectContradictions(
 	return output, nil
 }
 
+func (a *AgenticEventFactEvolutionDetector) DetectFactEvolution(
+	ctx context.Context,
+	task capevent.ResearchTask,
+	facts []Fact,
+) (FactEvolutionDetectionResult, error) {
+	if a == nil || a.Model == nil {
+		return FactEvolutionDetectionResult{}, errors.New(
+			"event fact evolution detector model is required",
+		)
+	}
+	if len(facts) < 2 {
+		return FactEvolutionDetectionResult{Relations: []DetectedFactRelation{}}, nil
+	}
+	var output FactEvolutionDetectionResult
+	if err := generateStrictAgenticJSON(
+		ctx, a.Model, factEvolutionInstruction,
+		factEvolutionPrompt{Symbol: task.Symbol, AsOf: task.AsOf.UTC().Format(timeRFC3339), Facts: facts},
+		&output,
+	); err != nil {
+		return FactEvolutionDetectionResult{}, fmt.Errorf(
+			"event fact evolution detection model: %w", err,
+		)
+	}
+	return output, nil
+}
+
 func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 	ctx context.Context,
 	task capevent.ResearchTask,
@@ -333,6 +373,7 @@ func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 			Type:            input.Type,
 			Facts:           facts,
 			Contradictions:  input.Contradictions,
+			FactRelations:   input.FactRelations,
 			EvidenceSupport: input.EvidenceSupport,
 		},
 		&output,
@@ -490,6 +531,24 @@ const contradictionDetectionInstruction = "You are the claim contradiction detec
 	"- If there is no explicit contradiction, return an empty contradictions array.\n\n" +
 	"Output: {\"contradictions\":[{\"left_fact_id\":\"fact_a\",\"right_fact_id\":\"fact_b\",\"kind\":\"VALUE\",\"rationale\":\"string\"}]}"
 
+const factEvolutionInstruction = "You are the fact temporal evolution stage of an investment research event analyst.\n\n" +
+	"The supplied grounded facts belong to the same event cluster. Identify only defensible directional evolution relationships between claims.\n\n" +
+	"Rules:\n" +
+	"- Return JSON only.\n" +
+	"- Use only supplied fact IDs.\n" +
+	"- from_fact_id is the later/evolving claim; to_fact_id is the earlier claim.\n" +
+	"- UPDATES means a later claim updates an earlier claim for the same subject and scope.\n" +
+	"- SUPERSEDES means a later claim explicitly replaces an earlier effective value or state.\n" +
+	"- FINALIZES means a final or official claim resolves a preliminary or provisional claim.\n" +
+	"- REALIZES means an actual result realizes a prior forecast or guidance claim.\n" +
+	"- Do not create a relation merely because facts mention the same entity, occur at different times, are similar, have different values, or come from different source authorities.\n" +
+	"- Different periods without an explicit evolution relationship are not related.\n" +
+	"- Do not decide which fact is true or more credible. Recency is not truth.\n" +
+	"- Do not convert an unresolved contradiction into an evolution relation merely to resolve it.\n" +
+	"- rationale must explain the concrete evolution semantics without outside facts.\n" +
+	"- If no defensible relation exists, return an empty relations array.\n\n" +
+	"Output: {\"relations\":[{\"type\":\"UPDATES\",\"from_fact_id\":\"fact_new\",\"to_fact_id\":\"fact_old\",\"rationale\":\"string\"}]}"
+
 const materialityInstruction = "You are the interpretation stage of an investment research event analyst.\n\n" +
 	"Assess the potential materiality of exactly one already-extracted factual event cluster.\n\n" +
 	"Rules:\n" +
@@ -499,6 +558,8 @@ const materialityInstruction = "You are the interpretation stage of an investmen
 	"- Fact groundings are already runtime-verified exact spans. Treat them as provenance for the supplied fact, not as permission to infer additional facts from surrounding or outside text.\n" +
 	"- Contradictions are unresolved mutually incompatible grounded claims. Do not choose a winning claim.\n" +
 	"- Contradiction presence is epistemic uncertainty, not economic materiality; never raise or lower materiality level solely because a contradiction exists.\n" +
+	"- FactRelations describe temporal/evolution semantics only. Relation existence is not economic materiality and does not prove the later claim is true.\n" +
+	"- Use FactRelations only to distinguish earlier forecast/preliminary/state claims from later actual/final/update claims when the supplied relation supports that interpretation.\n" +
 	"- If an unresolved contradiction prevents a supported directional interpretation, use UNCERTAIN and expose the conflict in risks.\n" +
 	"- Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, price targets, or trading instructions.\n" +
 	"- level must be LOW, MEDIUM, HIGH, or UNKNOWN.\n" +
