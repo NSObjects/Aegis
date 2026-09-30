@@ -213,7 +213,8 @@ func validWorkflowInput() Input {
 		time.FixedZone("Asia/Shanghai", 8*60*60),
 	)
 	return Input{
-		Symbol: "600519.SH",
+		Symbol:        "600519.SH",
+		RequestedAsOf: asOf,
 		EventInput: eventagent.Input{
 			Task: eventcap.ResearchTask{
 				ID:              "event-research",
@@ -296,7 +297,7 @@ func TestWorkflowRunUsesResearchArtifactBoundary(
 
 	if technicalAgent.input.Symbol != "600519.SH" ||
 		technicalAgent.input.RequestedAsOf !=
-			marketContext.AsOf {
+			"20260923" {
 		t.Fatalf(
 			"technical input = %+v",
 			technicalAgent.input,
@@ -535,6 +536,28 @@ func (s *signalingSynthesizer) Synthesize(
 		input,
 		opts...,
 	)
+}
+
+func TestWorkflowRejectsEventAsOfMismatchBeforeGraphWork(t *testing.T) {
+	marketAgent := &fakeMarketAgent{result: validMarketContext()}
+	eventAgent := &fakeEventAgent{result: validEventContext()}
+	workflow, err := New(context.Background(), Config{
+		MarketAgent: marketAgent,
+		TechnicalAgent: &fakeTechnicalAgent{result: validTechnicalContext()},
+		EventAgent: eventAgent,
+		Synthesizer: &fakeSynthesizer{},
+		TradingAgent: &fakeArtifactTradingAgent{result: validDecision()},
+	})
+	if err != nil { t.Fatal(err) }
+	input := validWorkflowInput()
+	input.EventInput.Task.AsOf = input.RequestedAsOf.Add(-time.Second)
+	_, err = workflow.Run(context.Background(), input)
+	if err == nil || !strings.Contains(err.Error(), "does not match research requested_as_of") {
+		t.Fatalf("error = %v, want as_of mismatch", err)
+	}
+	if marketAgent.calls != 0 || eventAgent.calls != 0 {
+		t.Fatalf("graph work started before input rejection: market=%d event=%d", marketAgent.calls, eventAgent.calls)
+	}
 }
 
 func TestWorkflowRejectsEventTaskSymbolMismatchBeforeGraphWork(
