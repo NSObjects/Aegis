@@ -228,6 +228,7 @@ func TestLiveAgentCapturesThenResearchesFrozenSnapshots(
 				Impact:        noImpactMechanismAnalyzer{},
 				Evolution:     noFactEvolutionDetector{},
 				Contradiction: noContradictionDetector{},
+				Synthesis: synthesisFunc(func(_ context.Context,_ capevent.ResearchTask,events []Event)(AnalystSynthesis,error){return normalTestSynthesis(events),nil}),
 				Materiality: materialityFunc(
 					func(
 						context.Context,
