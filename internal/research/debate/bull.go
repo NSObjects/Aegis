@@ -23,7 +23,7 @@ type bullInput struct {
 	Round    int                 `json:"round"`
 }
 
-func (r *BullResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.Artifact, state *State, round int, opts ...model.Option) (Turn, error) {
+func (r *BullResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.Artifact, state *State, round int) (Turn, error) {
 	if r == nil || r.Model == nil { return Turn{}, errors.New("bull researcher model is required") }
 	if err := synthesis.Validate(artifact); err != nil { return Turn{}, fmt.Errorf("invalid research artifact: %w", err) }
 	if state == nil { state = &State{Symbol: artifact.Symbol} }
@@ -35,7 +35,7 @@ func (r *BullResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.A
 	response, err := r.Model.Generate(ctx, []*schema.AgenticMessage{
 		schema.SystemAgenticMessage(bullInstruction),
 		schema.UserAgenticMessage(string(payload)),
-	}, opts...)
+	})
 	if err != nil { return Turn{}, fmt.Errorf("generate bull researcher turn: %w", err) }
 	raw := strings.TrimSpace(debateAssistantText(response))
 	if raw == "" { return Turn{}, errors.New("bull researcher returned empty output") }

@@ -22,7 +22,7 @@ type bearInput struct {
 	Round    int                 `json:"round"`
 }
 
-func (r *BearResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.Artifact, state *State, round int, opts ...model.Option) (Turn, error) {
+func (r *BearResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.Artifact, state *State, round int) (Turn, error) {
 	if r == nil || r.Model == nil { return Turn{}, errors.New("bear researcher model is required") }
 	if err := synthesis.Validate(artifact); err != nil { return Turn{}, fmt.Errorf("invalid research artifact: %w", err) }
 	if state == nil { state = &State{Symbol: artifact.Symbol} }
@@ -34,7 +34,7 @@ func (r *BearResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.A
 	response, err := r.Model.Generate(ctx, []*schema.AgenticMessage{
 		schema.SystemAgenticMessage(bearInstruction),
 		schema.UserAgenticMessage(string(payload)),
-	}, opts...)
+	})
 	if err != nil { return Turn{}, fmt.Errorf("generate bear researcher turn: %w", err) }
 	raw := strings.TrimSpace(debateAssistantText(response))
 	if raw == "" { return Turn{}, errors.New("bear researcher returned empty output") }
