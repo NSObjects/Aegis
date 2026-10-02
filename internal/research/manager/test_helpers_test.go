@@ -11,24 +11,30 @@ func validManagerArtifact() *synthesis.Artifact {
 	return &synthesis.Artifact{
 		Symbol: "600519.SH",
 		Market: &market.Context{
-			AsOf: "20260930",
-			MarketView: "neutral market",
-			RiskLevel: "MEDIUM",
+			AsOf:      "20260930",
+			Regime:    market.RegimeMixed,
+			Evidence:  []string{"market evidence"},
+			Confidence: .6,
 		},
 		Technical: &technical.Context{
-			Symbol: "600519.SH",
+			Symbol:        "600519.SH",
 			RequestedAsOf: "20260930",
-			DataAsOf: "20260930",
-			Status: "NORMAL",
-			Summary: "constructive technical context",
+			EffectiveAsOf: "20260930",
+			Status:        technical.StatusNormal,
+			Snapshot: &technical.Snapshot{
+				Open: 1, High: 1, Low: 1, Close: 1, PreClose: 1,
+			},
+			Evidence:   []string{"technical evidence"},
+			Confidence: .7,
 		},
 		Event: &event.Context{
-			Symbol: "600519.SH",
-			AsOf: "20260930",
-			Status: "NO_EVENT",
+			Symbol:        "600519.SH",
+			RequestedAsOf: "2026-09-30T15:00:00+08:00",
+			Status:        event.StatusNoEvent,
+			Confidence:    .5,
 		},
 		Synthesis: synthesis.Synthesis{
-			Summary: "mixed evidence",
+			Summary:    "mixed evidence",
 			Confidence: .6,
 		},
 	}
