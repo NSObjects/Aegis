@@ -9,14 +9,37 @@ import (
 )
 
 func Validate(plan *ResearchPlan, artifact *synthesis.Artifact, state *debate.State) error {
+	if err := ValidateForTrading(plan, artifact); err != nil {
+		return err
+	}
+	if err := debate.ValidateState(state, artifact); err != nil {
+		return fmt.Errorf("invalid debate state: %w", err)
+	}
+
+	argumentIDs := map[string]struct{}{}
+	for _, turn := range state.Turns {
+		for _, argument := range turn.Arguments {
+			argumentIDs[strings.TrimSpace(argument.ID)] = struct{}{}
+		}
+	}
+	if err := validateKnownArgumentIDs(plan.AcceptedArgumentIDs, "accepted_argument_ids", argumentIDs); err != nil {
+		return err
+	}
+	if err := validateKnownArgumentIDs(plan.UnresolvedArgumentIDs, "unresolved_argument_ids", argumentIDs); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateForTrading validates the artifact-bound ResearchPlan contract without
+// requiring the upstream DebateState. Full debate provenance is validated once
+// at the Research Manager boundary by Validate.
+func ValidateForTrading(plan *ResearchPlan, artifact *synthesis.Artifact) error {
 	if plan == nil {
 		return errors.New("research plan is nil")
 	}
 	if err := synthesis.Validate(artifact); err != nil {
 		return fmt.Errorf("invalid research artifact: %w", err)
-	}
-	if err := debate.ValidateState(state, artifact); err != nil {
-		return fmt.Errorf("invalid debate state: %w", err)
 	}
 	symbol := strings.TrimSpace(plan.Symbol)
 	if symbol == "" {
@@ -37,18 +60,11 @@ func Validate(plan *ResearchPlan, artifact *synthesis.Artifact, state *debate.St
 		return fmt.Errorf("confidence out of range: %f", plan.Confidence)
 	}
 
-	argumentIDs := map[string]struct{}{}
-	for _, turn := range state.Turns {
-		for _, argument := range turn.Arguments {
-			argumentIDs[strings.TrimSpace(argument.ID)] = struct{}{}
-		}
-	}
-
 	seen := map[string]string{}
-	if err := validateArgumentIDs(plan.AcceptedArgumentIDs, "accepted_argument_ids", argumentIDs, seen); err != nil {
+	if err := validateArgumentIDShape(plan.AcceptedArgumentIDs, "accepted_argument_ids", seen); err != nil {
 		return err
 	}
-	if err := validateArgumentIDs(plan.UnresolvedArgumentIDs, "unresolved_argument_ids", argumentIDs, seen); err != nil {
+	if err := validateArgumentIDShape(plan.UnresolvedArgumentIDs, "unresolved_argument_ids", seen); err != nil {
 		return err
 	}
 	for i, insight := range plan.Opportunities {
@@ -69,19 +85,26 @@ func Validate(plan *ResearchPlan, artifact *synthesis.Artifact, state *debate.St
 	return nil
 }
 
-func validateArgumentIDs(ids []string, field string, known map[string]struct{}, seen map[string]string) error {
+func validateArgumentIDShape(ids []string, field string, seen map[string]string) error {
 	for i, raw := range ids {
 		id := strings.TrimSpace(raw)
 		if id == "" {
 			return fmt.Errorf("%s[%d] is empty", field, i)
 		}
-		if _, ok := known[id]; !ok {
-			return fmt.Errorf("%s[%d] %q does not exist in debate", field, i, id)
-		}
 		if prior, ok := seen[id]; ok {
 			return fmt.Errorf("argument id %q appears in both %s and %s", id, prior, field)
 		}
 		seen[id] = field
+	}
+	return nil
+}
+
+func validateKnownArgumentIDs(ids []string, field string, known map[string]struct{}) error {
+	for i, raw := range ids {
+		id := strings.TrimSpace(raw)
+		if _, ok := known[id]; !ok {
+			return fmt.Errorf("%s[%d] %q does not exist in debate", field, i, id)
+		}
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/decision"
 	"Aegis/internal/research/synthesis"
+	"Aegis/internal/research/manager"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,7 @@ type Input struct {
 type Agent struct {
 	runner         *adk.TypedRunner[*schema.AgenticMessage]
 	artifactRunner *adk.TypedRunner[*schema.AgenticMessage]
+	planRunner     *adk.TypedRunner[*schema.AgenticMessage]
 }
 
 func New(
@@ -78,9 +80,22 @@ func New(
 		)
 	}
 
+	planRunner, err := newTradingRunner(
+		ctx,
+		cfg.Model,
+		maxIterations,
+		"trading_agent_research_plan",
+		"Consumes a validated ResearchArtifact plus ResearchPlan and produces a structured decision.",
+		researchPlanInstruction,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create research-plan trading runner: %w", err)
+	}
+
 	return &Agent{
 		runner:         legacyRunner,
 		artifactRunner: artifactRunner,
+		planRunner:     planRunner,
 	}, nil
 }
 
@@ -249,6 +264,39 @@ func (a *Agent) AnalyzeArtifact(
 		query,
 		opts...,
 	)
+}
+
+
+func (a *Agent) AnalyzeResearchPlan(
+	ctx context.Context,
+	artifact *synthesis.Artifact,
+	plan *manager.ResearchPlan,
+	opts ...adk.AgentRunOption,
+) (*decision.Decision, error) {
+	if a == nil || a.planRunner == nil {
+		return nil, errors.New("trading research-plan runner is not initialized")
+	}
+	if err := manager.ValidateForTrading(plan, artifact); err != nil {
+		return nil, fmt.Errorf("invalid research plan: %w", err)
+	}
+
+	artifactJSON, err := json.Marshal(artifact)
+	if err != nil {
+		return nil, fmt.Errorf("marshal research artifact: %w", err)
+	}
+	planJSON, err := json.Marshal(plan)
+	if err != nil {
+		return nil, fmt.Errorf("marshal research plan: %w", err)
+	}
+
+	symbol := strings.TrimSpace(artifact.Symbol)
+	query := fmt.Sprintf(
+		"研究标的：%s\n\n上游 research_artifact：\n%s\n\n上游 research_plan：\n%s\n\n请同时消费已验证的 ResearchArtifact 与 ResearchPlan，独立形成最终 Decision。",
+		symbol,
+		string(artifactJSON),
+		string(planJSON),
+	)
+	return runDecision(ctx, a.planRunner, symbol, query, opts...)
 }
 
 func runDecision(

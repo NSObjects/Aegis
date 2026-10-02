@@ -6,6 +6,7 @@ import (
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/decision"
 	"Aegis/internal/research/synthesis"
+	"Aegis/internal/research/manager"
 	"context"
 	"errors"
 	"strings"
@@ -566,5 +567,125 @@ func TestAgentAnalyzeArtifactRejectsInvalidArtifactBeforeModel(
 			"model calls = %d, want 0",
 			model.calls,
 		)
+	}
+}
+
+
+func validResearchPlan() *manager.ResearchPlan {
+	return &manager.ResearchPlan{
+		Symbol:     "600519.SH",
+		Conclusion: manager.ConclusionBalanced,
+		Summary:    "bullish technical evidence and bearish market evidence remain in tension",
+		Opportunities: []manager.Insight{
+			{
+				Claim:      "technical setup remains constructive enough to monitor",
+				References: []synthesis.Reference{{Domain: synthesis.DomainTechnical}},
+			},
+		},
+		Risks: []manager.Insight{
+			{
+				Claim:      "market breadth remains a headwind",
+				References: []synthesis.Reference{{Domain: synthesis.DomainMarket}},
+			},
+		},
+		AcceptedArgumentIDs:   []string{"bull-r1-a1"},
+		UnresolvedArgumentIDs: []string{"bear-r1-a1"},
+		TradingConstraints:    []string{"respect unresolved market weakness"},
+		Confidence:            0.64,
+	}
+}
+
+func TestAgentAnalyzeResearchPlan(t *testing.T) {
+	model := &fakeModel{
+		output: `{
+			"symbol":"600519.SH",
+			"market_view":"多 Agent 研究仍存在分歧",
+			"evidence":["技术研究仍提供可跟踪依据"],
+			"risk":["市场弱势论点尚未解决"],
+			"action":"WATCH",
+			"confidence":0.61
+		}`,
+	}
+	a, err := New(context.Background(), Config{Model: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := a.AnalyzeResearchPlan(
+		context.Background(),
+		validResearchArtifact(),
+		validResearchPlan(),
+	)
+	if err != nil {
+		t.Fatalf("AnalyzeResearchPlan() error = %v", err)
+	}
+	if result.Action != decision.ActionWatch {
+		t.Fatalf("action = %q", result.Action)
+	}
+
+	var userText string
+	for _, message := range model.inputs[0] {
+		if message == nil || message.Role != schema.AgenticRoleTypeUser {
+			continue
+		}
+		for _, block := range message.ContentBlocks {
+			if block != nil && block.UserInputText != nil {
+				userText += block.UserInputText.Text
+			}
+		}
+	}
+	if !strings.Contains(userText, "research_artifact") ||
+		!strings.Contains(userText, "research_plan") ||
+		!strings.Contains(userText, "BALANCED") {
+		t.Fatalf("research-plan trading input = %s", userText)
+	}
+}
+
+func TestAgentAnalyzeResearchPlanRejectsInvalidPlanBeforeModel(t *testing.T) {
+	model := &fakeModel{}
+	a, err := New(context.Background(), Config{Model: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := validResearchPlan()
+	plan.Symbol = "000001.SZ"
+
+	_, err = a.AnalyzeResearchPlan(
+		context.Background(),
+		validResearchArtifact(),
+		plan,
+	)
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("error = %v", err)
+	}
+	if model.calls != 0 {
+		t.Fatalf("model calls = %d, want 0", model.calls)
+	}
+}
+
+func TestAgentAnalyzeResearchPlanRejectsInvalidReferenceBeforeModel(t *testing.T) {
+	model := &fakeModel{}
+	a, err := New(context.Background(), Config{Model: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := validResearchPlan()
+	plan.Risks = []manager.Insight{
+		{
+			Claim:      "invented event",
+			References: []synthesis.Reference{{Domain: synthesis.DomainEvent, EventID: "invented"}},
+		},
+	}
+
+	_, err = a.AnalyzeResearchPlan(
+		context.Background(),
+		validResearchArtifact(),
+		plan,
+	)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("error = %v", err)
+	}
+	if model.calls != 0 {
+		t.Fatalf("model calls = %d, want 0", model.calls)
 	}
 }
