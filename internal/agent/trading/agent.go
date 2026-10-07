@@ -6,6 +6,7 @@ import (
 	"Aegis/internal/decision"
 	"Aegis/internal/research/synthesis"
 	"Aegis/internal/research/manager"
+	"Aegis/internal/tradeintent"
 	"context"
 	"encoding/json"
 	"errors"
@@ -297,6 +298,24 @@ func (a *Agent) AnalyzeResearchPlan(
 		string(planJSON),
 	)
 	return runDecision(ctx, a.planRunner, symbol, query, opts...)
+}
+
+
+func (a *Agent) AnalyzeResearchPlanIntent(
+	ctx context.Context,
+	artifact *synthesis.Artifact,
+	plan *manager.ResearchPlan,
+	opts ...adk.AgentRunOption,
+) (*tradeintent.Intent, error) {
+	result, err := a.AnalyzeResearchPlan(ctx, artifact, plan, opts...)
+	if err != nil {
+		return nil, err
+	}
+	intent, err := tradeintent.FromDecision(result)
+	if err != nil {
+		return nil, fmt.Errorf("convert trading decision to trade intent: %w", err)
+	}
+	return intent, nil
 }
 
 func runDecision(

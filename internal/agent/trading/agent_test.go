@@ -6,6 +6,7 @@ import (
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/decision"
 	"Aegis/internal/research/synthesis"
+	"Aegis/internal/tradeintent"
 	"Aegis/internal/research/manager"
 	"context"
 	"errors"
@@ -687,5 +688,41 @@ func TestAgentAnalyzeResearchPlanRejectsInvalidReferenceBeforeModel(t *testing.T
 	}
 	if model.calls != 0 {
 		t.Fatalf("model calls = %d, want 0", model.calls)
+	}
+}
+
+
+func TestAgentAnalyzeResearchPlanIntent(t *testing.T) {
+	model := &fakeModel{
+		output: `{
+			"symbol":"600519.SH",
+			"market_view":"研究结论允许进入候选审查",
+			"evidence":["结构化研究证据支持继续评估"],
+			"risk":["仍存在未解决风险"],
+			"action":"CANDIDATE",
+			"confidence":0.66
+		}`,
+	}
+	a, err := New(context.Background(), Config{Model: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	intent, err := a.AnalyzeResearchPlanIntent(
+		context.Background(),
+		validResearchArtifact(),
+		validResearchPlan(),
+	)
+	if err != nil {
+		t.Fatalf("AnalyzeResearchPlanIntent() error = %v", err)
+	}
+	if intent.Status != tradeintent.StatusCandidate {
+		t.Fatalf("status = %q, want %q", intent.Status, tradeintent.StatusCandidate)
+	}
+	if intent.Symbol != "600519.SH" {
+		t.Fatalf("symbol = %q", intent.Symbol)
+	}
+	if model.calls != 1 {
+		t.Fatalf("model calls = %d, want 1", model.calls)
 	}
 }
