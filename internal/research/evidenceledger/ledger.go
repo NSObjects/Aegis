@@ -68,11 +68,11 @@ type Ledger struct {
 // All reference slices are copied, so callers can mutate neither source nor
 // ledger into one another by aliasing shared slice storage.
 func Build(artifact *synthesis.Artifact, state *debate.State, plan *manager.ResearchPlan) (*Ledger, error) {
+	if state != nil && len(state.Turns) == 0 {
+		return nil, fmt.Errorf("evidence ledger requires a non-empty debate")
+	}
 	if err := manager.Validate(plan, artifact, state); err != nil {
 		return nil, fmt.Errorf("invalid evidence ledger inputs: %w", err)
-	}
-	if len(state.Turns) == 0 {
-		return nil, fmt.Errorf("evidence ledger requires a non-empty debate")
 	}
 	accepted := make(map[string]struct{}, len(plan.AcceptedArgumentIDs))
 	for _, id := range plan.AcceptedArgumentIDs {
