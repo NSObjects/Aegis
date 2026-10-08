@@ -30,9 +30,19 @@ type semanticEvidenceDocument struct {
 	Publisher     string `json:"publisher,omitempty"`
 }
 
+// JSON wire values use pointers so omitted classification fields cannot
+// silently become irrelevant=false, confidence=0 or an empty explanation.
+// A missing classification is incomplete research, not a negative verdict.
+type semanticEvidenceWireMatch struct {
+	RawDocumentID string   `json:"raw_document_id"`
+	Relevant      *bool    `json:"relevant"`
+	Confidence    *float64 `json:"confidence"`
+	Reason        *string  `json:"reason"`
+}
+
 type semanticEvidenceResponse struct {
-	Type    string                  `json:"type,omitempty"`
-	Matches []SemanticEvidenceMatch `json:"matches"`
+	Type    string                      `json:"type,omitempty"`
+	Matches []semanticEvidenceWireMatch `json:"matches"`
 }
 
 const semanticEvidenceBatchSize = 4
@@ -207,7 +217,23 @@ func (m *AgenticSemanticEvidenceMatcher) matchBatch(
 		)
 	}
 
-	return parsed.Matches, nil
+	matches := make([]SemanticEvidenceMatch, 0, len(parsed.Matches))
+	for i, entry := range parsed.Matches {
+		if entry.Relevant == nil || entry.Confidence == nil ||
+			entry.Reason == nil || strings.TrimSpace(*entry.Reason) == "" {
+			return nil, fmt.Errorf(
+				"semantic evidence match %d for document %q must explicitly provide relevant, confidence, and a nonempty reason",
+				i, entry.RawDocumentID,
+			)
+		}
+		matches = append(matches, SemanticEvidenceMatch{
+			RawDocumentID: entry.RawDocumentID,
+			Relevant:      *entry.Relevant,
+			Confidence:    *entry.Confidence,
+			Reason:        *entry.Reason,
+		})
+	}
+	return matches, nil
 }
 
 const semanticEvidenceInstruction = `You are a strict evidence relevance classifier.
