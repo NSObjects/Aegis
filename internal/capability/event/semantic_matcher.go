@@ -39,8 +39,9 @@ const semanticEvidenceBatchSize = 4
 
 // Match evaluates a bounded set of candidate documents at a time so that
 // output length and response completeness do not scale with the entire news
-// feed. An omitted ID is retried only once in a smaller, targeted request;
-// still-omitted IDs remain unreviewed and must be excluded by the selector.
+// feed. Missing IDs are retried individually. If any remain unclassified,
+// the caller gets an explicit incomplete-research error, never a partial
+// set presented as complete.
 func (m *AgenticSemanticEvidenceMatcher) Match(
 	ctx context.Context,
 	target EvidenceTarget,
@@ -66,7 +67,7 @@ func (m *AgenticSemanticEvidenceMatcher) Match(
 		}
 		// Reject fabricated IDs, duplicate IDs or invalid confidence BEFORE
 		// accepting any subset from this model response.
-		if _, err := validateSemanticMatches(batch, first, defaultSemanticSelectionThreshold); err != nil {
+		if _, err := validatePartialSemanticMatches(batch, first, defaultSemanticSelectionThreshold); err != nil {
 			return nil, fmt.Errorf("validate semantic evidence batch %d: %w",
 				start/semanticEvidenceBatchSize+1, err)
 		}
@@ -80,20 +81,30 @@ func (m *AgenticSemanticEvidenceMatcher) Match(
 				omitted = append(omitted, document)
 			}
 		}
-		if len(omitted) > 0 {
-			recovered, err := m.matchBatch(ctx, target, omitted)
+		// Only re-evaluate missing IDs, one document per request. A small
+		// batch can still omit an ID due to prompt and output drift; the
+		// single-document retry bounds output size without weakening coverage.
+		for _, document := range omitted {
+			recovered, err := m.matchBatch(ctx, target, []RawDocument{document})
 			if err != nil {
-				return nil, fmt.Errorf("retry omitted semantic evidence batch %d: %w",
-					start/semanticEvidenceBatchSize+1, err)
+				return nil, fmt.Errorf("retry semantic document %q: %w",
+					document.ID, err)
 			}
-			if _, err := validateSemanticMatches(omitted, recovered, defaultSemanticSelectionThreshold); err != nil {
-				return nil, fmt.Errorf("validate recovered semantic evidence batch %d: %w",
-					start/semanticEvidenceBatchSize+1, err)
+			if _, err := validatePartialSemanticMatches(
+				[]RawDocument{document}, recovered,
+				defaultSemanticSelectionThreshold,
+			); err != nil {
+				return nil, fmt.Errorf("validate retried semantic document %q: %w",
+					document.ID, err)
 			}
 			first = append(first, recovered...)
 		}
-		// Remaining omitted candidates are NOT fabricated as relevant. The
-		// HybridEvidenceSelector records each as UNREVIEWED/selected=false.
+		if _, err := validateSemanticMatches(
+			batch, first, defaultSemanticSelectionThreshold,
+		); err != nil {
+			return nil, fmt.Errorf("semantic evidence batch %d: %w",
+				start/semanticEvidenceBatchSize+1, err)
+		}
 		matches = append(matches, first...)
 	}
 	return matches, nil
