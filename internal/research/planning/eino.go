@@ -70,7 +70,10 @@ func NewPlanner(
 	return planexecute.NewPlanner(
 		ctx,
 		&planexecute.PlannerConfig{
-			ToolCallingChatModel: chatModel,
+			ToolCallingChatModel: &validatedResearchToolModel{
+				base: chatModel,
+				phase: "planner",
+			},
 			ToolInfo:             &ResearchPlanToolInfo,
 			GenInputFn:           researchPlannerInput,
 			NewPlan: func(context.Context) planexecute.Plan {
@@ -93,7 +96,10 @@ func NewReplanner(
 	return planexecute.NewReplanner(
 		ctx,
 		&planexecute.ReplannerConfig{
-			ChatModel: chatModel,
+			ChatModel: &validatedResearchToolModel{
+				base: chatModel,
+				phase: "replanner",
+			},
 			PlanTool:  &ResearchPlanToolInfo,
 			NewPlan: func(context.Context) planexecute.Plan {
 				return &ResearchPlan{}

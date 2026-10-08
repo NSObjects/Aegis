@@ -322,32 +322,18 @@ func TestHybridEvidenceSelectorValidation(
 							{
 								RawDocumentID: "candidate",
 								Confidence:    1,
+								Reason: "test classification",
 							},
 							{
 								RawDocumentID: "candidate",
 								Confidence:    1,
+								Reason: "test classification",
 							},
 						}, nil
 					},
 				),
 			},
 			want: "duplicated",
-		},
-		{
-			name: "missing semantic id",
-			selector: &HybridEvidenceSelector{
-				TargetResolver: baseResolver,
-				SemanticMatcher: semanticMatcherFunc(
-					func(
-						context.Context,
-						EvidenceTarget,
-						[]RawDocument,
-					) ([]SemanticEvidenceMatch, error) {
-						return nil, nil
-					},
-				),
-			},
-			want: "missing for raw document",
 		},
 		{
 			name: "invalid confidence",
@@ -369,6 +355,18 @@ func TestHybridEvidenceSelectorValidation(
 				),
 			},
 			want: "must be between 0 and 1",
+		},
+		{
+			name: "incomplete semantic coverage",
+			selector: &HybridEvidenceSelector{
+				TargetResolver: baseResolver,
+				SemanticMatcher: semanticMatcherFunc(func(
+					context.Context, EvidenceTarget, []RawDocument,
+				) ([]SemanticEvidenceMatch, error) {
+					return nil, nil
+				}),
+			},
+			want: "research incomplete",
 		},
 		{
 			name: "semantic failure",
@@ -489,5 +487,66 @@ func TestMapEvidenceTargetResolver(t *testing.T) {
 			"error = %v, want missing-target error",
 			err,
 		)
+	}
+}
+
+func TestHybridEvidenceSelectorRejectsIncompleteSemanticCoverage(t *testing.T) {
+	selector := &HybridEvidenceSelector{
+		TargetResolver: MapEvidenceTargetResolver{
+			"600519.SH": {Name: "贵州茅台"},
+		},
+		SemanticMatcher: semanticMatcherFunc(func(
+			_ context.Context, _ EvidenceTarget, documents []RawDocument,
+		) ([]SemanticEvidenceMatch, error) {
+			if len(documents) != 2 {
+				t.Fatalf("documents = %d, want 2", len(documents))
+			}
+			return []SemanticEvidenceMatch{{
+				RawDocumentID: "candidate-1", Relevant: true,
+				Confidence: .93, Reason: "issuer linkage",
+			}}, nil
+		}),
+	}
+	decisions, err := selector.Select(context.Background(),
+		ResearchTask{Symbol: "600519.SH"},
+		[]RawDocument{
+			{ID: "candidate-1", Title: "supplier news"},
+			{ID: "cls_news_2498111", Title: "market news"},
+		})
+	if err == nil || !strings.Contains(err.Error(), "research incomplete") ||
+		!strings.Contains(err.Error(), "cls_news_2498111") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(decisions) != 0 {
+		t.Fatalf("incomplete selection cannot appear successful: %+v", decisions)
+	}
+}
+
+func TestHybridEvidenceSelectorRejectsAllMissingSemanticCoverage(t *testing.T) {
+	_, err := validateSemanticMatches(
+		[]RawDocument{{ID: "candidate-1"}, {ID: "candidate-2"}},
+		nil, .8,
+	)
+	if err == nil || !strings.Contains(err.Error(), "research incomplete") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestHybridEvidenceSelectorPartialSemanticMatchesStillRejectsInvalidIDs(t *testing.T) {
+	for _, tc := range []struct{
+		name string
+		matches []SemanticEvidenceMatch
+		want string
+	}{
+		{"unknown", []SemanticEvidenceMatch{{RawDocumentID:"unknown", Confidence:.7}}, "unknown raw document"},
+		{"duplicate", []SemanticEvidenceMatch{{RawDocumentID:"one", Confidence:.7, Reason:"test classification"}, {RawDocumentID:"one", Confidence:.7, Reason:"test classification"}}, "duplicated"},
+		{"bad confidence", []SemanticEvidenceMatch{{RawDocumentID:"one", Confidence:1.5}}, "between 0 and 1"},
+	} {
+		t.Run(tc.name,func(t *testing.T){
+			_,err:=validateSemanticMatches([]RawDocument{{ID:"one"}, {ID:"missing"}},tc.matches,.8)
+			if err==nil || !strings.Contains(err.Error(),tc.want) {
+				t.Fatalf("error=%v, want %q",err,tc.want)
+			}
+		})
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -130,4 +131,29 @@ func TestNewInvalidConfig(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+}
+
+
+func TestNewLoadsCheckedInSkills(t *testing.T) {
+	// Production CLI uses the repository skills/ directory. Verify the real
+	// shipped asset, not just the empty temp directory exercised above.
+	dir := filepath.Join("..", "..", "skills")
+	manifest := filepath.Join(dir, "tushare-data", "SKILL.md")
+	data, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatalf("required production skill %q is not checked in: %v", manifest, err)
+	}
+	if !strings.Contains(string(data), "name: tushare-data") {
+		t.Fatalf("skill manifest %q has unexpected metadata", manifest)
+	}
+	rt, err := New(context.Background(), Config{
+		SkillsDir: dir,
+		TimeZone:  "Asia/Shanghai",
+	})
+	if err != nil {
+		t.Fatalf("real production skills could not be loaded: %v", err)
+	}
+	if len(rt.Handlers()) != 3 {
+		t.Fatalf("loaded runtime handlers = %d, want 3", len(rt.Handlers()))
+	}
 }

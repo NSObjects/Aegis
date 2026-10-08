@@ -3,6 +3,7 @@ package portfolio
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -48,7 +49,8 @@ func Validate(ctx *Context) error {
 			if symbol != strings.ToUpper(symbol) {
 				return fmt.Errorf("position %d symbol %q must be uppercase", i, position.Symbol)
 			}
-			if position.Quantity <= 0 {
+			if math.IsNaN(position.Quantity) || math.IsInf(position.Quantity, 0) ||
+				position.Quantity <= 0 {
 				return fmt.Errorf("position %d quantity must be positive", i)
 			}
 			if _, ok := seen[symbol]; ok {

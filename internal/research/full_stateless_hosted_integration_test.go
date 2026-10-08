@@ -29,9 +29,10 @@ func TestWorkflow_Run_FullStatelessHostedIntegration(t *testing.T) {
 	ctx,cancel:=context.WithTimeout(context.Background(),15*time.Minute);defer cancel()
 	modelName:=envOrDefault("DEEPSEEK_MODEL","deepseek-chat")
 	strongName:=envOrDefault("DEEPSEEK_STRONG_MODEL",modelName)
+	maxOutputTokens:=16384
 	cfg:=config.Config{DefaultModel:"default",Models:map[string]config.ModelConfig{
-		"default":{Provider:config.ProviderDeepSeek,Model:modelName,APIKeyEnv:"DEEPSEEK_API_KEY",BaseURL:os.Getenv("DEEPSEEK_BASE_URL")},
-		"strong":{Provider:config.ProviderDeepSeek,Model:strongName,APIKeyEnv:"DEEPSEEK_API_KEY",BaseURL:os.Getenv("DEEPSEEK_BASE_URL")},
+		"default":{Provider:config.ProviderDeepSeek,Model:modelName,APIKeyEnv:"DEEPSEEK_API_KEY",BaseURL:os.Getenv("DEEPSEEK_BASE_URL"),MaxTokens:&maxOutputTokens},
+		"strong":{Provider:config.ProviderDeepSeek,Model:strongName,APIKeyEnv:"DEEPSEEK_API_KEY",BaseURL:os.Getenv("DEEPSEEK_BASE_URL"),MaxTokens:&maxOutputTokens},
 	},Agents:map[string]config.AgentConfig{"trading":{Model:"strong"}}}
 	models:=llm.NewManager(cfg.Models)
 	defaultModel,err:=models.Get(ctx,"default");if err!=nil{t.Fatal(err)}

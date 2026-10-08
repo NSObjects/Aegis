@@ -30,22 +30,101 @@ type semanticEvidenceDocument struct {
 	Publisher     string `json:"publisher,omitempty"`
 }
 
-type semanticEvidenceResponse struct {
-	Type    string                  `json:"type,omitempty"`
-	Matches []SemanticEvidenceMatch `json:"matches"`
+// JSON wire values use pointers so omitted classification fields cannot
+// silently become irrelevant=false, confidence=0 or an empty explanation.
+// A missing classification is incomplete research, not a negative verdict.
+type semanticEvidenceWireMatch struct {
+	RawDocumentID string   `json:"raw_document_id"`
+	Relevant      *bool    `json:"relevant"`
+	Confidence    *float64 `json:"confidence"`
+	Reason        *string  `json:"reason"`
 }
 
+type semanticEvidenceResponse struct {
+	Type    string                      `json:"type,omitempty"`
+	Matches []semanticEvidenceWireMatch `json:"matches"`
+}
+
+const semanticEvidenceBatchSize = 4
+
+// Match evaluates a bounded set of candidate documents at a time so that
+// output length and response completeness do not scale with the entire news
+// feed. Missing IDs are retried individually. If any remain unclassified,
+// the caller gets an explicit incomplete-research error, never a partial
+// set presented as complete.
 func (m *AgenticSemanticEvidenceMatcher) Match(
 	ctx context.Context,
 	target EvidenceTarget,
 	documents []RawDocument,
 ) ([]SemanticEvidenceMatch, error) {
 	if m == nil || m.Model == nil {
-		return nil, errors.New(
-			"semantic evidence matcher model is required",
-		)
+		return nil, errors.New("semantic evidence matcher model is required")
 	}
+	matches := make([]SemanticEvidenceMatch, 0, len(documents))
+	for start := 0; start < len(documents); start += semanticEvidenceBatchSize {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		end := start + semanticEvidenceBatchSize
+		if end > len(documents) {
+			end = len(documents)
+		}
+		batch := documents[start:end]
+		first, err := m.matchBatch(ctx, target, batch)
+		if err != nil {
+			return nil, fmt.Errorf("semantic evidence batch %d: %w",
+				start/semanticEvidenceBatchSize+1, err)
+		}
+		// Reject fabricated IDs, duplicate IDs or invalid confidence BEFORE
+		// accepting any subset from this model response.
+		if _, err := validatePartialSemanticMatches(batch, first, defaultSemanticSelectionThreshold); err != nil {
+			return nil, fmt.Errorf("validate semantic evidence batch %d: %w",
+				start/semanticEvidenceBatchSize+1, err)
+		}
+		seen := make(map[string]struct{}, len(first))
+		for _, match := range first {
+			seen[strings.TrimSpace(match.RawDocumentID)] = struct{}{}
+		}
+		omitted := make([]RawDocument, 0)
+		for _, document := range batch {
+			if _, ok := seen[strings.TrimSpace(document.ID)]; !ok {
+				omitted = append(omitted, document)
+			}
+		}
+		// Only re-evaluate missing IDs, one document per request. A small
+		// batch can still omit an ID due to prompt and output drift; the
+		// single-document retry bounds output size without weakening coverage.
+		for _, document := range omitted {
+			recovered, err := m.matchBatch(ctx, target, []RawDocument{document})
+			if err != nil {
+				return nil, fmt.Errorf("retry semantic document %q: %w",
+					document.ID, err)
+			}
+			if _, err := validatePartialSemanticMatches(
+				[]RawDocument{document}, recovered,
+				defaultSemanticSelectionThreshold,
+			); err != nil {
+				return nil, fmt.Errorf("validate retried semantic document %q: %w",
+					document.ID, err)
+			}
+			first = append(first, recovered...)
+		}
+		if _, err := validateSemanticMatches(
+			batch, first, defaultSemanticSelectionThreshold,
+		); err != nil {
+			return nil, fmt.Errorf("semantic evidence batch %d: %w",
+				start/semanticEvidenceBatchSize+1, err)
+		}
+		matches = append(matches, first...)
+	}
+	return matches, nil
+}
 
+func (m *AgenticSemanticEvidenceMatcher) matchBatch(
+	ctx context.Context,
+	target EvidenceTarget,
+	documents []RawDocument,
+) ([]SemanticEvidenceMatch, error) {
 	prompt := semanticEvidencePrompt{
 		Target: target,
 		Documents: make(
@@ -138,7 +217,23 @@ func (m *AgenticSemanticEvidenceMatcher) Match(
 		)
 	}
 
-	return parsed.Matches, nil
+	matches := make([]SemanticEvidenceMatch, 0, len(parsed.Matches))
+	for i, entry := range parsed.Matches {
+		if entry.Relevant == nil || entry.Confidence == nil ||
+			entry.Reason == nil || strings.TrimSpace(*entry.Reason) == "" {
+			return nil, fmt.Errorf(
+				"semantic evidence match %d for document %q must explicitly provide relevant, confidence, and a nonempty reason",
+				i, entry.RawDocumentID,
+			)
+		}
+		matches = append(matches, SemanticEvidenceMatch{
+			RawDocumentID: entry.RawDocumentID,
+			Relevant:      *entry.Relevant,
+			Confidence:    *entry.Confidence,
+			Reason:        *entry.Reason,
+		})
+	}
+	return matches, nil
 }
 
 const semanticEvidenceInstruction = `You are a strict evidence relevance classifier.

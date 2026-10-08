@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strings"
@@ -123,7 +124,8 @@ func (s *HybridEvidenceSelector) Select(
 	if threshold == 0 {
 		threshold = defaultSemanticSelectionThreshold
 	}
-	if threshold < 0 || threshold > 1 {
+	if math.IsNaN(threshold) || math.IsInf(threshold, 0) ||
+		threshold < 0 || threshold > 1 {
 		return nil, errors.New(
 			"semantic evidence selection threshold must be between 0 and 1",
 		)
@@ -410,6 +412,31 @@ func validateSemanticMatches(
 	matches []SemanticEvidenceMatch,
 	threshold float64,
 ) ([]EvidenceSelectionDecision, error) {
+	decisions, err := validatePartialSemanticMatches(documents, matches, threshold)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(decisions))
+	for _, decision := range decisions {
+		seen[decision.RawDocumentID] = struct{}{}
+	}
+	for _, document := range documents {
+		documentID := strings.TrimSpace(document.ID)
+		if _, ok := seen[documentID]; !ok {
+			return nil, fmt.Errorf(
+				"semantic evidence research incomplete: missing match for raw document %q",
+				documentID,
+			)
+		}
+	}
+	return decisions, nil
+}
+
+func validatePartialSemanticMatches(
+	documents []RawDocument,
+	matches []SemanticEvidenceMatch,
+	threshold float64,
+) ([]EvidenceSelectionDecision, error) {
 	expected := make(map[string]struct{}, len(documents))
 	for _, document := range documents {
 		expected[strings.TrimSpace(document.ID)] = struct{}{}
@@ -443,10 +470,16 @@ func validateSemanticMatches(
 				documentID,
 			)
 		}
-		if match.Confidence < 0 ||
-			match.Confidence > 1 {
+		if math.IsNaN(match.Confidence) || math.IsInf(match.Confidence, 0) ||
+			match.Confidence < 0 || match.Confidence > 1 {
 			return nil, fmt.Errorf(
 				"semantic evidence match confidence for raw document %q must be between 0 and 1",
+				documentID,
+			)
+		}
+		if strings.TrimSpace(match.Reason) == "" {
+			return nil, fmt.Errorf(
+				"semantic evidence match for raw document %q requires an evidence-based reason",
 				documentID,
 			)
 		}
@@ -477,15 +510,6 @@ func validateSemanticMatches(
 		)
 	}
 
-	for documentID := range expected {
-		if _, ok := seen[documentID]; ok {
-			continue
-		}
-		return nil, fmt.Errorf(
-			"semantic evidence match is missing for raw document %q",
-			documentID,
-		)
-	}
 
 	return decisions, nil
 }

@@ -402,9 +402,8 @@ func TestAgenticStagesRejectNonStrictJSON(t *testing.T) {
 			extractor := &AgenticEventFactExtractor{
 				Model: &eventModel{
 					responses: []*schema.AgenticMessage{
-						assistantJSON(
-							test.response,
-						),
+						assistantJSON(test.response),
+						assistantJSON(test.response),
 					},
 				},
 			}
@@ -442,6 +441,9 @@ func TestAgenticContradictionDetectorRejectsTruthWinnerField(
 	detector := &AgenticEventContradictionDetector{
 		Model: &eventModel{
 			responses: []*schema.AgenticMessage{
+				assistantJSON(
+					`{"contradictions":[{"left_fact_id":"fact_a","right_fact_id":"fact_b","kind":"VALUE","rationale":"conflict","winner_fact_id":"fact_a"}]}`,
+				),
 				assistantJSON(
 					`{"contradictions":[{"left_fact_id":"fact_a","right_fact_id":"fact_b","kind":"VALUE","rationale":"conflict","winner_fact_id":"fact_a"}]}`,
 				),
@@ -521,4 +523,86 @@ func eventAgenticTestText(
 		}
 	}
 	return builder.String()
+}
+
+func TestStrictEventJSONRetriesSyntaxErrorOnce(t *testing.T) {
+	m := &eventModel{responses: []*schema.AgenticMessage{
+		assistantJSON(`{"level":"LOW","direction":"NEUTRAL",}`),
+		assistantJSON(`{"level":"LOW","direction":"NEUTRAL"}`),
+	}}
+	var result struct {
+		Level string `json:"level"`
+		Direction string `json:"direction"`
+	}
+	err := generateStrictAgenticJSON(context.Background(), m,
+		"Return {level,direction}", map[string]string{"symbol": "600519.SH"}, &result)
+	if err != nil {
+		t.Fatalf("generateStrictAgenticJSON error = %v", err)
+	}
+	if m.index != 2 || result.Level != "LOW" || result.Direction != "NEUTRAL" {
+		t.Fatalf("index=%d result=%+v", m.index, result)
+	}
+	if !strings.Contains(eventAgenticTestText(m.inputs[1][0]), "only the schema fields") {
+		t.Fatalf("retry instruction did not emphasize strict schema")
+	}
+	if eventAgenticTestText(m.inputs[0][1]) != eventAgenticTestText(m.inputs[1][1]) {
+		t.Fatal("retry must use the same original payload")
+	}
+}
+
+func TestStrictEventJSONRetriesUnknownFieldOnce(t *testing.T) {
+	m := &eventModel{responses: []*schema.AgenticMessage{
+		assistantJSON(`{"type":"json_object","level":"LOW"}`),
+		assistantJSON(`{"level":"LOW"}`),
+	}}
+	var result struct { Level string `json:"level"` }
+	if err := generateStrictAgenticJSON(context.Background(), m, "only level",
+		nil, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Level != "LOW" || m.index != 2 {
+		t.Fatalf("result=%+v, calls=%d", result, m.index)
+	}
+}
+
+func TestStrictEventJSONDoesNotLeakRejectedAttemptFields(t *testing.T) {
+	m := &eventModel{responses: []*schema.AgenticMessage{
+		assistantJSON(`{"value":"stale","unexpected":true}`),
+		assistantJSON(`{"count":2}`),
+	}}
+	var result struct {
+		Value string `json:"value"`
+		Count int    `json:"count"`
+	}
+	if err := generateStrictAgenticJSON(context.Background(), m, "format", nil, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Value != "" || result.Count != 2 {
+		t.Fatalf("rejected first-attempt state leaked: %+v", result)
+	}
+}
+
+func TestStrictEventJSONFailsClosedAfterTwoErrors(t *testing.T) {
+	m := &eventModel{responses: []*schema.AgenticMessage{
+		assistantJSON(`{"level":"LOW","type":"json_object"}`),
+		assistantJSON(`{"level":"LOW","type":"json_object"}`),
+	}}
+	var result struct{ Level string `json:"level"` }
+	err := generateStrictAgenticJSON(context.Background(), m, "only level", nil, &result)
+	if err == nil || !strings.Contains(err.Error(), "unknown field") ||
+		!strings.Contains(err.Error(), "after 2 attempts") {
+		t.Fatalf("error = %v", err)
+	}
+	if m.index != 2 || result.Level != "" {
+		t.Fatalf("bad output must not be committed: %+v, calls=%d", result, m.index)
+	}
+}
+
+func TestStrictEventJSONModelErrorDoesNotRetry(t *testing.T) {
+	m := &eventModel{err: errors.New("provider failed")}
+	var result struct{ Level string `json:"level"` }
+	err := generateStrictAgenticJSON(context.Background(), m, "only level", nil, &result)
+	if err == nil || !strings.Contains(err.Error(), "provider failed") || len(m.inputs) != 1 {
+		t.Fatalf("error=%v, calls=%d", err, len(m.inputs))
+	}
 }

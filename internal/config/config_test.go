@@ -281,3 +281,22 @@ func writeTestConfig(
 
 	return path
 }
+
+func TestLoadModelMaxTokens(t *testing.T) {
+	path := writeTestConfig(t, `default_model: default
+models:
+  default:
+    provider: deepseek
+    model: deepseek-chat
+    api_key_env: DEEPSEEK_API_KEY
+    max_tokens: 16384
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens := cfg.Models["default"].MaxTokens
+	if tokens == nil || *tokens != 16384 {
+		t.Fatalf("max_tokens = %v, want 16384", tokens)
+	}
+}

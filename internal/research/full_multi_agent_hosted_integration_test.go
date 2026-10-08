@@ -4,6 +4,11 @@ import (
 	eventagent "Aegis/internal/agent/event"
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/agent/trading"
+	portfolioagent "Aegis/internal/agent/portfolio"
+	riskagent "Aegis/internal/agent/risk"
+	"Aegis/internal/portfolio"
+	"Aegis/internal/portfoliodecision"
+	"Aegis/internal/risk"
 	eventcap "Aegis/internal/capability/event"
 	technicalcap "Aegis/internal/capability/technical"
 	"Aegis/internal/config"
@@ -38,6 +43,8 @@ func TestWorkflow_Run_FullMultiAgentHostedIntegration(t *testing.T) {
 
 	modelName := envOrDefault("DEEPSEEK_MODEL", "deepseek-chat")
 	strongName := envOrDefault("DEEPSEEK_STRONG_MODEL", modelName)
+	// Hosted runs may generate longer grounded Event JSON than default provider output limits.
+	maxOutputTokens := 16384
 	cfg := config.Config{
 		DefaultModel: "default",
 		Models: map[string]config.ModelConfig{
@@ -46,12 +53,14 @@ func TestWorkflow_Run_FullMultiAgentHostedIntegration(t *testing.T) {
 				Model: modelName,
 				APIKeyEnv: "DEEPSEEK_API_KEY",
 				BaseURL: os.Getenv("DEEPSEEK_BASE_URL"),
+				MaxTokens: &maxOutputTokens,
 			},
 			"strong": {
 				Provider: config.ProviderDeepSeek,
 				Model: strongName,
 				APIKeyEnv: "DEEPSEEK_API_KEY",
 				BaseURL: os.Getenv("DEEPSEEK_BASE_URL"),
+				MaxTokens: &maxOutputTokens,
 			},
 		},
 	}
@@ -209,6 +218,104 @@ func TestWorkflow_Run_FullMultiAgentHostedIntegration(t *testing.T) {
 	}
 	if err := synthesis.Validate(artifact); err != nil {
 		t.Fatalf("validate research artifact: %v", err)
+	}
+
+
+	// This branch extends the same real hosted ResearchArtifact with the V2.10
+	// Risk / Portfolio stages. The V2.9 path below is left unchanged as baseline.
+	if os.Getenv("AEGIS_FULL_RISK_PORTFOLIO_E2E") == "1" {
+		tradingAgent, err := trading.New(ctx, trading.Config{
+			Model: strongModel,
+			MaxIterations: 30,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		riskAnalyst := &riskagent.Analyst{Model: strongModel}
+		portfolioManager := &portfolioagent.Manager{}
+		reviewWorkflow, err := NewPortfolioReview(PortfolioReviewConfig{
+			Debate: &debate.Runtime{
+				Bull: &debate.BullResearcher{Model: strongModel},
+				Bear: &debate.BearResearcher{Model: strongModel},
+				MaxRounds: 2,
+			},
+			ResearchManager:  &manager.ResearchManager{Model: strongModel},
+			TradingAgent:     tradingAgent,
+			RiskAnalyst:      riskAnalyst,
+			PortfolioManager: portfolioManager,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// An explicitly supplied TEST FIXTURE, never an inferred live account.
+		// The portfolio lacks cash, NAV, exposure and risk budgets by contract.
+		book := &portfolio.Context{
+			State: portfolio.StatePositions,
+			AsOf: cutoff.Format(time.RFC3339),
+			Positions: []portfolio.Position{{Symbol: symbol, Quantity: 100}},
+		}
+		result, err := reviewWorkflow.Run(ctx, artifact, book)
+		if err != nil {
+			t.Fatalf("run full multi-agent risk / portfolio workflow: %v", err)
+		}
+		if err := portfoliodecision.Validate(
+			result.PortfolioDecision, result.TradeIntent, book, result.RiskContext,
+		); err != nil {
+			t.Fatalf("validate final portfolio decision: %v", err)
+		}
+		if len(result.Debate.Turns) != 4 {
+			t.Fatalf("debate turns = %d, want 4", len(result.Debate.Turns))
+		}
+		if result.PortfolioDecision.Symbol != symbol {
+			t.Fatalf("final symbol = %q, want %q", result.PortfolioDecision.Symbol, symbol)
+		}
+		if result.PortfolioDecision.Disposition != portfoliodecision.DispositionNoAction &&
+			result.PortfolioDecision.Disposition != portfoliodecision.DispositionBlocked &&
+			result.PortfolioDecision.Disposition != portfoliodecision.DispositionReviewRequired {
+			t.Fatalf("unexpected portfolio disposition %q", result.PortfolioDecision.Disposition)
+		}
+
+		// A second *deterministic* downstream check reuses the real TradeIntent.
+		// No repeated Research / Debate / Trading or risk LLM call is required.
+		missingBook := &portfolio.Context{State: portfolio.StateNotProvided}
+		missingRisk, err := riskAnalyst.Review(ctx, result.TradeIntent, missingBook)
+		if err != nil {
+			t.Fatalf("risk review without portfolio: %v", err)
+		}
+		if missingRisk.Assessment != risk.AssessmentInsufficientContext {
+			t.Fatalf("missing portfolio risk assessment = %q", missingRisk.Assessment)
+		}
+		missingDecision, err := portfolioManager.Review(
+			ctx, result.TradeIntent, missingBook, missingRisk,
+		)
+		if err != nil {
+			t.Fatalf("portfolio decision without portfolio: %v", err)
+		}
+		if err := portfoliodecision.Validate(
+			missingDecision, result.TradeIntent, missingBook, missingRisk,
+		); err != nil {
+			t.Fatalf("validate missing portfolio decision: %v", err)
+		}
+		if result.TradeIntent.Status == "CANDIDATE" &&
+			missingDecision.Disposition != portfoliodecision.DispositionReviewRequired {
+			t.Fatalf("candidate with no portfolio must require review, got %q", missingDecision.Disposition)
+		}
+
+		data, err := json.MarshalIndent(struct {
+			ObservedPortfolio *portfolio.Context
+			ObservedReview    *PortfolioReviewResult
+			MissingPortfolio  *portfoliodecision.Decision
+		}{
+			ObservedPortfolio: book,
+			ObservedReview: result,
+			MissingPortfolio: missingDecision,
+		}, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("full risk/portfolio E2E (portfolio is a test fixture):\n%s", data)
+		return
 	}
 
 	debateRuntime := &debate.Runtime{

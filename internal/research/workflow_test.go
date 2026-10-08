@@ -791,3 +791,86 @@ func TestNewLegacyPreservesPreEventWorkflow(
 		)
 	}
 }
+
+func TestWorkflowRejectsFutureOrInconsistentResearchStageDates(t *testing.T) {
+	tests := []struct {
+		name string
+		updateTechnical func(*technical.Context)
+		updateEvent func(*eventagent.Context)
+		want string
+	}{
+		{"future effective date", func(c *technical.Context) { c.EffectiveAsOf="20260924" }, nil, "effective_as_of"},
+		{"future last trade date", func(c *technical.Context) { c.LastTradeDate="20260924" }, nil, "last_trade_date"},
+		{"different technical trading date", func(c *technical.Context) { c.RequestedAsOf="20260922" }, nil, "technical requested_as_of"},
+		{"technical symbol mismatch", func(c *technical.Context) { c.Symbol="000001.SZ" }, nil, "technical symbol"},
+		{"event returns different cutoff", nil, func(c *eventagent.Context) {c.RequestedAsOf="2026-09-22T15:00:00+08:00"}, "event requested_as_of"},
+	}
+	for _,tc:=range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tech:=validTechnicalContext()
+			evt:=validEventContext()
+			if tc.updateTechnical!=nil {tc.updateTechnical(tech)}
+			if tc.updateEvent!=nil {tc.updateEvent(evt)}
+			synth:=&fakeSynthesizer{}
+			trader:=&fakeArtifactTradingAgent{result:validDecision()}
+			w,err:=New(context.Background(), Config{
+				MarketAgent:&fakeMarketAgent{result:validMarketContext()},
+				TechnicalAgent:&fakeTechnicalAgent{result:tech},
+				EventAgent:&fakeEventAgent{result:evt},
+				Synthesizer:synth,
+				TradingAgent:trader,
+			})
+			if err!=nil {t.Fatal(err)}
+			_,err=w.Run(context.Background(),validWorkflowInput())
+			if err==nil || !strings.Contains(err.Error(),tc.want) {
+				t.Fatalf("error=%v, want %q",err,tc.want)
+			}
+			if synth.calls!=0 || trader.calls!=0 {
+				t.Fatalf("invalid PIT data leaked downstream: synthesis=%d trader=%d",synth.calls,trader.calls)
+			}
+		})
+	}
+}
+
+func TestWorkflowTradingDateUsesShanghaiTimezone(t *testing.T) {
+	tokyo:=time.FixedZone("Asia/Tokyo",9*3600)
+	// Tokyo 00:30 on Sep 24 is still Sep 23 on Shanghai exchanges.
+	input:=validWorkflowInput()
+	input.RequestedAsOf=time.Date(2026,9,24,0,30,0,0,tokyo)
+	input.EventInput.Task.AsOf=input.RequestedAsOf
+	evt:=validEventContext()
+	evt.RequestedAsOf=input.RequestedAsOf.Format(time.RFC3339)
+	techAgent:=&fakeTechnicalAgent{result:validTechnicalContext()}
+	w,err:=New(context.Background(),Config{
+		MarketAgent:&fakeMarketAgent{result:validMarketContext()},
+		TechnicalAgent:techAgent,
+		EventAgent:&fakeEventAgent{result:evt},
+		Synthesizer:&fakeSynthesizer{},
+		TradingAgent:&fakeArtifactTradingAgent{result:validDecision()},
+	})
+	if err!=nil {t.Fatal(err)}
+	if _,err=w.Run(context.Background(),input);err!=nil {
+		t.Fatalf("Shanghai trading day must be preserved: %v",err)
+	}
+	if techAgent.input.RequestedAsOf!="20260923" {
+		t.Fatalf("requested trading date = %q, want Shanghai 20260923",techAgent.input.RequestedAsOf)
+	}
+}
+
+func TestWorkflowAcceptsEventCutoffAtRFC3339Seconds(t *testing.T) {
+	input:=validWorkflowInput()
+	input.RequestedAsOf=input.RequestedAsOf.Add(511*time.Millisecond)
+	input.EventInput.Task.AsOf=input.RequestedAsOf
+	evt:=validEventContext()
+	evt.RequestedAsOf=input.RequestedAsOf.Format(time.RFC3339)
+	w,err:=NewArtifact(context.Background(),Config{
+		MarketAgent:&fakeMarketAgent{result:validMarketContext()},
+		TechnicalAgent:&fakeTechnicalAgent{result:validTechnicalContext()},
+		EventAgent:&fakeEventAgent{result:evt},
+		Synthesizer:&fakeSynthesizer{},
+	})
+	if err!=nil {t.Fatal(err)}
+	if _,err=w.RunArtifact(context.Background(),input);err!=nil {
+		t.Fatalf("RFC3339 second-precision Event cutoff must remain valid: %v",err)
+	}
+}
