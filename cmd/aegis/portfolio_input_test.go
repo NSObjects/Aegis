@@ -169,3 +169,51 @@ func TestLoadPortfolioContextRejectsValuationFabricationOrAmbiguity(t *testing.T
 		})
 	}
 }
+
+func TestLoadPortfolioContextRequiresExplicitObservedValuationNumbers(t *testing.T) {
+	cases:=[]struct{name,payload,want string}{
+		{"missing cash",`{"state":"EMPTY","as_of":"2026-10-08T09:00:00+08:00",
+			"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+				"total_value_fen":0,"position_values":[]}}`,"requires explicit"},
+		{"missing total",`{"state":"EMPTY","as_of":"2026-10-08T09:00:00+08:00",
+			"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+				"cash_fen":0,"position_values":[]}}`,"requires explicit"},
+		{"null cash",`{"state":"EMPTY","as_of":"2026-10-08T09:00:00+08:00",
+			"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+				"cash_fen":null,"total_value_fen":0,"position_values":[]}}`,"requires explicit"},
+		{"missing position values array",`{"state":"EMPTY","as_of":"2026-10-08T09:00:00+08:00",
+			"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+				"cash_fen":0,"total_value_fen":0}}`,"requires explicit"},
+		{"missing market value",`{"state":"POSITIONS","as_of":"2026-10-08T09:00:00+08:00",
+			"positions":[{"symbol":"600519.SH","quantity":100}],
+			"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+				"cash_fen":100,"total_value_fen":100,
+				"position_values":[{"symbol":"600519.SH"}]}}`,"requires explicit symbol and market_value_fen"},
+		{"null position market value",`{"state":"POSITIONS","as_of":"2026-10-08T09:00:00+08:00",
+			"positions":[{"symbol":"600519.SH","quantity":100}],
+			"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+				"cash_fen":100,"total_value_fen":100,
+				"position_values":[{"symbol":"600519.SH","market_value_fen":null}]}}`,"requires explicit symbol and market_value_fen"},
+		{"nested unknown field",`{"state":"POSITIONS","as_of":"2026-10-08T09:00:00+08:00",
+			"positions":[{"symbol":"600519.SH","quantity":100}],
+			"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+				"cash_fen":100,"total_value_fen":100,
+				"position_values":[{"symbol":"600519.SH","market_value_fen":0,"settled":true}]}}`,"unknown field"},
+	}
+	for _,tc:=range cases {
+		t.Run(tc.name,func(t *testing.T){
+			_,err:=loadPortfolioContext(portfolioFixtureFile(t,tc.payload))
+			if err==nil || !strings.Contains(err.Error(),tc.want) {
+				t.Fatalf("error=%v, want %q",err,tc.want)
+			}
+		})
+	}
+	// Explicit zero is valid. It must not be mistaken for the missing value.
+	book,err:=loadPortfolioContext(portfolioFixtureFile(t,`{"state":"EMPTY",
+		"as_of":"2026-10-08T09:00:00+08:00","valuation":{
+			"scope":"CASH_AND_POSITIONS","currency":"CNY",
+			"cash_fen":0,"total_value_fen":0,"position_values":[]}}`))
+	if err!=nil || book.Valuation==nil {
+		t.Fatalf("explicit zeros must remain valid observed inputs: %+v, %v",book,err)
+	}
+}
