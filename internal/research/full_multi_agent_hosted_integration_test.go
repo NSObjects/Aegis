@@ -43,6 +43,8 @@ func TestWorkflow_Run_FullMultiAgentHostedIntegration(t *testing.T) {
 
 	modelName := envOrDefault("DEEPSEEK_MODEL", "deepseek-chat")
 	strongName := envOrDefault("DEEPSEEK_STRONG_MODEL", modelName)
+	// Hosted runs may generate longer grounded Event JSON than default provider output limits.
+	maxOutputTokens := 16384
 	cfg := config.Config{
 		DefaultModel: "default",
 		Models: map[string]config.ModelConfig{
@@ -51,12 +53,14 @@ func TestWorkflow_Run_FullMultiAgentHostedIntegration(t *testing.T) {
 				Model: modelName,
 				APIKeyEnv: "DEEPSEEK_API_KEY",
 				BaseURL: os.Getenv("DEEPSEEK_BASE_URL"),
+				MaxTokens: &maxOutputTokens,
 			},
 			"strong": {
 				Provider: config.ProviderDeepSeek,
 				Model: strongName,
 				APIKeyEnv: "DEEPSEEK_API_KEY",
 				BaseURL: os.Getenv("DEEPSEEK_BASE_URL"),
+				MaxTokens: &maxOutputTokens,
 			},
 		},
 	}
