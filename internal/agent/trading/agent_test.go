@@ -18,10 +18,11 @@ import (
 )
 
 type fakeModel struct {
-	output string
-	err    error
-	calls  int
-	inputs [][]*schema.AgenticMessage
+	output  string
+	outputs []string
+	err     error
+	calls   int
+	inputs  [][]*schema.AgenticMessage
 }
 
 func (m *fakeModel) Generate(
@@ -44,12 +45,20 @@ func (m *fakeModel) Generate(
 		return nil, m.err
 	}
 
+	output := m.output
+	if len(m.outputs) > 0 {
+		index := m.calls - 1
+		if index >= len(m.outputs) {
+			index = len(m.outputs) - 1
+		}
+		output = m.outputs[index]
+	}
 	return &schema.AgenticMessage{
 		Role: schema.AgenticRoleTypeAssistant,
 		ContentBlocks: []*schema.ContentBlock{
 			schema.NewContentBlock(
 				&schema.AssistantGenText{
-					Text: m.output,
+					Text: output,
 				},
 			),
 		},
@@ -724,5 +733,74 @@ func TestAgentAnalyzeResearchPlanIntent(t *testing.T) {
 	}
 	if model.calls != 1 {
 		t.Fatalf("model calls = %d, want 1", model.calls)
+	}
+}
+
+func TestTradingDecisionRetriesMalformedJSONOnce(t *testing.T) {
+	// Exact regression shape from hosted Integration: an extra quote
+	// between the closing evidence array and the next object key.
+	model := &fakeModel{outputs: []string{
+		`{"symbol":"600519.SH","market_view":"grounded","evidence":["evidence"]","risk":["risk"],"action":"WATCH","confidence":0.65}`,
+		`{"symbol":"600519.SH","market_view":"grounded","evidence":["evidence"],"risk":["risk"],"action":"WATCH","confidence":0.65}`,
+	}}
+	a, err := New(context.Background(), Config{Model: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := a.AnalyzeArtifact(context.Background(), validResearchArtifact())
+	if err != nil {
+		t.Fatalf("AnalyzeArtifact() error = %v", err)
+	}
+	if result.Action != decision.ActionWatch || result.Symbol != "600519.SH" {
+		t.Fatalf("invalid recovered decision: %+v", result)
+	}
+	if model.calls != 2 {
+		t.Fatalf("calls = %d, want 2", model.calls)
+	}
+}
+
+func TestTradingDecisionMalformedJSONRetryExhausted(t *testing.T) {
+	model := &fakeModel{output: `{"symbol":"600519.SH","evidence":["e"]","risk":["r"]}`}
+	a, err := New(context.Background(), Config{Model: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.AnalyzeArtifact(context.Background(), validResearchArtifact())
+	if err == nil || !strings.Contains(err.Error(), "attempt 2/2") ||
+		!strings.Contains(err.Error(), "invalid trading decision JSON") {
+		t.Fatalf("error = %v", err)
+	}
+	if model.calls != 2 {
+		t.Fatalf("calls = %d, want 2", model.calls)
+	}
+}
+
+func TestTradingDecisionSemanticFailureDoesNotRetry(t *testing.T) {
+	model := &fakeModel{output: `{"symbol":"600519.SH","market_view":"grounded","evidence":[],"risk":[],"action":"WATCH","confidence":0.65}`}
+	a, err := New(context.Background(), Config{Model: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.AnalyzeArtifact(context.Background(), validResearchArtifact())
+	if err == nil || !strings.Contains(err.Error(), "evidence is required") {
+		t.Fatalf("error = %v", err)
+	}
+	if model.calls != 1 {
+		t.Fatalf("calls = %d, want 1; never retry a semantic error", model.calls)
+	}
+}
+
+func TestTradingDecisionSymbolMismatchDoesNotRetry(t *testing.T) {
+	model := &fakeModel{output: `{"symbol":"000001.SZ","market_view":"grounded","evidence":["e"],"risk":[],"action":"WATCH","confidence":0.65}`}
+	a, err := New(context.Background(), Config{Model: model})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.AnalyzeArtifact(context.Background(), validResearchArtifact())
+	if err == nil || !strings.Contains(err.Error(), "does not match input symbol") {
+		t.Fatalf("error = %v", err)
+	}
+	if model.calls != 1 {
+		t.Fatalf("calls = %d, want 1; never retry symbol mismatch", model.calls)
 	}
 }
