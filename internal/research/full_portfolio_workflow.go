@@ -18,11 +18,16 @@ type FullPortfolioWorkflow struct {
 	// MaxPortfolioAge is a caller-defined freshness policy for observed
 	// account snapshots. Zero preserves the previous no-age-limit behavior.
 	MaxPortfolioAge time.Duration
+	// Limits is an optional caller-authored CURRENT exposure policy. It is
+	// not derived from the observed account and authorizes no orders.
+	Limits *portfolio.Limits
 }
 
 type FullPortfolioResult struct {
 	ResearchArtifact *synthesis.Artifact `json:"research_artifact"`
 	PortfolioReview  *PortfolioReviewResult `json:"portfolio_review"`
+	// Absent unless explicit independent risk limits were provided.
+	CurrentLimitsReview *portfolio.LimitReview `json:"current_limits_review,omitempty"`
 }
 
 func (w *FullPortfolioWorkflow) Run(
@@ -44,6 +49,12 @@ func (w *FullPortfolioWorkflow) Run(
 	if err := portfolio.ValidateAt(book, input.RequestedAsOf, w.MaxPortfolioAge); err != nil {
 		return nil, fmt.Errorf("invalid portfolio snapshot: %w", err)
 	}
+	// Check the independently supplied policy at the same PIT cutoff as
+	// research, before invoking any live model or external data source.
+	limitsReview, err := portfolio.EvaluateCurrentLimits(book, w.Limits, input.RequestedAsOf)
+	if err != nil {
+		return nil, fmt.Errorf("current risk limits review: %w", err)
+	}
 
 	artifact, err := w.Research.RunArtifact(ctx, input)
 	if err != nil {
@@ -56,5 +67,6 @@ func (w *FullPortfolioWorkflow) Run(
 	return &FullPortfolioResult{
 		ResearchArtifact: artifact,
 		PortfolioReview: result,
+		CurrentLimitsReview: limitsReview,
 	}, nil
 }

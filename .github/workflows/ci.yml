@@ -104,3 +104,22 @@ jobs:
           fi
           grep -q 'portfolio snapshot is stale' "${{ runner.temp }}/cli-err"
           test ! -s "${{ runner.temp }}/cli-out"
+
+          # A caller risk policy from the future is invalid for a current
+          # research cutoff. The CLI must reject it before configuration,
+          # LLM initialization, or any external provider calls.
+          printf '{"state":"NOT_PROVIDED"}\n' \
+            > "${{ runner.temp }}/unknown-account.json"
+          printf '{"policy_id":"future-risk-policy","as_of":"2099-01-01T00:00:00+08:00","scope":"CASH_AND_POSITIONS","currency":"CNY","rules":[{"kind":"MAX_SINGLE_POSITION_WEIGHT","limit_bps":3000}]}\n' \
+            > "${{ runner.temp }}/future-risk-limits.json"
+          if "${{ runner.temp }}/aegis-cli" \
+              -config "${{ runner.temp }}/nonexistent-config.yaml" \
+              -portfolio-review \
+              -portfolio-file "${{ runner.temp }}/unknown-account.json" \
+              -risk-limits-file "${{ runner.temp }}/future-risk-limits.json" \
+              > "${{ runner.temp }}/cli-out" 2> "${{ runner.temp }}/cli-err"; then
+            echo "::error::CLI accepted future policy"
+            exit 1
+          fi
+          grep -q 'after research requested_as_of' "${{ runner.temp }}/cli-err"
+          test ! -s "${{ runner.temp }}/cli-out"
