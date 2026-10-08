@@ -43,6 +43,7 @@ func main() {
 		portfolioFile string
 		portfolioMaxAge time.Duration
 		riskLimitsFile string
+		tradeScenarioFile string
 	)
 
 	flag.StringVar(
@@ -111,9 +112,15 @@ func main() {
 		"",
 		"optional caller-supplied JSON current-risk policy; requires -portfolio-review",
 	)
+	flag.StringVar(
+		&tradeScenarioFile,
+		"trade-scenario-file",
+		"",
+		"optional explicitly supplied CNY trade what-if; requires -portfolio-review and -risk-limits-file",
+	)
 	flag.Parse()
 
-	if err := runWithLimits(
+	if err := runWithScenario(
 		context.Background(),
 		configPath,
 		skillsDir,
@@ -126,6 +133,7 @@ func main() {
 		portfolioFile,
 		portfolioMaxAge,
 		riskLimitsFile,
+		tradeScenarioFile,
 	); err != nil {
 		log.Fatal(err)
 	}
@@ -165,6 +173,28 @@ func runWithLimits(
 	portfolioMaxAge time.Duration,
 	riskLimitsFile string,
 ) error {
+	return runWithScenario(ctx, configPath, skillsDir, timeZone, symbol,
+		marketQuery, evidenceStore, eventLookback, portfolioReview,
+		portfolioFile, portfolioMaxAge, riskLimitsFile, "")
+}
+
+// runWithScenario adds a separately declared hypothetical notional transfer
+// without altering the existing caller API or auto-sizing a TradeIntent.
+func runWithScenario(
+	ctx context.Context,
+	configPath string,
+	skillsDir string,
+	timeZone string,
+	symbol string,
+	marketQuery string,
+	evidenceStore string,
+	eventLookback time.Duration,
+	portfolioReview bool,
+	portfolioFile string,
+	portfolioMaxAge time.Duration,
+	riskLimitsFile string,
+	tradeScenarioFile string,
+) error {
 	// Validate account input before initiating any live research or LLM call.
 	// NOT_PROVIDED is explicit; no implicit empty portfolios.
 	var book *portfolio.Context
@@ -187,6 +217,20 @@ func runWithLimits(
 			return err
 		}
 		limits = loaded
+	}
+	if strings.TrimSpace(tradeScenarioFile) != "" && !portfolioReview {
+		return fmt.Errorf("-trade-scenario-file requires -portfolio-review")
+	}
+	if strings.TrimSpace(tradeScenarioFile) != "" && limits == nil {
+		return fmt.Errorf("-trade-scenario-file requires -risk-limits-file")
+	}
+	var scenario *portfolio.TradeScenario
+	if strings.TrimSpace(tradeScenarioFile) != "" {
+		loaded, err := loadTradeScenario(tradeScenarioFile)
+		if err != nil {
+			return err
+		}
+		scenario = loaded
 	}
 	if portfolioMaxAge < 0 {
 		return fmt.Errorf("-portfolio-max-age must not be negative")
@@ -215,6 +259,10 @@ func runWithLimits(
 		// Fail before loading LLM configuration and external capabilities.
 		if _, err := portfolio.EvaluateCurrentLimits(book, limits, workflowInput.RequestedAsOf); err != nil {
 			return fmt.Errorf("invalid current risk limits: %w", err)
+		}
+		if err := portfolio.ValidateTradeScenarioAt(scenario, book, limits,
+			workflowInput.RequestedAsOf, workflowInput.Symbol); err != nil {
+			return fmt.Errorf("invalid trade scenario: %w", err)
 		}
 	}
 
@@ -602,6 +650,7 @@ func runWithLimits(
 			Review: review,
 			MaxPortfolioAge: portfolioMaxAge,
 			Limits: limits,
+			Scenario: scenario,
 		}).Run(ctx, workflowInput, book)
 		if err != nil {
 			return err
