@@ -325,7 +325,7 @@ func TestSemanticMatcherPersistentOmissionStopsResearch(t *testing.T) {
 
 func TestSemanticMatcherRejectsUnknownBatchIDBeforeRetry(t *testing.T) {
 	model := &semanticMatcherModel{response: agenticTextMessage(schema.AgenticRoleTypeAssistant,
-		`{"matches":[{"raw_document_id":"fabricated","relevant":true,"confidence":0.98}]}`)}
+		`{"matches":[{"raw_document_id":"fabricated","relevant":true,"confidence":0.98,"reason":"fabricated linkage"}]}`)}
 	matcher := &AgenticSemanticEvidenceMatcher{Model:model}
 	_,err := matcher.Match(context.Background(),EvidenceTarget{Symbol:"600519.SH"},
 		[]RawDocument{{ID:"a"},{ID:"b"}})
