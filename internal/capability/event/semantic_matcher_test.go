@@ -238,6 +238,8 @@ func TestSemanticMatcherBatchesAndRetriesOnlyMissingIDs(t *testing.T) {
 		agenticTextMessage(schema.AgenticRoleTypeAssistant,
 			`{"matches":[{"raw_document_id":"b","relevant":true,"confidence":0.81,"reason":"direct"}]}`),
 		agenticTextMessage(schema.AgenticRoleTypeAssistant,
+			`{"matches":[{"raw_document_id":"d","relevant":false,"confidence":0.90,"reason":"no target linkage"}]}`),
+		agenticTextMessage(schema.AgenticRoleTypeAssistant,
 			`{"matches":[{"raw_document_id":"e","relevant":false,"confidence":0.99,"reason":"other"},{"raw_document_id":"f","relevant":true,"confidence":0.85,"reason":"direct"}]}`),
 	}}
 	selector := &HybridEvidenceSelector{
@@ -247,43 +249,76 @@ func TestSemanticMatcherBatchesAndRetriesOnlyMissingIDs(t *testing.T) {
 		SemanticMatcher: &AgenticSemanticEvidenceMatcher{Model: model},
 	}
 	documents := []RawDocument{
-		{ID:"a",Title:"supplier contract"}, {ID:"b",Title:"supply order"},
-		{ID:"c",Title:"industry news"}, {ID:"d",Title:"cls market news"},
-		{ID:"e",Title:"technology headline"}, {ID:"f",Title:"customer story"},
+		{ID: "a", Title: "supplier contract"},
+		{ID: "b", Title: "supply order"},
+		{ID: "c", Title: "industry news"},
+		{ID: "d", Title: "market update"},
+		{ID: "e", Title: "technology headline"},
+		{ID: "f", Title: "customer story"},
 	}
-	decisions, err := selector.Select(context.Background(),
-		ResearchTask{Symbol:"600519.SH"}, documents)
+	decisions, err := selector.Select(
+		context.Background(), ResearchTask{Symbol: "600519.SH"}, documents,
+	)
 	if err != nil {
 		t.Fatalf("Select() error = %v", err)
 	}
-	if model.calls != 3 {
-		t.Fatalf("calls = %d, want 3 (initial batch, omitted retry, second batch)", model.calls)
-	}
 	if len(decisions) != len(documents) {
-		t.Fatalf("decision count = %d", len(decisions))
+		t.Fatalf("decisions = %d, want %d", len(decisions), len(documents))
 	}
-	wantBatches := [][]string{{"a","b","c","d"},{"b","d"},{"e","f"}}
+	if model.calls != 4 {
+		t.Fatalf("calls = %d, want 4", model.calls)
+	}
+	wantBatches := [][]string{{"a", "b", "c", "d"}, {"b"}, {"d"}, {"e", "f"}}
 	for i, messages := range model.inputs {
 		var request semanticEvidencePrompt
 		if err := json.Unmarshal([]byte(agenticAssistantOrUserText(messages[1])), &request); err != nil {
 			t.Fatalf("decode batch %d input: %v", i, err)
 		}
-		ids := make([]string,0,len(request.Documents))
-		for _, item := range request.Documents { ids=append(ids,item.RawDocumentID) }
+		ids := make([]string, 0, len(request.Documents))
+		for _, item := range request.Documents {
+			ids = append(ids, item.RawDocumentID)
+		}
 		if !reflect.DeepEqual(ids, wantBatches[i]) {
-			t.Fatalf("batch %d ids=%v, want %v",i,ids,wantBatches[i])
+			t.Fatalf("batch %d ids=%v, want %v", i, ids, wantBatches[i])
 		}
 	}
-	byID := map[string]EvidenceSelectionDecision{}
-	for _, decision := range decisions {byID[decision.RawDocumentID]=decision}
-	if !byID["a"].Selected || !byID["b"].Selected || !byID["f"].Selected {
-		t.Fatalf("grounded positive matches lost: %+v",byID)
+	byID := make(map[string]EvidenceSelectionDecision)
+	for _, d := range decisions {
+		byID[d.RawDocumentID] = d
 	}
-	if byID["c"].Selected || byID["e"].Selected {
-		t.Fatalf("negative matches promoted: %+v",byID)
+	for _, id := range []string{"a", "b", "f"} {
+		if !byID[id].Selected {
+			t.Fatalf("grounded evidence %q was excluded", id)
+		}
 	}
-	if d:=byID["d"]; d.Selected || d.Method!=SelectionUnreviewed || d.Confidence!=0 {
-		t.Fatalf("still omitted candidate should be unreviewed: %+v",d)
+	for _, id := range []string{"c", "d", "e"} {
+		if byID[id].Selected || byID[id].Method != SelectionSemantic {
+			t.Fatalf("rejected evidence %q was accepted: %+v", id, byID[id])
+		}
+	}
+}
+
+func TestSemanticMatcherPersistentOmissionStopsResearch(t *testing.T) {
+	model := &semanticMatcherModel{responses: []*schema.AgenticMessage{
+		agenticTextMessage(schema.AgenticRoleTypeAssistant,
+			`{"matches":[{"raw_document_id":"a","relevant":true,"confidence":0.9,"reason":"direct"}]}`),
+		agenticTextMessage(schema.AgenticRoleTypeAssistant,
+			`{"matches":[]}`),
+	}}
+	matcher := &AgenticSemanticEvidenceMatcher{Model: model}
+	matches, err := matcher.Match(
+		context.Background(), EvidenceTarget{Symbol: "600519.SH"},
+		[]RawDocument{{ID: "a"}, {ID: "cls_news_2498111"}},
+	)
+	if err == nil || !strings.Contains(err.Error(), "research incomplete") ||
+		!strings.Contains(err.Error(), "cls_news_2498111") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("incomplete result must not be returned: %+v", matches)
+	}
+	if model.calls != 2 {
+		t.Fatalf("calls = %d, want 2", model.calls)
 	}
 }
 
