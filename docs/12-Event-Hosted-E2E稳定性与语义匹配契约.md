@@ -64,17 +64,15 @@ Hosted Full Stateless / Full Multi-Agent E2E 使用显式 `max_tokens=16384`，�
 
 **验收结论必须同时区分：代码可编译、确定性测试通过、真实 Hosted E2E 通过。三者不能互相替代。**
 
-## 6. 当前尚未完成的产品接入
+## 6. 产品入口与功能验收
 
-`cmd/aegis/main.go` 目前仍然装配旧版 `research.New(...)` 流程，并没有装配 `NewPortfolioReview(...)`。
-Hosted E2E 中构造的 `POSITIONS`、`Quantity:100` 仅是**测试 fixture**，不代表真实券商/用户持仓。
-因此本 PR 的测试成功不能被描述为“线上 Portfolio Manager 已经可用”。
+PR #81 现在增加了 `research.NewArtifact`、`FullPortfolioWorkflow` 以及 CLI 显式 `-portfolio-review -portfolio-file`，具体用法见 [13-生产组合审查链路.md](13-生产组合审查链路.md)。
 
-正式产品接入需要额外完成：
-- CLI/API 的明确 PortfolioContext 输入，不能拿 fixture 当真实账户；
-- ResearchArtifact 到 PortfolioReview 的真正生产编排；
-- 出错时对外可观察的研究不完整状态，区分数据源问题、模型结构错误和证据缺口；
-- 使用与生产一致的模型 profile 和可复用快照进行验收。
+`cmd/aegis/main.go` 的旧默认 `research.New(...).Run(...)` 行为仍保留为兼容模式；只有显式 `-portfolio-review` 才调用真实完整的研究/辩论/交易/风险/组合链路。PortfolioContext 必须来源于调用方文件：`NOT_PROVIDED`、`EMPTY`、`POSITIONS` 不可互相代替。
+
+Hosted E2E 使用的 `POSITIONS`、`Quantity:100` 仅是独立测试 fixture，不能证明真实账户读取的准确性。生产路径和单次调用边界由另外的确定性单元测试验证。
+
+下一步可将快照捕获、live acquisition smoke 和固定快照的 agent chain regression 分层，以便证据完整性失败时更容易定位原因，而不是要求 LLM 始终返回相同观点。
 
 ## 7. 后续但不在本次 PR 内
 
