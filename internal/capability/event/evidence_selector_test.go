@@ -355,6 +355,18 @@ func TestHybridEvidenceSelectorValidation(
 			want: "must be between 0 and 1",
 		},
 		{
+			name: "incomplete semantic coverage",
+			selector: &HybridEvidenceSelector{
+				TargetResolver: baseResolver,
+				SemanticMatcher: semanticMatcherFunc(func(
+					context.Context, EvidenceTarget, []RawDocument,
+				) ([]SemanticEvidenceMatch, error) {
+					return nil, nil
+				}),
+			},
+			want: "research incomplete",
+		},
+		{
 			name: "semantic failure",
 			selector: &HybridEvidenceSelector{
 				TargetResolver: baseResolver,
@@ -476,76 +488,45 @@ func TestMapEvidenceTargetResolver(t *testing.T) {
 	}
 }
 
-func TestHybridEvidenceSelectorMissingSemanticMatchesFailClosed(t *testing.T) {
+func TestHybridEvidenceSelectorRejectsIncompleteSemanticCoverage(t *testing.T) {
 	selector := &HybridEvidenceSelector{
-		TargetResolver: targetResolverFunc(func(
-			context.Context, ResearchTask,
-		) (EvidenceTarget, error) {
-			return EvidenceTarget{Symbol: "600519.SH", Name: "贵州茅台"}, nil
-		}),
+		TargetResolver: MapEvidenceTargetResolver{
+			"600519.SH": {Name: "贵州茅台"},
+		},
 		SemanticMatcher: semanticMatcherFunc(func(
 			_ context.Context, _ EvidenceTarget, documents []RawDocument,
 		) ([]SemanticEvidenceMatch, error) {
-			if len(documents) != 3 {
-				t.Fatalf("documents = %d, want 3", len(documents))
+			if len(documents) != 2 {
+				t.Fatalf("documents = %d, want 2", len(documents))
 			}
-			// The model silently omits the second and third input ID.
 			return []SemanticEvidenceMatch{{
-				RawDocumentID: "candidate-1",
-				Relevant: true,
-				Confidence: .93,
-				Reason: "explicit issuer linkage",
+				RawDocumentID: "candidate-1", Relevant: true,
+				Confidence: .93, Reason: "issuer linkage",
 			}}, nil
 		}),
 	}
-	decisions, err := selector.Select(context.Background(), ResearchTask{
-		Symbol: "600519.SH",
-	}, []RawDocument{
-		{ID: "candidate-1", Title: "external contract", Content: "issuer material"},
-		{ID: "cls_news_2498111", Title: "general market update", Content: "no target linkage"},
-		{ID: "candidate-3", Title: "industry article", Content: "sector general news"},
-	})
-	if err != nil {
-		t.Fatalf("Select() error = %v", err)
+	decisions, err := selector.Select(context.Background(),
+		ResearchTask{Symbol: "600519.SH"},
+		[]RawDocument{
+			{ID: "candidate-1", Title: "supplier news"},
+			{ID: "cls_news_2498111", Title: "market news"},
+		})
+	if err == nil || !strings.Contains(err.Error(), "research incomplete") ||
+		!strings.Contains(err.Error(), "cls_news_2498111") {
+		t.Fatalf("error = %v", err)
 	}
-	if len(decisions) != 3 {
-		t.Fatalf("decisions = %d, want one per candidate", len(decisions))
-	}
-	for _, d := range decisions {
-		switch d.RawDocumentID {
-		case "candidate-1":
-			if !d.Selected || d.Method != SelectionSemantic || d.Confidence != .93 {
-				t.Fatalf("matched decision = %+v", d)
-			}
-		case "cls_news_2498111", "candidate-3":
-			if d.Selected || d.Confidence != 0 || d.Method != SelectionUnreviewed ||
-				!strings.Contains(d.Reason, "omitted candidate") {
-				t.Fatalf("missing decision not safely rejected: %+v", d)
-			}
-		default:
-			t.Fatalf("unexpected decision %+v", d)
-		}
-	}
-	selected, err := applyEvidenceSelection([]RawDocument{
-		{ID: "candidate-1"}, {ID: "cls_news_2498111"}, {ID: "candidate-3"},
-	}, decisions)
-	if err != nil || len(selected) != 1 || selected[0].ID != "candidate-1" {
-		t.Fatalf("selected = %+v, err = %v", selected, err)
+	if len(decisions) != 0 {
+		t.Fatalf("incomplete selection cannot appear successful: %+v", decisions)
 	}
 }
 
-func TestHybridEvidenceSelectorAllSemanticMatchesOmitted(t *testing.T) {
-	decisions, err := validateSemanticMatches(
+func TestHybridEvidenceSelectorRejectsAllMissingSemanticCoverage(t *testing.T) {
+	_, err := validateSemanticMatches(
 		[]RawDocument{{ID: "candidate-1"}, {ID: "candidate-2"}},
 		nil, .8,
 	)
-	if err != nil || len(decisions) != 2 {
-		t.Fatalf("decisions=%+v, err=%v", decisions, err)
-	}
-	for _, d := range decisions {
-		if d.Selected || d.Method != SelectionUnreviewed || d.Confidence != 0 {
-			t.Fatalf("omitted candidate must fail closed: %+v", d)
-		}
+	if err == nil || !strings.Contains(err.Error(), "research incomplete") {
+		t.Fatalf("error = %v", err)
 	}
 }
 
@@ -563,33 +544,6 @@ func TestHybridEvidenceSelectorPartialSemanticMatchesStillRejectsInvalidIDs(t *t
 			_,err:=validateSemanticMatches([]RawDocument{{ID:"one"}, {ID:"missing"}},tc.matches,.8)
 			if err==nil || !strings.Contains(err.Error(),tc.want) {
 				t.Fatalf("error=%v, want %q",err,tc.want)
-			}
-		})
-	}
-}
-
-func TestApplyEvidenceSelectionRejectsForgedUnreviewedApproval(t *testing.T) {
-	for _, tc := range []struct{
-		name string
-		selected bool
-		confidence float64
-	}{
-		{"selected", true, 0},
-		{"nonzero confidence", false, .6},
-	} {
-		t.Run(tc.name, func(t *testing.T){
-			_,err:=applyEvidenceSelection(
-				[]RawDocument{{ID:"candidate"}},
-				[]EvidenceSelectionDecision{{
-					RawDocumentID:"candidate",
-					Selected:tc.selected,
-					Confidence:tc.confidence,
-					Method:SelectionUnreviewed,
-					Reason:"semantic matcher omitted candidate",
-				}},
-			)
-			if err==nil || !strings.Contains(err.Error(),"must be rejected with zero confidence") {
-				t.Fatalf("error=%v",err)
 			}
 		})
 	}
