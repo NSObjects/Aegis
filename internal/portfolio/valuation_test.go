@@ -72,6 +72,7 @@ func TestEmptyZeroValueValuationHasUndefinedWeights(t *testing.T) {
 			Scope: ValuationScopeCashAndPositions,
 			Currency: CurrencyCNY,
 			TotalValueFen: 0, CashFen: 0,
+			PositionValues: []PositionValue{},
 		},
 	}
 	got, err := ComputeExposure(book)
@@ -133,5 +134,22 @@ func TestCurrentExposureBasisPointsAreTruncatedWithoutFloatRounding(t *testing.T
 	if err!=nil {t.Fatal(err)}
 	if got.Positions[0].WeightBps!=3333 || *got.CashWeightBps!=6666 {
 		t.Fatalf("expected explicit downward truncation, got %+v",got)
+	}
+}
+
+func TestObservedValuationRequiresExplicitEmptyArrayInGo(t *testing.T) {
+	book:=&Context{
+		State:StateEmpty, AsOf:"2026-10-08T09:00:00+08:00",
+		Valuation:&Valuation{
+			Scope:ValuationScopeCashAndPositions, Currency:CurrencyCNY,
+			TotalValueFen:0, CashFen:0,
+		},
+	}
+	if err:=Validate(book);err==nil || !strings.Contains(err.Error(),"position_values must be explicitly provided") {
+		t.Fatalf("nil valuation positions cannot be confused with observed empty positions: %v",err)
+	}
+	book.Valuation.PositionValues=[]PositionValue{}
+	if err:=Validate(book);err!=nil {
+		t.Fatalf("explicitly empty observed market values must be valid: %v",err)
 	}
 }
