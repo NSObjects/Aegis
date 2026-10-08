@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 
 	"github.com/cloudwego/eino/components/model"
@@ -440,6 +441,8 @@ func (a *AgenticEventMaterialityAnalyzer) AnalyzeMateriality(
 
 const timeRFC3339 = "2006-01-02T15:04:05Z07:00"
 
+const maxStrictJSONAttempts = 2
+
 func generateStrictAgenticJSON(
 	ctx context.Context,
 	m model.BaseModel[*schema.AgenticMessage],
@@ -447,68 +450,60 @@ func generateStrictAgenticJSON(
 	payload any,
 	output any,
 ) error {
+	target := reflect.ValueOf(output)
+	if !target.IsValid() || target.Kind() != reflect.Pointer || target.IsNil() {
+		return errors.New("strict JSON output must be a non-nil pointer")
+	}
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf(
-			"encode model input: %w",
-			err,
-		)
+		return fmt.Errorf("encode model input: %w", err)
 	}
-
-	response, err := m.Generate(
-		ctx,
-		[]*schema.AgenticMessage{
-			schema.SystemAgenticMessage(
-				instruction,
-			),
-			schema.UserAgenticMessage(
-				string(data),
-			),
-		},
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"generate model output: %w",
-			err,
-		)
+	for attempt := 1; attempt <= maxStrictJSONAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		prompt := instruction
+		if attempt > 1 {
+			prompt += "\nReturn a new valid JSON object with only the schema fields specified above. No wrappers or additional keys."
+		}
+		response, err := m.Generate(ctx, []*schema.AgenticMessage{
+			schema.SystemAgenticMessage(prompt),
+			schema.UserAgenticMessage(string(data)),
+		})
+		if err != nil {
+			return fmt.Errorf("generate model output: %w", err)
+		}
+		raw := strings.TrimSpace(agenticMessageText(response))
+		if raw == "" {
+			return errors.New("model returned empty output")
+		}
+		candidate := reflect.New(target.Elem().Type())
+		if err := decodeStrictJSON(raw, candidate.Interface()); err != nil {
+			if attempt == maxStrictJSONAttempts {
+				return fmt.Errorf("decode strict JSON after %d attempts: %w: output=%q",
+					attempt, err, raw)
+			}
+			continue
+		}
+		target.Elem().Set(candidate.Elem())
+		return nil
 	}
+	return errors.New("strict JSON attempts exhausted")
+}
 
-	raw := strings.TrimSpace(
-		agenticMessageText(response),
-	)
-	if raw == "" {
-		return errors.New(
-			"model returned empty output",
-		)
-	}
-
-	decoder := json.NewDecoder(
-		strings.NewReader(raw),
-	)
+func decodeStrictJSON(raw string, output any) error {
+	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(output); err != nil {
-		return fmt.Errorf(
-			"decode strict JSON: %w: output=%q",
-			err,
-			raw,
-		)
+		return err
 	}
-
 	var trailing any
-	if err := decoder.Decode(&trailing);
-		err != io.EOF {
+	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
-			err = errors.New(
-				"multiple JSON values",
-			)
+			return errors.New("multiple JSON values")
 		}
-		return fmt.Errorf(
-			"decode strict JSON: %w: output=%q",
-			err,
-			raw,
-		)
+		return err
 	}
-
 	return nil
 }
 
