@@ -22,7 +22,7 @@ const (
 	ReasonRiskUncertain     ReasonCode = "RISK_UNCERTAIN"
 	ReasonRiskCaution       ReasonCode = "RISK_CAUTION"
 	ReasonAccountDataAbsent ReasonCode = "ACCOUNT_DATA_ABSENT"
-	ReasonExecutionContextMissing ReasonCode = "EXECUTION_CONTEXT_MISSING"
+	ReasonResearchReviewRequired ReasonCode = "RESEARCH_REVIEW_REQUIRED"
 )
 
 // Decision is a portfolio review disposition, NEVER an executable trade order.

@@ -184,8 +184,8 @@ func TestEvaluateAcceptableWithObservedValuationStillRequiresExecutionContext(t 
 	decision,err:=Evaluate(intent,book,review)
 	if err!=nil {t.Fatal(err)}
 	if decision.Disposition!=DispositionReviewRequired ||
-		decision.ReasonCode!=ReasonExecutionContextMissing ||
-		!strings.Contains(decision.Summary,"no executable trade size") {
+		decision.ReasonCode!=ReasonResearchReviewRequired ||
+		!strings.Contains(decision.Summary,"requires human assessment") {
 		t.Fatalf("observed account is not a trade authorization: %+v",decision)
 	}
 	if err:=Validate(decision,intent,book,review);err!=nil {t.Fatal(err)}

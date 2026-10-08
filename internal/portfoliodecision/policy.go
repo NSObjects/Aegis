@@ -103,8 +103,8 @@ func classify(status tradeintent.Status, assessment risk.Assessment, hasObserved
 				"Risk review requires caution; a further review is required."}, nil
 		case risk.AssessmentAcceptable:
 			if hasObservedValuation {
-				return policyResult{DispositionReviewRequired, ReasonExecutionContextMissing,
-					"Observed portfolio value is available, but no executable trade size, price or authorization has been assessed."}, nil
+				return policyResult{DispositionReviewRequired, ReasonResearchReviewRequired,
+					"Observed portfolio monetary exposure is available, but the research conclusion still requires human assessment."}, nil
 			}
 			return policyResult{DispositionReviewRequired, ReasonAccountDataAbsent,
 				"Risk review found no established concern, but portfolio cash and monetary exposure are not provided; execution is not authorized."}, nil

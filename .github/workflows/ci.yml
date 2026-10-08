@@ -123,3 +123,22 @@ jobs:
           fi
           grep -q 'after research requested_as_of' "${{ runner.temp }}/cli-err"
           test ! -s "${{ runner.temp }}/cli-out"
+
+          # Reject a caller scenario from the future before any provider,
+          # configuration or LLM setup; do not use made-up trading orders.
+          printf '{"policy_id":"test-policy","as_of":"2020-01-01T00:00:00+08:00","scope":"CASH_AND_POSITIONS","currency":"CNY","rules":[{"kind":"MAX_SINGLE_POSITION_WEIGHT","limit_bps":3000}]}\n' \
+            > "${{ runner.temp }}/scenario-limits.json"
+          printf '{"scenario_id":"future-what-if","as_of":"2099-01-01T00:00:00+08:00","symbol":"600519.SH","side":"BUY","currency":"CNY","notional_fen":1000}\n' \
+            > "${{ runner.temp }}/future-trade-scenario.json"
+          if "${{ runner.temp }}/aegis-cli" \
+              -config "${{ runner.temp }}/nonexistent-config.yaml" \
+              -portfolio-review \
+              -portfolio-file "${{ runner.temp }}/unknown-account.json" \
+              -risk-limits-file "${{ runner.temp }}/scenario-limits.json" \
+              -trade-scenario-file "${{ runner.temp }}/future-trade-scenario.json" \
+              > "${{ runner.temp }}/cli-out" 2> "${{ runner.temp }}/cli-err"; then
+            echo "::error::CLI accepted a future proposed trade scenario"
+            exit 1
+          fi
+          grep -q 'trade scenario as_of is after research requested_as_of' "${{ runner.temp }}/cli-err"
+          test ! -s "${{ runner.temp }}/cli-out"
