@@ -5,6 +5,7 @@ import (
 	riskctx "Aegis/internal/risk"
 	"Aegis/internal/tradeintent"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -15,14 +16,16 @@ import (
 type modelStub struct {
 	output string
 	calls  int
+	inputs [][]*schema.AgenticMessage
 }
 
 func (m *modelStub) Generate(
-	context.Context,
-	[]*schema.AgenticMessage,
-	...model.Option,
+	_ context.Context,
+	messages []*schema.AgenticMessage,
+	_ ...model.Option,
 ) (*schema.AgenticMessage, error) {
 	m.calls++
+	m.inputs = append(m.inputs, messages)
 	return &schema.AgenticMessage{
 		Role: schema.AgenticRoleTypeAssistant,
 		ContentBlocks: []*schema.ContentBlock{
@@ -163,5 +166,62 @@ func TestAnalystRequiresModelForObservedPortfolio(t *testing.T) {
 	)
 	if err == nil || !strings.Contains(err.Error(), "model is required") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAnalystReceivesOnlyReconciledObservedExposure(t *testing.T) {
+	m := &modelStub{output: `{"symbol":"600519.SH","assessment":"CAUTION","summary":"consider existing concentration","confidence":0.7}`}
+	book := testPositionsPortfolio()
+	book.Valuation = &portfolio.Valuation{
+		Scope: portfolio.ValuationScopeCashAndPositions,
+		Currency: portfolio.CurrencyCNY,
+		TotalValueFen: 100000,
+		CashFen: 30000,
+		PositionValues: []portfolio.PositionValue{
+			{Symbol:"600519.SH",MarketValueFen:60000},
+			{Symbol:"000001.SZ",MarketValueFen:10000},
+		},
+	}
+	result,err:=(&Analyst{Model:m}).Review(context.Background(),testIntent(),book)
+	if err!=nil || result==nil || m.calls!=1 {t.Fatalf("Review err=%v result=%+v calls=%d",err,result,m.calls)}
+	if len(m.inputs)!=1 || len(m.inputs[0])!=2 ||
+		len(m.inputs[0][1].ContentBlocks)!=1 || m.inputs[0][1].ContentBlocks[0].UserInputText==nil {
+		t.Fatalf("model input has unexpected layout")
+	}
+	var input struct {
+		ObservedExposure *portfolio.Exposure `json:"observed_exposure"`
+	}
+	raw:=m.inputs[0][1].ContentBlocks[0].UserInputText.Text
+	if err:=json.Unmarshal([]byte(raw),&input);err!=nil {t.Fatal(err)}
+	if input.ObservedExposure==nil ||
+		input.ObservedExposure.TotalValueFen!=100000 ||
+		input.ObservedExposure.CashWeightBps==nil ||
+		*input.ObservedExposure.CashWeightBps!=3000 ||
+		len(input.ObservedExposure.Positions)!=2 ||
+		input.ObservedExposure.Positions[0].WeightBps!=6000 {
+		t.Fatalf("risk model did not receive deterministic observed exposure: %+v",input.ObservedExposure)
+	}
+}
+
+func TestAnalystCannotInferExposureFromQuantity(t *testing.T) {
+	m:=&modelStub{output:`{"symbol":"600519.SH","assessment":"INSUFFICIENT_CONTEXT","summary":"no monetary values","confidence":1}`}
+	_,err:=(&Analyst{Model:m}).Review(context.Background(),testIntent(),testPositionsPortfolio())
+	if err!=nil {t.Fatal(err)}
+	raw:=m.inputs[0][1].ContentBlocks[0].UserInputText.Text
+	if strings.Contains(raw,"observed_exposure") {
+		t.Fatalf("unknown valuation must not become derived exposure: %s",raw)
+	}
+}
+
+func TestAnalystRejectsUnbalancedValuationWithoutModelCall(t *testing.T) {
+	m:=&modelStub{}
+	book:=testPositionsPortfolio()
+	book.Valuation=&portfolio.Valuation{
+		Scope:portfolio.ValuationScopeCashAndPositions, Currency:portfolio.CurrencyCNY,
+		TotalValueFen:1, CashFen:1,
+	}
+	_,err:=(&Analyst{Model:m}).Review(context.Background(),testIntent(),book)
+	if err==nil || m.calls!=0 || !strings.Contains(err.Error(),"valuation") {
+		t.Fatalf("unreconciled account must fail before LLM: calls=%d err=%v",m.calls,err)
 	}
 }
