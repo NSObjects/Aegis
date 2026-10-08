@@ -242,3 +242,51 @@ func TestPortfolioReviewRequiresAllRoles(t *testing.T) {
 	_,err:=NewPortfolioReview(PortfolioReviewConfig{})
 	if err==nil || !strings.Contains(err.Error(),"debate") {t.Fatalf("error = %v",err)}
 }
+
+func TestPortfolioReviewReturnsObservedCurrentExposure(t *testing.T) {
+	w,_,_,_,riskAnalyst:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentCaution))
+	book:=reviewBookFixture()
+	book.Valuation=&portfolio.Valuation{
+		Scope:portfolio.ValuationScopeCashAndPositions, Currency:portfolio.CurrencyCNY,
+		TotalValueFen:100000, CashFen:40000,
+		PositionValues:[]portfolio.PositionValue{{Symbol:"600519.SH",MarketValueFen:60000}},
+	}
+	result,err:=w.Run(context.Background(),reviewArtifactFixture(),book)
+	if err!=nil {t.Fatal(err)}
+	if result.ObservedExposure==nil ||
+		len(result.ObservedExposure.Positions)!=1 ||
+		result.ObservedExposure.Positions[0].WeightBps!=6000 ||
+		result.ObservedExposure.CashWeightBps==nil ||
+		*result.ObservedExposure.CashWeightBps!=4000 {
+		t.Fatalf("missing audited exposure in review artifact: %+v",result.ObservedExposure)
+	}
+	if riskAnalyst.lastBook!=book {
+		t.Fatal("risk analyst must receive original observed valuation")
+	}
+	if result.PortfolioDecision.Disposition!=portfoliodecision.DispositionReviewRequired {
+		t.Fatal("observed valuation without risk budget or trade size must not approve execution")
+	}
+}
+
+func TestPortfolioReviewNeverInventsExposure(t *testing.T) {
+	w,_,_,_,_:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentCaution))
+	result,err:=w.Run(context.Background(),reviewArtifactFixture(),reviewBookFixture())
+	if err!=nil {t.Fatal(err)}
+	if result.ObservedExposure!=nil {
+		t.Fatalf("missing valuation must not be represented as zero or known: %+v",result.ObservedExposure)
+	}
+}
+
+func TestPortfolioReviewRejectsUnreconciledValuationBeforeDebate(t *testing.T) {
+	w,debateAgent,_,_,_:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentCaution))
+	book:=reviewBookFixture()
+	book.Valuation=&portfolio.Valuation{
+		Scope:portfolio.ValuationScopeCashAndPositions, Currency:portfolio.CurrencyCNY,
+		TotalValueFen:100000, CashFen:50000,
+		PositionValues:[]portfolio.PositionValue{{Symbol:"600519.SH",MarketValueFen:10000}},
+	}
+	result,err:=w.Run(context.Background(),reviewArtifactFixture(),book)
+	if err==nil || result!=nil || !strings.Contains(err.Error(),"does not reconcile") || debateAgent.calls!=0 {
+		t.Fatalf("must fail before model-driven debate: result=%+v err=%v debate=%d",result,err,debateAgent.calls)
+	}
+}

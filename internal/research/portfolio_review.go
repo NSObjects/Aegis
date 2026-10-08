@@ -56,6 +56,9 @@ type PortfolioReviewResult struct {
 	TradeIntent       *tradeintent.Intent         `json:"trade_intent"`
 	RiskContext       *risk.Context               `json:"risk_context"`
 	PortfolioDecision *portfoliodecision.Decision `json:"portfolio_decision"`
+	// Only populated for validated, caller-observed valuation. Nil means
+	// existing exposure is unknown, not zero.
+	ObservedExposure  *portfolio.Exposure          `json:"observed_exposure,omitempty"`
 }
 
 // NewPortfolioReview wires the V2.9 reasoning stage to the V2.10 risk/portfolio stage.
@@ -96,6 +99,10 @@ func (w *PortfolioReview) Run(
 	// nil is invalid: callers must explicitly choose NOT_PROVIDED, EMPTY, or POSITIONS.
 	if err := portfolio.Validate(book); err != nil {
 		return nil, fmt.Errorf("invalid portfolio context: %w", err)
+	}
+	observedExposure, err := portfolio.ComputeExposure(book)
+	if err != nil {
+		return nil, fmt.Errorf("compute portfolio exposure: %w", err)
 	}
 	state, err := w.cfg.Debate.Run(ctx, artifact)
 	if err != nil {
@@ -149,5 +156,6 @@ func (w *PortfolioReview) Run(
 		TradeIntent: intent,
 		RiskContext: riskContext,
 		PortfolioDecision: final,
+		ObservedExposure: observedExposure,
 	}, nil
 }

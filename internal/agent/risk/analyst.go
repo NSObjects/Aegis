@@ -20,8 +20,9 @@ type Analyst struct {
 }
 
 type analystInput struct {
-	TradeIntent *tradeintent.Intent `json:"trade_intent"`
-	Portfolio   *portfolio.Context  `json:"portfolio_context"`
+	TradeIntent     *tradeintent.Intent `json:"trade_intent"`
+	Portfolio       *portfolio.Context  `json:"portfolio_context"`
+	ObservedExposure *portfolio.Exposure `json:"observed_exposure,omitempty"`
 }
 
 func (a *Analyst) Review(
@@ -62,9 +63,16 @@ func (a *Analyst) Review(
 		return nil, errors.New("risk analyst model is required")
 	}
 
+	// Exposure is calculated deterministically from an explicitly observed
+	// and reconciled account valuation, never invented by the model.
+	exposure, err := portfolio.ComputeExposure(portfolioCtx)
+	if err != nil {
+		return nil, fmt.Errorf("compute observed portfolio exposure: %w", err)
+	}
 	payload, err := json.Marshal(analystInput{
 		TradeIntent: intent,
-		Portfolio:   portfolioCtx,
+		Portfolio: portfolioCtx,
+		ObservedExposure: exposure,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode risk analyst input: %w", err)
@@ -136,6 +144,10 @@ Hard constraints:
 - Use ONLY trade_intent and portfolio_context.
 - Do not call tools or perform new market research.
 - Do not invent cash, market value, cost basis, exposure, risk budget, leverage, account constraints, execution quantities, or unstated positions.
+- portfolio_context.valuation is optional caller-observed CNY cash/position amounts. observed_exposure, when present, is a deterministic calculation from that observed snapshot.
+- When observed_exposure is absent, concentration, weight, cash and invested value are unknown; NEVER infer them from quantity alone.
+- When observed_exposure is present, cite only its observed values; weight_bps is basis points (10000 = 100%) rounded down.
+- Do not infer available buying power, projected post-trade weights or limit breaches without an explicit proposed trade size and actual risk limits.
 - Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, orders, or position sizes.
 - Do not override the Trading Agent. You are a risk review layer.
 - Every finding / constraint / unresolved item must cite TRADE_INTENT and/or PORTFOLIO.

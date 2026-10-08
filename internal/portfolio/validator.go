@@ -12,6 +12,9 @@ func Validate(ctx *Context) error {
 	if ctx == nil {
 		return errors.New("portfolio context is nil")
 	}
+	if err := validateValuation(ctx); err != nil {
+		return fmt.Errorf("invalid portfolio valuation: %w", err)
+	}
 
 	switch ctx.State {
 	case StateNotProvided:
