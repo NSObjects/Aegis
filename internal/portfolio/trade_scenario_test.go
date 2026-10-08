@@ -46,7 +46,7 @@ func TestScenarioExactBreachNotHiddenByDisplayTruncation(t *testing.T) {
 	if err!=nil {t.Fatal(err)}
 	if res.Status!=ScenarioBreach || len(res.Checks)!=2 ||
 		res.Checks[0].Status!=LimitReviewBreach || res.Checks[1].Status!=LimitReviewBreach ||
-		res.Checks[0].ProjectedWeightBps!=7000 || false {
+		res.Checks[0].ProjectedWeightBps!=7000 {
 		t.Fatalf("7000.1 bps still breaches 7000 despite display truncation: %+v",res)
 	}
 }
@@ -70,7 +70,7 @@ func TestBuyNewPositionIncludedInHighestExposureCheck(t *testing.T) {
 	if err!=nil {t.Fatal(err)}
 	if res.Status!=ScenarioBreach ||
 		res.Checks[0].Symbol!="600519.SH" || res.Checks[0].ProjectedWeightBps!=6000 ||
-		res.Checks[1].ProjectedWeightBps!=8000 || false {
+		res.Checks[1].ProjectedWeightBps!=8000 {
 		t.Fatalf("new hypothetical symbol must not erase existing concentrated positions: %+v",res)
 	}
 }
@@ -85,7 +85,7 @@ func TestScenarioInsufficientFundsAndPositionMarketValue(t *testing.T) {
 		res,err:=EvaluateTradeScenario(book,postPolicy(10000,10000),
 			tradeScenario(tc.side,tc.symbol,tc.amount),testCutoff(),tc.symbol)
 		if err!=nil || res.Status!=tc.want ||
-			res.ProjectedCashFen!=nil || len(res.Checks)!=0 || false {
+			res.ProjectedCashFen!=nil || len(res.Checks)!=0 {
 			t.Fatalf("%s/%s/%d: result=%+v err=%v",tc.side,tc.symbol,tc.amount,res,err)
 		}
 	}
@@ -102,7 +102,7 @@ func TestScenarioInsufficientDataNeverBecomesWithinLimits(t *testing.T) {
 		result,err:=EvaluateTradeScenario(book,postPolicy(10000,10000),
 			tradeScenario(ScenarioBuy,"600519.SH",1),testCutoff(),"600519.SH")
 		if err!=nil || result.Status!=ScenarioInsufficientData ||
-			result.ProjectedCashFen!=nil || len(result.Checks)!=0 || false {
+			result.ProjectedCashFen!=nil || len(result.Checks)!=0 {
 			t.Fatalf("unknown portfolio cannot produce a projection: %+v err=%v",result,err)
 		}
 	}
@@ -157,7 +157,7 @@ func TestNotApplicableScenarioNeverIncludesProjection(t *testing.T) {
 	s:=tradeScenario(ScenarioBuy,"600519.SH",100)
 	out:=BuildNotApplicableScenario(s,postPolicy(10000,10000),"intent is MONITOR")
 	if out.Status!=ScenarioNotApplicable || out.ProjectedCashFen!=nil ||
-		len(out.Checks)!=0 || false {
+		len(out.Checks)!=0 {
 		t.Fatalf("non-candidate must not project: %+v",out)
 	}
 }
