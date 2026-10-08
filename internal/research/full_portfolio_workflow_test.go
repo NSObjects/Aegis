@@ -233,3 +233,105 @@ func TestFullPortfolioWorkflowFreshnessPolicyIsMeasuredAtResearchCutoff(t *testi
 		t.Fatalf("historical PIT snapshot within explicit age policy must pass: result=%+v error=%v",result,err)
 	}
 }
+
+func TestFullPortfolioWorkflowEvaluatesCurrentLimitsWithoutAuthorizingOrders(t *testing.T) {
+	marketAgent:=&fakeMarketAgent{result:validMarketContext()}
+	graph,err:=NewArtifact(context.Background(),Config{
+		MarketAgent:marketAgent,
+		TechnicalAgent:&fakeTechnicalAgent{result:validTechnicalContext()},
+		EventAgent:&fakeEventAgent{result:validEventContext()},
+		Synthesizer:&fakeSynthesizer{},
+	})
+	if err!=nil {t.Fatal(err)}
+	review,_,_,_,_:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentAcceptable))
+	input:=validWorkflowInput()
+	book:=reviewBookFixture()
+	book.AsOf=input.RequestedAsOf.Add(-time.Hour).Format(time.RFC3339)
+	book.Valuation=&portfolio.Valuation{
+		Scope:portfolio.ValuationScopeCashAndPositions,
+		Currency:portfolio.CurrencyCNY,
+		TotalValueFen:100000, CashFen:20000,
+		PositionValues:[]portfolio.PositionValue{{Symbol:"600519.SH",MarketValueFen:80000}},
+	}
+	maxSingle:=int64(7000)
+	limits:=&portfolio.Limits{
+		PolicyID:"risk-policy-v1",
+		AsOf:input.RequestedAsOf.Add(-time.Hour).Format(time.RFC3339),
+		Scope:portfolio.ValuationScopeCashAndPositions,Currency:portfolio.CurrencyCNY,
+		Rules:[]portfolio.LimitRule{{Kind:portfolio.LimitMaxSinglePositionWeight,LimitBps:&maxSingle}},
+	}
+	result,err:=(&FullPortfolioWorkflow{Research:graph,Review:review,Limits:limits}).
+		Run(context.Background(),input,book)
+	if err!=nil {t.Fatal(err)}
+	if result.CurrentLimitsReview==nil ||
+		result.CurrentLimitsReview.Status!=portfolio.LimitReviewBreach ||
+		len(result.CurrentLimitsReview.Checks)!=1 ||
+		result.CurrentLimitsReview.Checks[0].Symbol!="600519.SH" {
+		t.Fatalf("current breach must appear in auditable output: %+v",result.CurrentLimitsReview)
+	}
+	if result.PortfolioReview.PortfolioDecision.Disposition!=portfoliodecision.DispositionReviewRequired {
+		t.Fatal("current limits are diagnostic; cannot authorize transactions")
+	}
+	if marketAgent.calls!=1 {
+		t.Fatal("valid policy must allow a single research pass")
+	}
+}
+
+func TestFullPortfolioWorkflowRejectsFutureRiskPolicyBeforeResearch(t *testing.T) {
+	marketAgent:=&fakeMarketAgent{result:validMarketContext()}
+	graph,err:=NewArtifact(context.Background(),Config{
+		MarketAgent:marketAgent,
+		TechnicalAgent:&fakeTechnicalAgent{result:validTechnicalContext()},
+		EventAgent:&fakeEventAgent{result:validEventContext()},
+		Synthesizer:&fakeSynthesizer{},
+	})
+	if err!=nil {t.Fatal(err)}
+	review,debateAgent,_,_,_:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentAcceptable))
+	input:=validWorkflowInput()
+	book:=reviewBookFixture()
+	book.AsOf=input.RequestedAsOf.Add(-time.Hour).Format(time.RFC3339)
+	maxSingle:=int64(2000)
+	limits:=&portfolio.Limits{
+		PolicyID:"future-policy",
+		AsOf:input.RequestedAsOf.Add(time.Second).Format(time.RFC3339),
+		Scope:portfolio.ValuationScopeCashAndPositions,Currency:portfolio.CurrencyCNY,
+		Rules:[]portfolio.LimitRule{{Kind:portfolio.LimitMaxSinglePositionWeight,LimitBps:&maxSingle}},
+	}
+	result,err:=(&FullPortfolioWorkflow{Research:graph,Review:review,Limits:limits}).
+		Run(context.Background(),input,book)
+	if err==nil || result!=nil || !strings.Contains(err.Error(),"after research requested_as_of") {
+		t.Fatalf("future policy must be rejected: result=%+v err=%v",result,err)
+	}
+	if marketAgent.calls!=0 || debateAgent.calls!=0 {
+		t.Fatalf("future policy must fail before any model: market=%d debate=%d",marketAgent.calls,debateAgent.calls)
+	}
+}
+
+func TestFullPortfolioWorkflowUnknownCurrentRiskBudgetDoesNotMeanPass(t *testing.T) {
+	graph,err:=NewArtifact(context.Background(),Config{
+		MarketAgent:&fakeMarketAgent{result:validMarketContext()},
+		TechnicalAgent:&fakeTechnicalAgent{result:validTechnicalContext()},
+		EventAgent:&fakeEventAgent{result:validEventContext()},
+		Synthesizer:&fakeSynthesizer{},
+	})
+	if err!=nil {t.Fatal(err)}
+	review,_,_,_,_:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentHighRisk))
+	input:=validWorkflowInput()
+	book:=reviewBookFixture()
+	book.AsOf=input.RequestedAsOf.Format(time.RFC3339)
+	maxInvested:=int64(8000)
+	result,err:=(&FullPortfolioWorkflow{
+		Research:graph,Review:review,
+		Limits:&portfolio.Limits{
+			PolicyID:"risk-policy-v1",AsOf:book.AsOf,
+			Scope:portfolio.ValuationScopeCashAndPositions,Currency:portfolio.CurrencyCNY,
+			Rules:[]portfolio.LimitRule{{Kind:portfolio.LimitMaxInvestedWeight,LimitBps:&maxInvested}},
+		},
+	}).Run(context.Background(),input,book)
+	if err!=nil {t.Fatal(err)}
+	if result.CurrentLimitsReview==nil ||
+		result.CurrentLimitsReview.Status!=portfolio.LimitReviewInsufficientData ||
+		result.CurrentLimitsReview.Checks[0].ObservedWeightBps!=nil {
+		t.Fatalf("no valued account must mean insufficient data, not pass: %+v",result.CurrentLimitsReview)
+	}
+}
