@@ -334,22 +334,6 @@ func TestHybridEvidenceSelectorValidation(
 			want: "duplicated",
 		},
 		{
-			name: "missing semantic id",
-			selector: &HybridEvidenceSelector{
-				TargetResolver: baseResolver,
-				SemanticMatcher: semanticMatcherFunc(
-					func(
-						context.Context,
-						EvidenceTarget,
-						[]RawDocument,
-					) ([]SemanticEvidenceMatch, error) {
-						return nil, nil
-					},
-				),
-			},
-			want: "missing for raw document",
-		},
-		{
 			name: "invalid confidence",
 			selector: &HybridEvidenceSelector{
 				TargetResolver: baseResolver,
@@ -489,5 +473,97 @@ func TestMapEvidenceTargetResolver(t *testing.T) {
 			"error = %v, want missing-target error",
 			err,
 		)
+	}
+}
+
+func TestHybridEvidenceSelectorMissingSemanticMatchesFailClosed(t *testing.T) {
+	selector := &HybridEvidenceSelector{
+		TargetResolver: targetResolverFunc(func(
+			context.Context, ResearchTask,
+		) (EvidenceTarget, error) {
+			return EvidenceTarget{Symbol: "600519.SH", Name: "贵州茅台"}, nil
+		}),
+		SemanticMatcher: semanticMatcherFunc(func(
+			_ context.Context, _ EvidenceTarget, documents []RawDocument,
+		) ([]SemanticEvidenceMatch, error) {
+			if len(documents) != 3 {
+				t.Fatalf("documents = %d, want 3", len(documents))
+			}
+			// The model silently omits the second and third input ID.
+			return []SemanticEvidenceMatch{{
+				RawDocumentID: "candidate-1",
+				Relevant: true,
+				Confidence: .93,
+				Reason: "explicit issuer linkage",
+			}}, nil
+		}),
+	}
+	decisions, err := selector.Select(context.Background(), ResearchTask{
+		Symbol: "600519.SH",
+	}, []RawDocument{
+		{ID: "candidate-1", Title: "external contract", Content: "issuer material"},
+		{ID: "cls_news_2498111", Title: "general market update", Content: "no target linkage"},
+		{ID: "candidate-3", Title: "industry article", Content: "sector general news"},
+	})
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+	if len(decisions) != 3 {
+		t.Fatalf("decisions = %d, want one per candidate", len(decisions))
+	}
+	for _, d := range decisions {
+		switch d.RawDocumentID {
+		case "candidate-1":
+			if !d.Selected || d.Method != SelectionSemantic || d.Confidence != .93 {
+				t.Fatalf("matched decision = %+v", d)
+			}
+		case "cls_news_2498111", "candidate-3":
+			if d.Selected || d.Confidence != 0 || d.Method != SelectionUnreviewed ||
+				!strings.Contains(d.Reason, "omitted candidate") {
+				t.Fatalf("missing decision not safely rejected: %+v", d)
+			}
+		default:
+			t.Fatalf("unexpected decision %+v", d)
+		}
+	}
+	selected, err := applyEvidenceSelection([]RawDocument{
+		{ID: "candidate-1"}, {ID: "cls_news_2498111"}, {ID: "candidate-3"},
+	}, decisions)
+	if err != nil || len(selected) != 1 || selected[0].ID != "candidate-1" {
+		t.Fatalf("selected = %+v, err = %v", selected, err)
+	}
+}
+
+func TestHybridEvidenceSelectorAllSemanticMatchesOmitted(t *testing.T) {
+	decisions, err := validateSemanticMatches(
+		[]RawDocument{{ID: "candidate-1"}, {ID: "candidate-2"}},
+		nil, .8,
+	)
+	if err != nil || len(decisions) != 2 {
+		t.Fatalf("decisions=%+v, err=%v", decisions, err)
+	}
+	for _, d := range decisions {
+		if d.Selected || d.Method != SelectionUnreviewed || d.Confidence != 0 {
+			t.Fatalf("omitted candidate must fail closed: %+v", d)
+		}
+	}
+}
+
+func TestHybridEvidenceSelectorPartialSemanticMatchesStillRejectsInvalidIDs(t *testing.T) {
+	for _, tc := range []struct{
+		name string
+		matches []SemanticEvidenceMatch
+		want string
+	}{
+		{"unknown", []SemanticEvidenceMatch{{RawDocumentID:"unknown", Confidence:.7}}, "unknown raw document"},
+		{"duplicate", []SemanticEvidenceMatch{{RawDocumentID:"one", Confidence:.7}, {RawDocumentID:"one", Confidence:.7}}, "duplicated"},
+		{"bad confidence", []SemanticEvidenceMatch{{RawDocumentID:"one", Confidence:1.5}}, "between 0 and 1"},
+	} {
+		t.Run(tc.name,func(t *testing.T){
+			_,err:=validateSemanticMatches([]RawDocument{{ID:"one"}, {ID:"missing"}},tc.matches,.8)
+			if err==nil || !strings.Contains(err.Error(),tc.want) {
+				t.Fatalf("error=%v, want %q",err,tc.want)
+			}
+		})
 	}
 }
