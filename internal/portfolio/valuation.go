@@ -65,6 +65,9 @@ func validateValuation(book *Context) error {
 	if v.Currency != CurrencyCNY {
 		return fmt.Errorf("valuation currency %q must be %q", v.Currency, CurrencyCNY)
 	}
+	if v.PositionValues == nil {
+		return errors.New("valuation position_values must be explicitly provided (use an empty list when no positions)")
+	}
 	if v.TotalValueFen < 0 || v.CashFen < 0 {
 		return errors.New("valuation total_value_fen and cash_fen must be nonnegative")
 	}
