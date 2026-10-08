@@ -410,6 +410,31 @@ func validateSemanticMatches(
 	matches []SemanticEvidenceMatch,
 	threshold float64,
 ) ([]EvidenceSelectionDecision, error) {
+	decisions, err := validatePartialSemanticMatches(documents, matches, threshold)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(decisions))
+	for _, decision := range decisions {
+		seen[decision.RawDocumentID] = struct{}{}
+	}
+	for _, document := range documents {
+		documentID := strings.TrimSpace(document.ID)
+		if _, ok := seen[documentID]; !ok {
+			return nil, fmt.Errorf(
+				"semantic evidence research incomplete: missing match for raw document %q",
+				documentID,
+			)
+		}
+	}
+	return decisions, nil
+}
+
+func validatePartialSemanticMatches(
+	documents []RawDocument,
+	matches []SemanticEvidenceMatch,
+	threshold float64,
+) ([]EvidenceSelectionDecision, error) {
 	expected := make(map[string]struct{}, len(documents))
 	for _, document := range documents {
 		expected[strings.TrimSpace(document.ID)] = struct{}{}
@@ -477,23 +502,6 @@ func validateSemanticMatches(
 		)
 	}
 
-	// A well-formed model response can silently omit one or more candidates.
-	// Do not infer relevance for omitted IDs and do not fail the entire
-	// research batch: record an explicit, auditable fail-closed rejection.
-	// Invalid / unknown / duplicate model decisions above remain fatal.
-	for _, document := range documents {
-		documentID := strings.TrimSpace(document.ID)
-		if _, ok := seen[documentID]; ok {
-			continue
-		}
-		decisions = append(decisions, EvidenceSelectionDecision{
-			RawDocumentID: documentID,
-			Selected:      false,
-			Method:        SelectionUnreviewed,
-			Confidence:    0,
-			Reason:        "semantic matcher omitted candidate; relevance was not evaluated, so candidate was excluded",
-		})
-	}
 
 	return decisions, nil
 }
