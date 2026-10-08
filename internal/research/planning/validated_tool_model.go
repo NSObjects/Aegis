@@ -38,10 +38,13 @@ func (m *validatedResearchToolModel) WithTools(
 	return &validatedResearchToolModel{base: bound, phase: m.phase}, nil
 }
 
-func (m *validatedResearchToolModel) Generate(
+// validateModelAction runs the underlying model using its native protocol,
+// then checks the completed tool call before the Eino planner can consume it.
+// A validation retry reuses the original research request with concise feedback.
+func (m *validatedResearchToolModel) validateModelAction(
 	ctx context.Context,
 	input []*schema.Message,
-	opts ...model.Option,
+	invoke func(context.Context, []*schema.Message) (*schema.Message, error),
 ) (*schema.Message, error) {
 	if m == nil || m.base == nil {
 		return nil, errors.New("research planning model is not initialized")
@@ -51,10 +54,8 @@ func (m *validatedResearchToolModel) Generate(
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		response, err := m.base.Generate(ctx, messages, opts...)
+		response, err := invoke(ctx, messages)
 		if err != nil {
-			// Retrying provider errors may duplicate requests without repairing
-			// a malformed action, so only schema errors are retried.
 			return nil, fmt.Errorf("%s model request: %w", m.phase, err)
 		}
 		if err := validateResearchToolAction(m.phase, response); err != nil {
@@ -62,8 +63,6 @@ func (m *validatedResearchToolModel) Generate(
 				return nil, fmt.Errorf("%s returned invalid planning action after %d attempts: %w",
 					m.phase, attempt, err)
 			}
-			// No model-supplied plan is silently changed. Ask for a NEW tool
-			// call, preserving the original research context.
 			messages = append(append([]*schema.Message(nil), input...),
 				schema.UserMessage(fmt.Sprintf(
 					"Your previous structured tool action did not satisfy the research contract: %s. "+
@@ -80,15 +79,37 @@ func (m *validatedResearchToolModel) Generate(
 	return nil, errors.New("research planning retry exhausted")
 }
 
-// PlanExecute itself uses Stream even when called from a non-streaming agent.
-// Collect the model response before the Eino parser sees it, so no unvalidated
-// partial tool call escapes during this planning phase.
+func (m *validatedResearchToolModel) Generate(
+	ctx context.Context,
+	input []*schema.Message,
+	opts ...model.Option,
+) (*schema.Message, error) {
+	return m.validateModelAction(ctx, input,
+		func(ctx context.Context, messages []*schema.Message) (*schema.Message, error) {
+			return m.base.Generate(ctx, messages, opts...)
+		})
+}
+
+// The Eino PlanExecute graph consumes the native Stream API. Preserve that
+// provider contract; collect the whole tool call before validating or
+// retrying, then return a single validated message stream to Eino.
 func (m *validatedResearchToolModel) Stream(
 	ctx context.Context,
 	input []*schema.Message,
 	opts ...model.Option,
 ) (*schema.StreamReader[*schema.Message], error) {
-	response, err := m.Generate(ctx, input, opts...)
+	response, err := m.validateModelAction(ctx, input,
+		func(ctx context.Context, messages []*schema.Message) (*schema.Message, error) {
+			stream, err := m.base.Stream(ctx, messages, opts...)
+			if err != nil {
+				return nil, err
+			}
+			if stream == nil {
+				return nil, errors.New("research planning stream is nil")
+			}
+			defer stream.Close()
+			return schema.ConcatMessageStream(stream)
+		})
 	if err != nil {
 		return nil, err
 	}
