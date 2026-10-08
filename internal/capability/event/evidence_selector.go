@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strings"
@@ -123,7 +124,8 @@ func (s *HybridEvidenceSelector) Select(
 	if threshold == 0 {
 		threshold = defaultSemanticSelectionThreshold
 	}
-	if threshold < 0 || threshold > 1 {
+	if math.IsNaN(threshold) || math.IsInf(threshold, 0) ||
+		threshold < 0 || threshold > 1 {
 		return nil, errors.New(
 			"semantic evidence selection threshold must be between 0 and 1",
 		)
@@ -468,10 +470,16 @@ func validatePartialSemanticMatches(
 				documentID,
 			)
 		}
-		if match.Confidence < 0 ||
-			match.Confidence > 1 {
+		if math.IsNaN(match.Confidence) || math.IsInf(match.Confidence, 0) ||
+			match.Confidence < 0 || match.Confidence > 1 {
 			return nil, fmt.Errorf(
 				"semantic evidence match confidence for raw document %q must be between 0 and 1",
+				documentID,
+			)
+		}
+		if strings.TrimSpace(match.Reason) == "" {
+			return nil, fmt.Errorf(
+				"semantic evidence match for raw document %q requires an evidence-based reason",
 				documentID,
 			)
 		}
