@@ -1,7 +1,6 @@
 package research
 
 import (
-	portfolioagent "Aegis/internal/agent/portfolio"
 	"Aegis/internal/portfolio"
 	"Aegis/internal/portfoliodecision"
 	"Aegis/internal/risk"
