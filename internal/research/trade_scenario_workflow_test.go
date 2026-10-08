@@ -79,7 +79,7 @@ func TestFullPortfolioWorkflowProjectsOnlyExplicitCandidateScenario(t *testing.T
 		result.TradeScenarioReview.Status!=portfolio.ScenarioBreach ||
 		*result.TradeScenarioReview.ProjectedCashFen!=30000 ||
 		result.TradeScenarioReview.Checks[0].ProjectedWeightBps!=7000 ||
-		result.TradeScenarioReview.ExecutionAuthorized {
+		result.TradeScenarioReview.Checks[0].Status!=portfolio.LimitReviewBreach {
 		t.Fatalf("only a research candidate can produce a modeled exposure: %+v",result.TradeScenarioReview)
 	}
 	if result.CurrentLimitsReview.Status!=portfolio.LimitReviewPass {
