@@ -166,7 +166,7 @@ func TestNotApplicableScenarioNeverIncludesProjection(t *testing.T) {
 
 func TestScenarioExactTimeZoneComparison(t *testing.T) {
 	s:=tradeScenario(ScenarioBuy,"600519.SH",100)
-	s.AsOf="2026-10-08T11:00:00+09:00" // Earlier than 10:00 +08 but later than 08:00 policy
+	s.AsOf="2026-10-08T09:00:00+09:00" // 08:00 +08: earlier than observed account at 09:00 +08
 	if err:=ValidateTradeScenarioAt(s,observedBook(),postPolicy(10000,10000),testCutoff(),"600519.SH");
 		err==nil || !strings.Contains(err.Error(),"precedes observed account") {
 		t.Fatalf("time zones must be normalized to instants: %v",err)
