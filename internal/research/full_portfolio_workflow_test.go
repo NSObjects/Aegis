@@ -184,3 +184,52 @@ func TestFullPortfolioWorkflowRejectsFutureAccountStateBeforeResearch(t *testing
 	}
 	if marketAgent.calls!=0 {t.Fatal("future account state must fail before live data retrieval")}
 }
+
+func TestFullPortfolioWorkflowRejectsStaleSnapshotBeforeAgents(t *testing.T) {
+	marketAgent := &fakeMarketAgent{result: validMarketContext()}
+	techAgent := &fakeTechnicalAgent{result: validTechnicalContext()}
+	eventAgent := &fakeEventAgent{result: validEventContext()}
+	synth := &fakeSynthesizer{}
+	graph, err := NewArtifact(context.Background(), Config{
+		MarketAgent: marketAgent,
+		TechnicalAgent: techAgent,
+		EventAgent: eventAgent,
+		Synthesizer: synth,
+	})
+	if err != nil { t.Fatal(err) }
+	review, debateAgent, managerAgent, trader, riskAnalyst :=
+		reviewWorkflowFixture(t, reviewContextFixture(risk.AssessmentHighRisk))
+	book := reviewBookFixture()
+	book.AsOf = validWorkflowInput().RequestedAsOf.Add(-48*time.Hour).Format(time.RFC3339)
+	w := &FullPortfolioWorkflow{
+		Research: graph, Review: review, MaxPortfolioAge: 24*time.Hour,
+	}
+	result, err := w.Run(context.Background(),validWorkflowInput(),book)
+	if err==nil || !strings.Contains(err.Error(),"portfolio snapshot is stale") || result!=nil {
+		t.Fatalf("expected stale snapshot to block review: result=%+v error=%v",result,err)
+	}
+	if marketAgent.calls!=0 || techAgent.calls!=0 || eventAgent.calls!=0 ||
+		synth.calls!=0 || debateAgent.calls!=0 || managerAgent.calls!=0 ||
+		trader.calls!=0 || riskAnalyst.calls!=0 {
+		t.Fatalf("stale account must be rejected before every research/review agent")
+	}
+}
+
+func TestFullPortfolioWorkflowFreshnessPolicyIsMeasuredAtResearchCutoff(t *testing.T) {
+	graph,err:=NewArtifact(context.Background(),Config{
+		MarketAgent:&fakeMarketAgent{result:validMarketContext()},
+		TechnicalAgent:&fakeTechnicalAgent{result:validTechnicalContext()},
+		EventAgent:&fakeEventAgent{result:validEventContext()},
+		Synthesizer:&fakeSynthesizer{},
+	})
+	if err!=nil {t.Fatal(err)}
+	review,_,_,_,_:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentHighRisk))
+	book:=reviewBookFixture()
+	book.AsOf=validWorkflowInput().RequestedAsOf.Add(-12*time.Hour).Format(time.RFC3339)
+	result,err:=(&FullPortfolioWorkflow{
+		Research:graph, Review:review,MaxPortfolioAge:24*time.Hour,
+	}).Run(context.Background(),validWorkflowInput(),book)
+	if err!=nil || result==nil {
+		t.Fatalf("historical PIT snapshot within explicit age policy must pass: result=%+v error=%v",result,err)
+	}
+}
