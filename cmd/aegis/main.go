@@ -42,6 +42,7 @@ func main() {
 		portfolioReview bool
 		portfolioFile string
 		portfolioMaxAge time.Duration
+		riskLimitsFile string
 	)
 
 	flag.StringVar(
@@ -104,9 +105,15 @@ func main() {
 		0,
 		"optional maximum age of observed portfolio snapshot (e.g. 24h); 0 disables this policy",
 	)
+	flag.StringVar(
+		&riskLimitsFile,
+		"risk-limits-file",
+		"",
+		"optional caller-supplied JSON current-risk policy; requires -portfolio-review",
+	)
 	flag.Parse()
 
-	if err := run(
+	if err := runWithLimits(
 		context.Background(),
 		configPath,
 		skillsDir,
@@ -118,6 +125,7 @@ func main() {
 		portfolioReview,
 		portfolioFile,
 		portfolioMaxAge,
+		riskLimitsFile,
 	); err != nil {
 		log.Fatal(err)
 	}
@@ -136,6 +144,27 @@ func run(
 	portfolioFile string,
 	portfolioMaxAge time.Duration,
 ) error {
+	return runWithLimits(ctx, configPath, skillsDir, timeZone, symbol,
+		marketQuery, evidenceStore, eventLookback, portfolioReview,
+		portfolioFile, portfolioMaxAge, "")
+}
+
+// runWithLimits extends the existing CLI path while preserving the original
+// run() surface for callers that do not supply a policy.
+func runWithLimits(
+	ctx context.Context,
+	configPath string,
+	skillsDir string,
+	timeZone string,
+	symbol string,
+	marketQuery string,
+	evidenceStore string,
+	eventLookback time.Duration,
+	portfolioReview bool,
+	portfolioFile string,
+	portfolioMaxAge time.Duration,
+	riskLimitsFile string,
+) error {
 	// Validate account input before initiating any live research or LLM call.
 	// NOT_PROVIDED is explicit; no implicit empty portfolios.
 	var book *portfolio.Context
@@ -147,6 +176,17 @@ func run(
 		book = loaded
 	} else if strings.TrimSpace(portfolioFile) != "" {
 		return fmt.Errorf("-portfolio-file requires -portfolio-review")
+	}
+	if !portfolioReview && strings.TrimSpace(riskLimitsFile) != "" {
+		return fmt.Errorf("-risk-limits-file requires -portfolio-review")
+	}
+	var limits *portfolio.Limits
+	if strings.TrimSpace(riskLimitsFile) != "" {
+		loaded, err := loadRiskLimits(riskLimitsFile)
+		if err != nil {
+			return err
+		}
+		limits = loaded
 	}
 	if portfolioMaxAge < 0 {
 		return fmt.Errorf("-portfolio-max-age must not be negative")
@@ -171,6 +211,10 @@ func run(
 	if portfolioReview {
 		if err := portfolio.ValidateAt(book, workflowInput.RequestedAsOf, portfolioMaxAge); err != nil {
 			return fmt.Errorf("invalid portfolio snapshot: %w", err)
+		}
+		// Fail before loading LLM configuration and external capabilities.
+		if _, err := portfolio.EvaluateCurrentLimits(book, limits, workflowInput.RequestedAsOf); err != nil {
+			return fmt.Errorf("invalid current risk limits: %w", err)
 		}
 	}
 
@@ -557,6 +601,7 @@ func run(
 			Research: upstream,
 			Review: review,
 			MaxPortfolioAge: portfolioMaxAge,
+			Limits: limits,
 		}).Run(ctx, workflowInput, book)
 		if err != nil {
 			return err
