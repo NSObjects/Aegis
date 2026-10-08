@@ -138,7 +138,11 @@ func TestFullPortfolioWorkflowScenarioNotProvidedStaysBackwardCompatible(t *test
 
 func TestFullPortfolioWorkflowCandidateWithoutMoneyCannotBeProjected(t *testing.T) {
 	input:=validWorkflowInput()
-	graph,review,_:=tradeScenarioWorkflowFixture(t,risk.AssessmentInsufficientContext)
+	graph,_,_:=tradeScenarioWorkflowFixture(t,risk.AssessmentInsufficientContext)
+	review,_,_,_,_:=reviewWorkflowFixture(t,&risk.Context{
+		Symbol:"600519.SH", Assessment:risk.AssessmentInsufficientContext,
+		Summary:"observed account not provided",Confidence:1,
+	})
 	book:=&portfolio.Context{State:portfolio.StateNotProvided}
 	result,err:=(&FullPortfolioWorkflow{
 		Research:graph,Review:review,Limits:tradeScenarioPolicy(input),
