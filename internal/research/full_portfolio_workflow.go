@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // FullPortfolioWorkflow runs a single upstream research graph and hands the
@@ -35,6 +36,21 @@ func (w *FullPortfolioWorkflow) Run(
 	// Reject invalid/unknown account input before any paid or live research.
 	if err := portfolio.Validate(book); err != nil {
 		return nil, fmt.Errorf("invalid portfolio context: %w", err)
+	}
+	if _, err := normalizeWorkflowInput(input); err != nil {
+		return nil, fmt.Errorf("invalid research input: %w", err)
+	}
+	if book.State != portfolio.StateNotProvided {
+		asOf, err := time.Parse(time.RFC3339, book.AsOf)
+		if err != nil {
+			return nil, fmt.Errorf("invalid portfolio as_of: %w", err)
+		}
+		if asOf.After(input.RequestedAsOf) {
+			return nil, fmt.Errorf(
+				"portfolio as_of %q is after research requested_as_of %q",
+				book.AsOf, input.RequestedAsOf.Format(time.RFC3339),
+			)
+		}
 	}
 	artifact, err := w.Research.RunArtifact(ctx, input)
 	if err != nil {
