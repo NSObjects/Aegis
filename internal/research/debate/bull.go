@@ -42,7 +42,7 @@ func decodeTurn(raw string) (Turn, error) {
 	var turn Turn
 	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&turn); err != nil { return Turn{}, fmt.Errorf("decode debate turn JSON: %w: output=%q", err, raw) }
+	if err := decoder.Decode(&turn); err != nil { return Turn{}, fmt.Errorf("decode debate turn JSON: %w", err) }
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil { err = errors.New("multiple JSON values") }
@@ -71,6 +71,7 @@ Hard constraints:
 - Do not use outside knowledge and do not request or call tools.
 - Do not invent facts, evidence IDs, event IDs, prices, forecasts, or research.
 - Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, position size, or price targets.
+- Each argument MUST contain a nonempty unique id (including across all previous debate_state turns), a nonempty claim, and one or more valid references.
 - Every argument and rebuttal must cite one or more supplied ResearchArtifact references.
 - Reference domains are MARKET, TECHNICAL, EVENT.
 - EVENT event_id, when present, must exist in research_artifact.event.events.
