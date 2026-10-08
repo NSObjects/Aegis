@@ -1,6 +1,7 @@
 package portfolio
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -130,6 +131,28 @@ func TestValidateRejectsInconsistentPositionsState(t *testing.T) {
 			err := Validate(tt.ctx)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("error = %v, want contains %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateRejectsNonfinitePositionQuantities(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		quantity float64
+	}{
+		{name: "NaN", quantity: math.NaN()},
+		{name: "positive infinity", quantity: math.Inf(1)},
+		{name: "negative infinity", quantity: math.Inf(-1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Validate(&Context{
+				State: StatePositions,
+				AsOf: "2026-10-08T10:00:00+08:00",
+				Positions: []Position{{Symbol:"600519.SH", Quantity:tc.quantity}},
+			})
+			if err == nil || !strings.Contains(err.Error(),"quantity must be positive") {
+				t.Fatalf("error = %v",err)
 			}
 		})
 	}
