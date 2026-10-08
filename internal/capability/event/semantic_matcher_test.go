@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"math"
 	"strings"
 	"testing"
 
@@ -343,4 +344,53 @@ func agenticAssistantOrUserText(msg *schema.AgenticMessage) string {
 		if block!=nil && block.UserInputText!=nil {b.WriteString(block.UserInputText.Text)}
 	}
 	return b.String()
+}
+
+func TestSemanticMatcherRequiresExplicitClassificationFields(t *testing.T) {
+	cases := []struct {
+		name, output, want string
+	}{
+		{"missing relevant", `{"matches":[{"raw_document_id":"candidate","confidence":0.9,"reason":"no issuer relation"}]}`, "explicitly provide relevant"},
+		{"missing confidence", `{"matches":[{"raw_document_id":"candidate","relevant":false,"reason":"no issuer relation"}]}`, "explicitly provide relevant"},
+		{"missing reason", `{"matches":[{"raw_document_id":"candidate","relevant":false,"confidence":0.9}]}`, "explicitly provide relevant"},
+		{"null relevant", `{"matches":[{"raw_document_id":"candidate","relevant":null,"confidence":0.9,"reason":"no issuer relation"}]}`, "explicitly provide relevant"},
+		{"null confidence", `{"matches":[{"raw_document_id":"candidate","relevant":false,"confidence":null,"reason":"no issuer relation"}]}`, "explicitly provide relevant"},
+		{"empty reason", `{"matches":[{"raw_document_id":"candidate","relevant":false,"confidence":0.9,"reason":"  "}]}`, "explicitly provide relevant"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &AgenticSemanticEvidenceMatcher{Model: &semanticMatcherModel{
+				response: agenticTextMessage(schema.AgenticRoleTypeAssistant, tc.output),
+			}}
+			result, err := m.Match(context.Background(), EvidenceTarget{Symbol:"600519.SH"},
+				[]RawDocument{{ID:"candidate", Title:"industry headlines"}})
+			if err == nil || !strings.Contains(err.Error(),tc.want) {
+				t.Fatalf("error=%v, want %q",err,tc.want)
+			}
+			if len(result)>0 {t.Fatalf("malformed relevance must never yield evidence: %+v",result)}
+		})
+	}
+}
+
+func TestSemanticMatcherRejectsNonfiniteAndMissingReasonsFromCustomMatcher(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		confidence float64
+		reason string
+		want string
+	}{
+		{"nan", math.NaN(), "explicitly irrelevant", "between 0 and 1"},
+		{"positive infinity", math.Inf(1), "explicitly irrelevant", "between 0 and 1"},
+		{"negative infinity", math.Inf(-1), "explicitly irrelevant", "between 0 and 1"},
+		{"missing reason", .8, "", "evidence-based reason"},
+	} {
+		t.Run(tc.name, func(t *testing.T){
+			_, err := validateSemanticMatches([]RawDocument{{ID:"candidate"}}, []SemanticEvidenceMatch{{
+				RawDocumentID:"candidate", Relevant:false, Confidence:tc.confidence, Reason:tc.reason,
+			}}, .8)
+			if err==nil || !strings.Contains(err.Error(),tc.want) {
+				t.Fatalf("error=%v, want %q",err,tc.want)
+			}
+		})
+	}
 }
