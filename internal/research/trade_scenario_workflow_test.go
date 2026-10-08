@@ -80,7 +80,7 @@ func TestFullPortfolioWorkflowProjectsOnlyExplicitCandidateScenario(t *testing.T
 		*result.TradeScenarioReview.ProjectedCashFen!=30000 ||
 		result.TradeScenarioReview.Checks[0].ProjectedWeightBps!=7000 ||
 		result.TradeScenarioReview.ExecutionAuthorized {
-		t.Fatalf("only a candidate can produce bounded modeled risk: %+v",result.TradeScenarioReview)
+		t.Fatalf("only a research candidate can produce a modeled exposure: %+v",result.TradeScenarioReview)
 	}
 	if result.CurrentLimitsReview.Status!=portfolio.LimitReviewPass {
 		t.Fatalf("original portfolio is within limits; scenario breached them: %+v",result.CurrentLimitsReview)
