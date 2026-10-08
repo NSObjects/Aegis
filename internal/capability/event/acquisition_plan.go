@@ -473,6 +473,13 @@ func applyEvidenceSelection(
 				documentID,
 			)
 		}
+		if decision.Method == SelectionUnreviewed &&
+			(decision.Selected || decision.Confidence != 0) {
+			return nil, fmt.Errorf(
+				"unreviewed candidate %q must be rejected with zero confidence",
+				documentID,
+			)
+		}
 
 		seenDecisions[documentID] = struct{}{}
 		selectedIDs[documentID] = decision.Selected
