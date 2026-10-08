@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
 )
 
 type BearResearcher struct {
