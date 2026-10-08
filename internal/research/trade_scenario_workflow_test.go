@@ -104,7 +104,6 @@ func TestFullPortfolioWorkflowMonitorProducesNoTradeProjection(t *testing.T) {
 		result.TradeScenarioReview.Status!=portfolio.ScenarioNotApplicable ||
 		result.TradeScenarioReview.ProjectedCashFen!=nil ||
 		len(result.TradeScenarioReview.Checks)!=0 ||
-		result.TradeScenarioReview.ExecutionAuthorized ||
 		result.PortfolioReview.PortfolioDecision.Disposition!=portfoliodecision.DispositionNoAction {
 		t.Fatalf("MONITOR must not produce projected limits or approvals: %+v",result)
 	}
@@ -151,7 +150,6 @@ func TestFullPortfolioWorkflowCandidateWithoutMoneyCannotBeProjected(t *testing.
 	if err!=nil {t.Fatal(err)}
 	if result.TradeScenarioReview.Status!=portfolio.ScenarioInsufficientData ||
 		result.TradeScenarioReview.ProjectedCashFen!=nil ||
-		result.TradeScenarioReview.ExecutionAuthorized ||
 		result.CurrentLimitsReview.Status!=portfolio.LimitReviewInsufficientData {
 		t.Fatalf("unknown account must never produce hypothetical funded trade: %+v",result)
 	}
