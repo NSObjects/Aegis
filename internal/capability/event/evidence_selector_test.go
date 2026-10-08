@@ -322,10 +322,12 @@ func TestHybridEvidenceSelectorValidation(
 							{
 								RawDocumentID: "candidate",
 								Confidence:    1,
+								Reason: "test classification",
 							},
 							{
 								RawDocumentID: "candidate",
 								Confidence:    1,
+								Reason: "test classification",
 							},
 						}, nil
 					},
@@ -537,7 +539,7 @@ func TestHybridEvidenceSelectorPartialSemanticMatchesStillRejectsInvalidIDs(t *t
 		want string
 	}{
 		{"unknown", []SemanticEvidenceMatch{{RawDocumentID:"unknown", Confidence:.7}}, "unknown raw document"},
-		{"duplicate", []SemanticEvidenceMatch{{RawDocumentID:"one", Confidence:.7}, {RawDocumentID:"one", Confidence:.7}}, "duplicated"},
+		{"duplicate", []SemanticEvidenceMatch{{RawDocumentID:"one", Confidence:.7, Reason:"test classification"}, {RawDocumentID:"one", Confidence:.7, Reason:"test classification"}}, "duplicated"},
 		{"bad confidence", []SemanticEvidenceMatch{{RawDocumentID:"one", Confidence:1.5}}, "between 0 and 1"},
 	} {
 		t.Run(tc.name,func(t *testing.T){
