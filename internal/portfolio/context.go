@@ -17,4 +17,7 @@ type Context struct {
 	State     State      `json:"state"`
 	AsOf      string     `json:"as_of,omitempty"`
 	Positions []Position `json:"positions,omitempty"`
+	// Valuation is optional caller-observed monetary data. Omitting it is
+	// explicitly different from observing a zero-value account.
+	Valuation *Valuation `json:"valuation,omitempty"`
 }
