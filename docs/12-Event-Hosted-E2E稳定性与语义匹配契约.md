@@ -29,16 +29,16 @@
 `HybridEvidenceSelector` 先使用股票代码/名称等确定性直接关联信息判定；
 不满足确定性证据关联的候选交给 `AgenticSemanticEvidenceMatcher`。
 
-为了降低一次输出需覆盖的候选数量：
+研究功能必须优先满足候选证据的**分类完整性**，不能为了通过测试将“没有分类”偷换为“已确认不相关”。
 
-1. 按原始候选顺序，每批最多 4 个原始文档。
-2. 每个模型响应通过 `validateSemanticMatches` 检查 ID、重复、置信度。
-3. 如果缺失一些候选，只对**缺失候选**补判一次；不重复已成功匹配的新闻。
-4. 若补判后仍遗漏，`HybridEvidenceSelector` 为遗漏项生成 `UNREVIEWED` 记录、`selected=false`、`confidence=0`。
-5. `applyEvidenceSelection` 再次拒绝任何将 `UNREVIEWED` 伪装成选中的行为。
-6. 虚构/未知 ID、重复 ID、非法置信度仍报错，不接受错误匹配结果。
+1. 按原始候选顺序分批，每批最多 4 个原始文档，降低单次响应规模。
+2. 对每个响应先验证候选 ID、唯一性和置信度；对缺失 ID 逐篇重新请求一次。
+3. 补判后每个输入原始文档必须恰好有一条分类结论；`Relevant=false` 是模型明确输出的判断，和模型漏判**不是同一状态**。
+4. 若仍有文档缺失分类，返回明确的 `semantic evidence research incomplete` 错误，包含缺失文档 ID，**不返回可被误用的部分研究结果**。
+5. 虚构 ID、重复 ID、非法置信度或模型错误仍然拒绝。只有已验证的正向相关性结论可以进入证据池。
+6. 此处暂不新增下游 `PARTIAL_RESEARCH` 状态；在没有定义信息完整性如何影响 TradeIntent/RiskContext 之前，宁可停止生成投资决策，也不能隐匿关键新闻缺口。
 
-`UNREVIEWED` **不代表已经确认该新闻无关**，而是**未得到可用的相关性判断**。它必须留在审计结果中，不得作为正向证据、事实或经济影响进入 EventContext。
+最终是否进行“降级研究”必须在 ResearchArtifact、TradeIntent 和下游风控契约中显式表达信息缺口，经独立验收后才可能允许，不能由 Evidence Selector 私自决定。
 
 ## 3.1 生成长度配置
 
@@ -57,13 +57,25 @@ Hosted Full Stateless / Full Multi-Agent E2E 使用显式 `max_tokens=16384`，�
 
 ## 5. 正确的验收分层
 
-- 单元测试：固定输入 + 脚本化模型输出，覆盖批次边界、漏项补判、持续遗漏、伪造 ID 和拒绝未审查证据；`go test ./...` 只证明这些确定性测试成功。
+- 单元测试：固定输入 + 脚本化模型输出，覆盖批次边界、逐篇漏项补判、持续遗漏必须失败、伪造 ID 严格拒绝；`go test ./...` 只证明这些确定性测试成功。
 - Hosted 测试：明确记录当前 branch SHA、GitHub Actions run ID、失败阶段和数据有效时间；一次失败应当先查日志，不应推测与上次同因。
 - Risk/Portfolio E2E：使用**显式测试用 Portfolio fixture**，绝不推导真实账户数据；最终 `PortfolioDecision` 仍不批准可执行交易。
 - 当前 workflow_dispatch 默认仅运行 `run_risk_portfolio`，如需单独诊断 Stateless/Multi-Agent/Technical/Trading，再显式开启对应选项。
 
 **验收结论必须同时区分：代码可编译、确定性测试通过、真实 Hosted E2E 通过。三者不能互相替代。**
 
-## 6. 后续但不在本次 PR 内
+## 6. 当前尚未完成的产品接入
+
+`cmd/aegis/main.go` 目前仍然装配旧版 `research.New(...)` 流程，并没有装配 `NewPortfolioReview(...)`。
+Hosted E2E 中构造的 `POSITIONS`、`Quantity:100` 仅是**测试 fixture**，不代表真实券商/用户持仓。
+因此本 PR 的测试成功不能被描述为“线上 Portfolio Manager 已经可用”。
+
+正式产品接入需要额外完成：
+- CLI/API 的明确 PortfolioContext 输入，不能拿 fixture 当真实账户；
+- ResearchArtifact 到 PortfolioReview 的真正生产编排；
+- 出错时对外可观察的研究不完整状态，区分数据源问题、模型结构错误和证据缺口；
+- 使用与生产一致的模型 profile 和可复用快照进行验收。
+
+## 7. 后续但不在本次 PR 内
 
 若仍频繁受新闻实时变化影响，应把 live acquisition smoke 与基于持久化 canonical evidence snapshot 的 agent-chain regression 分开，并在测试输出中记录 snapshot ID、版本、PIT as_of 和覆盖率。这能区分数据源变化、模型不稳定、领域 validator 拒绝，防止纯随机重跑掩盖问题。
