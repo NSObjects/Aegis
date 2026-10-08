@@ -6,22 +6,22 @@ on:
       run_trading:
         description: "Run the Trading Agent integration test"
         required: true
-        default: true
+        default: false
         type: boolean
       run_technical:
         description: "Run the real Technical Agent integration test"
         required: true
-        default: true
+        default: false
         type: boolean
       run_research:
         description: "Run the full stateless production Research → Decision pipeline"
         required: true
-        default: true
+        default: false
         type: boolean
       run_multi_agent:
         description: "Run the full multi-agent Research → Debate → Manager → Trading pipeline"
         required: true
-        default: true
+        default: false
         type: boolean
       run_risk_portfolio:
         description: "Run full Research → Debate → Trading → Risk → Portfolio hosted E2E"
