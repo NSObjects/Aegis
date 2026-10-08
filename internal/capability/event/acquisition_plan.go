@@ -23,6 +23,10 @@ type EvidenceSelectionMethod string
 const (
 	SelectionDeterministic EvidenceSelectionMethod = "deterministic"
 	SelectionSemantic      EvidenceSelectionMethod = "semantic"
+	// SelectionUnreviewed means the semantic matcher did not return a
+	// decision for this candidate. The selection is a fail-closed rejection,
+	// not a model judgment that the document is irrelevant.
+	SelectionUnreviewed EvidenceSelectionMethod = "unreviewed"
 )
 
 type EvidenceSelectionDecision struct {
