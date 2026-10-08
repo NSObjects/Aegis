@@ -4,6 +4,7 @@ import (
 	"Aegis/internal/agent/event"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
+	capevent "Aegis/internal/capability/event"
 	"Aegis/internal/research/debate"
 	"Aegis/internal/research/manager"
 	"Aegis/internal/research/synthesis"
@@ -162,4 +163,182 @@ func TestBuildRequiresValidNonEmptyDebateAndArtifact(t *testing.T){
 	a.Market=nil
 	got,err=Build(a,s,p)
 	if err==nil || got!=nil || !strings.Contains(err.Error(),"market"){t.Fatalf("got %+v %v",got,err)}
+}
+
+
+// A concrete EVENT reference is more specific than a domain-only EVENT
+// reference: it must pass EventContext validation and survive all three typed
+// provenance paths without sharing writable reference-slice storage.
+func TestBuildPreservesExistingSpecificEventIDAcrossResearchStages(t *testing.T) {
+	artifact, state, plan := ledgerFixture()
+	eventRef := synthesis.Reference{Domain: synthesis.DomainEvent, EventID: "event-1"}
+	artifact.Event = &event.Context{
+		Symbol:        "600519.SH",
+		RequestedAsOf: "2026-09-30T15:00:00Z",
+		Status:        event.StatusNormal,
+		Events: []event.Event{{
+			ID:          "event-1",
+			Type:        event.EventOther,
+			Headline:    "example disclosure",
+			FactSummary: "grounded event fact",
+			Facts: []event.Fact{{
+				ID:       "fact-1",
+				Type:     event.EventOther,
+				Headline: "example disclosure",
+				Summary:  "grounded event fact",
+				Groundings: []event.EvidenceGrounding{{
+					DocumentID: "doc-1",
+					Quote:      "grounded event fact",
+					StartByte:  0,
+					EndByte:    len("grounded event fact"),
+				}},
+				EvidenceDocumentIDs: []string{"doc-1"},
+				Confidence:          0.8,
+			}},
+			EvidenceDocumentIDs: []string{"doc-1"},
+			SourceCount:         1,
+			HasPrimarySource:    true,
+			EvidenceSupport: capevent.EvidenceSupport{
+				DocumentCount:            1,
+				IndependentEvidenceCount: 1,
+				IndependentSourceCount:   1,
+				PrimarySourcePresent:     true,
+				SupportClass:            capevent.EvidenceSupportPrimaryOnly,
+			},
+			FactConfidence: 0.8,
+			Materiality: event.Materiality{
+				Level:      event.MaterialityLow,
+				Direction:  event.DirectionUncertain,
+				Horizon:    event.HorizonUnknown,
+				Rationale:  "example event requires interpretation",
+				Confidence: 0.7,
+			},
+		}},
+		Evidence:   []string{"doc-1"},
+		Confidence: 0.7,
+	}
+	state.Turns[0].Arguments[0].References = []synthesis.Reference{eventRef}
+	state.Turns[1].Rebuttals[0].References = []synthesis.Reference{eventRef}
+	plan.Opportunities[0].References = []synthesis.Reference{eventRef}
+	plan.Risks[0].References = []synthesis.Reference{eventRef}
+
+	if err := synthesis.Validate(artifact); err != nil {
+		t.Fatalf("event must be valid in the full ResearchArtifact: %v", err)
+	}
+	if err := debate.ValidateState(state, artifact); err != nil {
+		t.Fatalf("specific EventID must validate in debate: %v", err)
+	}
+	if err := manager.Validate(plan, artifact, state); err != nil {
+		t.Fatalf("specific EventID must validate in manager: %v", err)
+	}
+
+	beforeArtifact, _ := json.Marshal(artifact)
+	beforeState, _ := json.Marshal(state)
+	beforePlan, _ := json.Marshal(plan)
+
+	got, err := Build(artifact, state, plan)
+	if err != nil {
+		t.Fatalf("Build() rejected existing EventID: %v", err)
+	}
+	if len(got.Arguments) != 3 || len(got.Arguments[0].Challenges) != 1 ||
+		len(got.Insights) != 2 {
+		t.Fatalf("unexpected traceability output shape: %+v", got)
+	}
+
+	paths := []struct {
+		name string
+		refs []synthesis.Reference
+	}{
+		{"debate argument", got.Arguments[0].References},
+		{"bear rebuttal", got.Arguments[0].Challenges[0].References},
+		{"manager opportunity", got.Insights[0].References},
+		{"manager risk", got.Insights[1].References},
+	}
+	for _, path := range paths {
+		if len(path.refs) != 1 || path.refs[0] != eventRef {
+			t.Fatalf("%s lost its specific existing EventID: %+v", path.name, path.refs)
+		}
+	}
+
+	afterArtifact, _ := json.Marshal(artifact)
+	afterState, _ := json.Marshal(state)
+	afterPlan, _ := json.Marshal(plan)
+	if string(beforeArtifact) != string(afterArtifact) ||
+		string(beforeState) != string(afterState) ||
+		string(beforePlan) != string(afterPlan) {
+		t.Fatal("Build modified a grounded EventContext or a research input")
+	}
+
+	// Mutating each returned slice must not affect the owning upstream slice.
+	for _, path := range paths {
+		path.refs[0] = synthesis.Reference{Domain: synthesis.DomainTechnical}
+	}
+	sources := []struct {
+		name string
+		refs []synthesis.Reference
+	}{
+		{"argument source", state.Turns[0].Arguments[0].References},
+		{"rebuttal source", state.Turns[1].Rebuttals[0].References},
+		{"opportunity source", plan.Opportunities[0].References},
+		{"risk source", plan.Risks[0].References},
+	}
+	for _, source := range sources {
+		if len(source.refs) != 1 || source.refs[0] != eventRef {
+			t.Fatalf("%s aliases output reference storage: %+v", source.name, source.refs)
+		}
+	}
+
+	// No shared slice between independent ledger paths, either: mutating
+	// an upstream reference after Build cannot retroactively change output.
+	again, err := Build(artifact, state, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Turns[0].Arguments[0].References[0] = synthesis.Reference{Domain: synthesis.DomainMarket}
+	if again.Arguments[0].References[0] != eventRef ||
+		again.Arguments[0].Challenges[0].References[0] != eventRef ||
+		again.Insights[0].References[0] != eventRef ||
+		again.Insights[1].References[0] != eventRef {
+		t.Fatal("output EventID changed after upstream slice was edited")
+	}
+}
+
+func TestBuildRejectsNilInputsUsingExistingValidators(t *testing.T) {
+	tests := []struct {
+		name    string
+		prepare func(*synthesis.Artifact, *debate.State, *manager.ResearchPlan) (*synthesis.Artifact, *debate.State, *manager.ResearchPlan)
+		want    string
+	}{
+		{
+			name: "nil artifact",
+			prepare: func(_ *synthesis.Artifact, state *debate.State, plan *manager.ResearchPlan) (*synthesis.Artifact, *debate.State, *manager.ResearchPlan) {
+				return nil, state, plan
+			},
+			want: "research artifact is nil",
+		},
+		{
+			name: "nil debate state",
+			prepare: func(artifact *synthesis.Artifact, _ *debate.State, plan *manager.ResearchPlan) (*synthesis.Artifact, *debate.State, *manager.ResearchPlan) {
+				return artifact, nil, plan
+			},
+			want: "debate state is nil",
+		},
+		{
+			name: "nil research plan",
+			prepare: func(artifact *synthesis.Artifact, state *debate.State, _ *manager.ResearchPlan) (*synthesis.Artifact, *debate.State, *manager.ResearchPlan) {
+				return artifact, state, nil
+			},
+			want: "research plan is nil",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			artifact, state, plan := ledgerFixture()
+			artifact, state, plan = tc.prepare(artifact, state, plan)
+			got, err := Build(artifact, state, plan)
+			if got != nil || err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Build() = (%+v, %v), want nil ledger and upstream %q error", got, err, tc.want)
+			}
+		})
+	}
 }
