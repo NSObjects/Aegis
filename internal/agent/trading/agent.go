@@ -318,24 +318,53 @@ func (a *Agent) AnalyzeResearchPlanIntent(
 	return intent, nil
 }
 
+const maxTradingDecisionJSONAttempts = 2
+
+// runDecision only retries JSON *syntax* failures, not semantic or provenance
+// validation errors. A fresh model attempt must still pass Decision.Validate.
 func runDecision(
 	ctx context.Context,
 	runner *adk.TypedRunner[*schema.AgenticMessage],
 	symbol string,
 	query string,
 	opts ...adk.AgentRunOption,
-) (
-	*decision.Decision,
-	error,
-) {
-	iter := runner.Query(
-		ctx,
-		query,
-		opts...,
-	)
+) (*decision.Decision, error) {
+	for attempt := 1; attempt <= maxTradingDecisionJSONAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 
+		result, err := runDecisionOnce(ctx, runner, symbol, query, opts...)
+		if err == nil {
+			return result, nil
+		}
+
+		var syntaxErr *json.SyntaxError
+		if !errors.As(err, &syntaxErr) || attempt == maxTradingDecisionJSONAttempts {
+			return nil, fmt.Errorf(
+				"trading decision attempt %d/%d: %w",
+				attempt, maxTradingDecisionJSONAttempts, err,
+			)
+		}
+		// JSON mode is a generation constraint, not a guarantee. Re-run the
+		// original validated research prompt; never repair the response by
+		// inserting or deleting characters in the model's decision.
+		query += "\n\n上一轮输出包含 JSON 语法错误。请基于同一份上游研究材料重新生成完整的合法 JSON object。" +
+			" 确保 evidence 和 risk 都是正确闭合的字符串数组，不要输出 Markdown 或额外文字。" +
+			" 严格遵守相同的 Decision 字段与证据约束，不允许新增上游未提供的事实。"
+	}
+	return nil, errors.New("trading decision retry exhausted")
+}
+
+func runDecisionOnce(
+	ctx context.Context,
+	runner *adk.TypedRunner[*schema.AgenticMessage],
+	symbol string,
+	query string,
+	opts ...adk.AgentRunOption,
+) (*decision.Decision, error) {
+	iter := runner.Query(ctx, query, opts...)
 	var output string
-
 	for {
 		event, ok := iter.Next()
 		if !ok {
@@ -345,46 +374,31 @@ func runDecision(
 			continue
 		}
 		if event.Err != nil {
-			return nil, fmt.Errorf(
-				"trading agent run failed: %w",
-				event.Err,
-			)
+			return nil, fmt.Errorf("trading agent run failed: %w", event.Err)
 		}
 		if event.Output == nil ||
 			event.Output.MessageOutput == nil ||
 			event.Output.MessageOutput.Message == nil {
 			continue
 		}
-
-		text := strings.TrimSpace(
-			assistantText(
-				event.Output.MessageOutput.Message,
-			),
-		)
+		text := strings.TrimSpace(assistantText(event.Output.MessageOutput.Message))
 		if text != "" {
 			output = text
 		}
 	}
-
 	if output == "" {
-		return nil, errors.New(
-			"trading agent returned empty output",
-		)
+		return nil, errors.New("trading agent returned empty output")
 	}
-
 	result, err := parseDecision(output)
 	if err != nil {
 		return nil, err
 	}
-
 	if result.Symbol != symbol {
 		return nil, fmt.Errorf(
 			"decision symbol %q does not match input symbol %q",
-			result.Symbol,
-			symbol,
+			result.Symbol, symbol,
 		)
 	}
-
 	return result, nil
 }
 
