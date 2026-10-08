@@ -9,6 +9,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 // This exercises the same production orchestration API used by cmd/aegis,
@@ -32,6 +33,7 @@ func TestFullPortfolioWorkflowUsesOneResearchPass(t *testing.T) {
 	)
 	full := &FullPortfolioWorkflow{Research: researchGraph, Review: review}
 	book := reviewBookFixture()
+	book.AsOf = validWorkflowInput().RequestedAsOf.Format(time.RFC3339)
 	result, err := full.Run(context.Background(), validWorkflowInput(), book)
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -103,7 +105,9 @@ func TestFullPortfolioWorkflowStopsOnIncompleteEventResearch(t *testing.T) {
 		t, reviewContextFixture(risk.AssessmentHighRisk),
 	)
 	full := &FullPortfolioWorkflow{Research: researchGraph, Review: review}
-	_, err = full.Run(context.Background(), validWorkflowInput(), reviewBookFixture())
+	book := reviewBookFixture()
+	book.AsOf = validWorkflowInput().RequestedAsOf.Format(time.RFC3339)
+	_, err = full.Run(context.Background(), validWorkflowInput(), book)
 	if err == nil || !strings.Contains(err.Error(), "research incomplete") {
 		t.Fatalf("missing evidence must fail, got %v", err)
 	}
@@ -161,4 +165,23 @@ func TestFullPortfolioWorkflowUnknownIsNotEmpty(t *testing.T) {
 	if riskAnalyst.lastBook!=book || result.PortfolioReview.RiskContext.Assessment!=risk.AssessmentInsufficientContext {
 		t.Fatalf("unknown portfolio was lost: %+v", result.PortfolioReview)
 	}
+}
+
+func TestFullPortfolioWorkflowRejectsFutureAccountStateBeforeResearch(t *testing.T) {
+	marketAgent:=&fakeMarketAgent{result:validMarketContext()}
+	graph,err:=NewArtifact(context.Background(),Config{
+		MarketAgent:marketAgent,
+		TechnicalAgent:&fakeTechnicalAgent{result:validTechnicalContext()},
+		EventAgent:&fakeEventAgent{result:validEventContext()},
+		Synthesizer:&fakeSynthesizer{},
+	})
+	if err!=nil {t.Fatal(err)}
+	review,_,_,_,_:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentHighRisk))
+	book:=reviewBookFixture() // October snapshot, September research cutoff.
+	_,err=(&FullPortfolioWorkflow{Research:graph, Review:review}).Run(
+		context.Background(),validWorkflowInput(),book)
+	if err==nil || !strings.Contains(err.Error(),"after research requested_as_of") {
+		t.Fatalf("error = %v",err)
+	}
+	if marketAgent.calls!=0 {t.Fatal("future account state must fail before live data retrieval")}
 }
