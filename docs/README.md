@@ -1,278 +1,101 @@
-# Aegis 文档
+# Aegis 文档与当前能力
 
-> 当前实现状态更新时间：2026-09-24
+> 状态基准：2026-10-08 · `main` 已合并 V2.11.3（PR #85）；V2.11.4（PR #86）仍在独立分支验收。  
+> **权威架构**：[10-多Agent架构与职责边界.md](10-多Agent架构与职责边界.md)。本文是按仓库代码整理的能力索引，不覆盖该架构约束。
 
-Aegis 当前已经完成一条可运行的 V2.5 A 股研究主链路：
+## 产品定位
 
-```text
-Config
-  ↓
-LLM Manager
-  ↓
-Runtime
-  ├── Skill
-  ├── Filesystem / execute
-  └── Context
-  ↓
-Market Agent
-  ↓
-MarketContext
-  ↓
-Research Workflow / Eino Graph
-  ↓
-Trading Agent
-  ↓
-Decision
-```
+Aegis 是面向 A 股的**投资研究与决策辅助系统**，借鉴 [TradingAgents](research/tradingagents/README.md) 的分角色研究、Bull/Bear 论证与研究管理方式。
 
-这只是**当前已实现链路**，不是最终职责划分。
+**永久不做真实交易执行**：没有券商下单、委托/成交、订单审批、资金划拨或交易授权接口。名称中的 `Trading Agent`、`TradeIntent`、`Portfolio Manager` 均为**研究角色或研究结论**，不能当作自动交易能力。回测中如有成交记录，也只应是离线模拟。
 
-V2.6 起，长期架构调整为**组织级 Multi-Agent**，目标是逐步形成真实投资研究公司的分工：
+## 已进入 main 的研究链路（截至 V2.11.3）
 
 ```text
-Analyst Team
-├── Market Analyst
-├── Technical Analyst
-├── News/Event Analyst
-├── Fundamental Analyst
-└── Capital Flow Analyst
-        ↓
-Research Team
-├── Bull Researcher
-├── Bear Researcher
-└── Research Manager
-        ↓
-Trading Team
-└── Trader
-        ↓
-Risk / Portfolio Team
-├── Risk Analyst
-└── Portfolio Manager
-
-Offline Evolution
-├── Strategy Team
-└── Backtest / Validation Team
+Market Agent ─────────→ MarketContext    ┐
+Technical Agent ──────→ TechnicalContext ├─→ Synthesis
+Event/News Agent ─────→ EventContext     ┘      ↓
+                                       ResearchArtifact
+                                              ↓
+                                  Bull / Bear Debate
+                                              ↓
+                                      Research Manager
+                                              ↓
+                                  Trading Agent → TradeIntent
+                                              ↓
+                                    Risk Analyst → RiskContext
+                                              ↓
+                              Portfolio Manager → PortfolioDecision
 ```
 
-其中 Strategy Team 负责提出和升级策略，Backtest / Validation Team 独立验证，形成版本化 ApprovedStrategy，再供在线决策流程选择使用。
+- **Market**：市场环境与市场风险偏好；实际数据能力和可信度以当次研究输入及返回证据为准。
+- **Technical**：通过 `internal/capability/technical` 的原生 Go HTTP/Tushare 能力提供技术研究上下文；不再依赖旧的临时 `stock_technical_research.py` 路径。
+- **Event/News**：支持公告、新闻与搜索来源的获取、证据规范化、时间语义、相关性与语义核验；某个外部来源失败不等于一定可以安全得出完整研究结论。
+- **Research Synthesis**：校验多维事实，并生成带来源的 `ResearchArtifact`。
+- **Bull / Bear + Research Manager**：基于已核验证据形成并交叉检查投资论点，不应编造证据、引用或论证 ID。
+- **Trading Agent**：把研究论点形成 `TradeIntent`（例如 `MONITOR / CANDIDATE / REJECTED`），不是委托对象。
+- **Risk Analyst / Portfolio Manager**：形成 `RiskContext` 与 `PortfolioDecision`（`NO_ACTION / BLOCKED / REVIEW_REQUIRED`）；以上都是不可执行的研究判断。
 
-当前不会一次性实现这些角色。V2.6 只先完成 Technical Agent，并继续验证 typed Context + Graph 协作。策略/回测部门属于长期并行演进方向，尚未实现。
+`internal/research` 仍保留历史 Decision 路径以兼容旧调用方。完整 Portfolio Review 是显式启用的独立路径，不把两条研究图偷偷串起来重复运行。
 
-## 当前权威代码
+## 账户与组合研究能力
 
-| 模块 | 状态 | 说明 |
+| 版本 | 已实现能力 | 核心边界 |
 |---|---|---|
-| `cmd/aegis` | 已实现 | 正式应用入口，负责配置加载与组件组装 |
-| `internal/config` | 已实现 | YAML 配置、默认模型与 per-agent profile 选择 |
-| `internal/llm` | 已实现 | 当前仅支持 DeepSeek；包含 DSML → FunctionToolCall 兼容层 |
-| `internal/middleware` | 已实现 | Context / Skill / Filesystem |
-| `internal/runtime` | 已实现 | 创建共享 local backend 并装配 middleware |
-| `internal/agent/market` | 已实现 | 真实市场环境研究，输出 `MarketContext` |
-| `internal/agent/trading` | 已实现（待 V2.6 收窄职责） | 当前消费 `MarketContext` 并自行补个股研究；目标是只综合各 Domain Context |
-| `internal/agent/technical` | V2.6 进行中 | Context/Agent 单测已通过；旧 integration 暴露临时 execute 计算，现已切到专属 stock_technical_research Tool，待重新验证 |
-| `internal/research` | 已实现 V2.5 | 当前 Graph：Market Agent → Trading Agent；V2.6 将升级为 Market → Technical → Trading |
-| `internal/decision` | 已实现 | WATCH / AVOID / CANDIDATE 输出契约 |
+| V2.10 | 真实 ResearchArtifact → Debate → Research Manager → TradeIntent → Risk / Portfolio | `PortfolioContext` 必须明确传入；未知账户是 `NOT_PROVIDED`，**不是空仓** |
+| V2.11.1 | 可选账户快照时效限制 | 按研究截止时间执行 PIT 校验，不以本机时间臆断历史数据 |
+| V2.11.2 | 可选已观察账户估值和当前敞口 | CNY 分整数、账户严格对账；无估值不推算权重 |
+| V2.11.3 | 调用方定义的当前组合风险限制 | 可独立提供风险策略文件，确定性检查单股权重与总投资比例；`INSUFFICIENT_DATA` 不等于 `PASS` |
+| V2.11.4 | **PR #86 验收中，尚未进入 main** | 可选研究性 What-if 组合金额情景；不是订单、无审批或执行能力 |
 
-## 当前明确不包含
+相关契约：[13-生产组合审查链路.md](13-生产组合审查链路.md) · [14-快照时效](14-V2.11.1-Portfolio快照时效约束.md) · [15-账户估值](15-V2.11.2-已观测账户估值与敞口.md) · [16-当前风险策略](16-V2.11.3-当前风险策略检查.md) · [17-情景研究（PR #86）](17-V2.11.4-显式交易情景与交易后风险诊断.md)。
 
-以下能力已经从当前运行路径删除，后续需要时再重新引入：
+## 当前代码导航
 
-- V1 mock tools（market / technical / news / overview）
-- `internal/skillruntime`
-- MCP runtime 与 `configs/mcp.json`
-- scenario mock
-- 旧 MarketContext / 旧 Market Prompt
-- OpenAI / Claude / Qwen / Gemini / Ark provider adapter
+| 代码路径 | 职责 |
+|---|---|
+| `cmd/aegis` | 正式 CLI、参数及显式研究输入校验 |
+| `internal/config`, `internal/llm` | 模型配置与 DeepSeek Adapter（含既有协议兼容处理） |
+| `internal/runtime`, `internal/middleware` | Runtime、Skill / Filesystem / Context 能力 |
+| `internal/agent/market`, `technical`, `event` | 独立事实研究 Agent |
+| `internal/capability/technical`, `event` | 技术数据与新闻/公告/搜索数据能力 |
+| `internal/research/synthesis`, `debate`, `manager` | 结构化事实交接、正反研究与研究管理 |
+| `internal/research/workflow.go`, `full_portfolio_workflow.go` | 上游研究和完整 Portfolio Review 的编排 |
+| `internal/agent/trading`, `risk`, `portfolio` | 研究观点、风险分析与组合研究角色 |
+| `internal/portfolio`, `internal/portfoliodecision` | 账户事实、估值、当前限制和不可执行的组合判断 |
+| `internal/research/planning` | 研究计划与受约束的研究能力调用 |
 
-当前唯一实际支持的模型供应商是 **DeepSeek**。
+并未因为架构文档描述了 Fundamental / Capital Flow / Strategy / Backtest 等长期角色，就把它们标成已完成。Agent 应按真实独立职责增量加入，不应按 Tushare、MCP、Web Search 等数据来源创建 Agent。
 
-## Runtime
+## 运行与验证
 
-Runtime 只负责共享运行资源和 middleware 装配：
-
-```text
-Runtime
-├── Skill Middleware
-├── Filesystem Middleware
-└── Context Middleware
-```
-
-Model 不属于 Runtime。不同 Agent 通过配置选择 profile，再由 `llm.Manager` 获取模型实例。
-
-## Multi-Agent 架构边界
-
-后续新增 Agent / Tool / 数据源前，必须先阅读：
-
-- `docs/10-多Agent架构与职责边界.md`
-
-核心规则：
-
-```text
-Team        = 共同完成某类组织目标的一组 Role
-Role        = 稳定组织职责
-Agent       = Role 的具体运行实例
-Context     = Role / Team 间结构化交接物
-Capability  = Agent 完成职责所需能力
-Provider    = Capability 的具体来源
-Graph       = 公司的工作流
-```
-
-长期有两条主要工作流：
-
-```text
-Online Decision Loop
-→ Analyst / Research / Trading / Risk
-
-Offline Evolution Loop
-→ Strategy / Backtest / Validation / ApprovedStrategy
-```
-
-Skill / MCP / API / Crawler / DB / Tushare 都不是 Agent 职责分类。
-
-**重要：Team / Role 当前首先是架构概念，不代表已经存在 TeamRegistry / RoleRegistry 等运行时抽象。只有真实重复出现后才实现框架层类型。
-
-## Skill
-
-Skill 根目录由运行参数指定，默认：
-
-```text
-./skills
-```
-
-`skills/` 被 Git 忽略，真实 Tushare Skill 和凭证不进入仓库。
-
-普通依赖可以由 Skill 通过 `execute` 安装；Token、账号、付费权限和系统权限属于外部条件。
-
-## Model
-
-当前配置：
-
-```yaml
-default_model: default
-
-models:
-  default:
-    provider: deepseek
-    model: deepseek-chat
-    api_key_env: DEEPSEEK_API_KEY
-
-  strong:
-    provider: deepseek
-    model: deepseek-chat
-    api_key_env: DEEPSEEK_API_KEY
-
-agents:
-  trading:
-    model: strong
-```
-
-`default` 与 `strong` 是 profile，不代表必须是不同 Provider。
-
-## DeepSeek DSML
-
-真实集成测试中出现过 DeepSeek 把工具调用作为 DSML 文本返回，而不是标准结构化 tool call。
-
-当前在 `internal/llm/dsml.go` 做 Provider 边界兼容：
-
-```text
-DeepSeek DSML
-    ↓
-DSML Normalizer
-    ↓
-schema.FunctionToolCall
-    ↓
-Eino ADK ReAct / ToolsNode
-```
-
-Agent 业务层不感知 DSML。
-
-## 真实链路验证
-
-V2.6 Technical Agent 已真实取得过行情并成功生成 TechnicalContext，但 Tool Trace 发现旧路径仍通过通用 execute 临时计算指标，因此该次 PASS 不作为最终 Capability 验收。
-
-当前修正后的待验证链路：
-
-```text
-Technical Agent
-  ↓
-stock_technical_research
-  ↓
-Technical Researcher
-  ↓
-仓库受控 deterministic script
-  ↓
-Tushare
-  ↓
-TechnicalContext
-```
-
-V2.5 主链路仍已实际跑通：
-
-```text
-Market Agent
-  ↓
-Tushare Skill
-  ↓
-MarketContext
-  ↓
-Eino Graph
-  ↓
-Trading Agent
-  ↓
-Tushare Skill
-  ↓
-Decision
-```
-
-端到端测试：
+使用真实来源时，请通过外部环境配置相应凭证，勿提交到仓库。生产 CLI 的完整审查路径要求**显式账户状态**：
 
 ```bash
-AEGIS_INTEGRATION=1 \
-go test ./internal/research \
-  -run '^TestWorkflow_Run_Integration$' \
-  -v \
-  -count=1
+printf '{"state":"NOT_PROVIDED"}\n' > portfolio.json
+go run ./cmd/aegis -symbol 600519.SH \
+  -portfolio-review -portfolio-file ./portfolio.json
 ```
 
-## 正式运行
+此 `NOT_PROVIDED` 只表示未提供账户信息，**不代表没有持仓、现金或敞口**。这是生产入口的保守输入示例，不能证明券商账户已经连接。
 
-环境变量：
+仅在调用方拥有真实、完整的账户估值与自行确定的策略时，才另外使用：
 
-```bash
-export DEEPSEEK_API_KEY="..."
-export TUSHARE_TOKEN="..."
-```
+- `-portfolio-max-age`：账户快照最大容许年龄；
+- `-risk-limits-file`：独立的当前组合风险规则；
+- `-trade-scenario-file`：V2.11.4 PR #86 分支的 What-if 研究输入，**main 暂不可用**。
 
-执行：
+普通 CI 运行 `go vet ./...`、`go test ./... -count=1` 及真实 CLI 黑盒非法输入门禁。手动触发的 `.github/workflows/integration.yml` 的 `run_production_cli` 使用真实模型与来源、以 `NOT_PROVIDED` 验证完整研究链路和 JSON 契约。**它不验证真实持仓、真实市值或新增情景输入**；这些计算应由确定性领域/Workflow 测试验证。
 
-```bash
-go run ./cmd/aegis -symbol 600519.SH
-```
+外部 API、行情、新闻、模型响应均可能失败。实际研究必须尊重来源证据、PIT 时间及 `INSUFFICIENT_CONTEXT`，不能为了让 Hosted 测试通过而引入假数据或跳过校验。
 
-历史市场环境：
+## 文档维护与工程约束
 
-```bash
-go run ./cmd/aegis \
-  -symbol 600519.SH \
-  -market-query "分析 2026-09-18 A 股市场环境。"
-```
+- [10-多Agent架构与职责边界](10-多Agent架构与职责边界.md)：最高优先级，尤其是永久研究边界、Role/Agent/Capability/Provider 分层。
+- [01-设计原则](01-设计原则.md)、[07-工程实践与踩坑](07-工程实践与踩坑.md)：设计原则、确定性验证、接口与工具实践。
+- [09-Technical数据口径](09-Technical数据口径.md)：技术指标与时间语义。
+- [12-Event Hosted E2E稳定性](12-Event-Hosted-E2E稳定性与语义匹配契约.md)：事件取证和真实来源验证要求。
+- [13-生产组合审查链路](13-生产组合审查链路.md)：正式 CLI 的 Risk / Portfolio 端到端交接。
+- [08-演进路线与现状](08-演进路线与现状.md)：含历史阶段记录，**不应把 V2.6 章节当作今日最新架构**。
 
-## 文档说明
-
-- `docs/10-多Agent架构与职责边界.md`：**最高优先级架构约束**，定义 Agent / Context / Capability / Provider / Graph 边界。
-- `docs/08-演进路线与现状.md`：当前实现、已知过渡状态与下一阶段。
-- `docs/09-Technical数据口径.md`：Technical Agent / TechnicalContext 的 A 股技术数据语义。
-- `docs/01-*.md` ~ `docs/07-*.md`：保留的设计/演进记录，其中部分内容描述历史实现，不作为当前代码状态的权威来源。
-- `docs/research/tradingagents/`：外部项目研究与架构取舍记录。
-
-发生冲突时，优先级为：
-
-```text
-10-多Agent架构与职责边界
-  ↓
-README / 08-演进路线与现状
-  ↓
-09-Technical数据口径
-  ↓
-历史设计文档
-```
+本仓库当前未发现 `AGENT.md`、`AGENTS.md`、`CONTRIBUTING.md`。如果后续新增正式贡献规范，应更新此索引并保证与 [10-架构约束](10-多Agent架构与职责边界.md) 一致。
