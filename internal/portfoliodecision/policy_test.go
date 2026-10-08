@@ -169,3 +169,39 @@ func TestValidateRejectsInventedSummary(t *testing.T) {
 		t.Fatal("invented summary must fail")
 	}
 }
+
+func TestEvaluateAcceptableWithObservedValuationStillRequiresExecutionContext(t *testing.T) {
+	book:=testBook(portfolio.StatePositions)
+	book.Valuation=&portfolio.Valuation{
+		Scope:portfolio.ValuationScopeCashAndPositions,
+		Currency:portfolio.CurrencyCNY,
+		TotalValueFen:100000,
+		CashFen:20000,
+		PositionValues:[]portfolio.PositionValue{{Symbol:"600519.SH",MarketValueFen:80000}},
+	}
+	intent:=testIntent(tradeintent.StatusCandidate)
+	review:=testRisk(risk.AssessmentAcceptable)
+	decision,err:=Evaluate(intent,book,review)
+	if err!=nil {t.Fatal(err)}
+	if decision.Disposition!=DispositionReviewRequired ||
+		decision.ReasonCode!=ReasonExecutionContextMissing ||
+		!strings.Contains(decision.Summary,"no executable trade size") {
+		t.Fatalf("observed account is not a trade authorization: %+v",decision)
+	}
+	if err:=Validate(decision,intent,book,review);err!=nil {t.Fatal(err)}
+	decision.ReasonCode=ReasonAccountDataAbsent
+	if err:=Validate(decision,intent,book,review);err==nil {
+		t.Fatal("cannot misreport observed account as missing")
+	}
+}
+
+func TestEvaluateAcceptableWithoutValuationStillReportsMissingMoney(t *testing.T) {
+	book:=testBook(portfolio.StateEmpty)
+	decision,err:=Evaluate(testIntent(tradeintent.StatusCandidate),book,testRisk(risk.AssessmentAcceptable))
+	if err!=nil {t.Fatal(err)}
+	if decision.ReasonCode!=ReasonAccountDataAbsent ||
+		!strings.Contains(decision.Summary,"not provided") ||
+		decision.Disposition!=DispositionReviewRequired {
+		t.Fatalf("unknown money is not known zero or authorized: %+v",decision)
+	}
+}
