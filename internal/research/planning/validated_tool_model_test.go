@@ -35,11 +35,15 @@ func (m *scriptedResearchModel) Generate(
 }
 
 func (m *scriptedResearchModel) Stream(
-	context.Context,
-	[]*schema.Message,
-	...model.Option,
+	ctx context.Context,
+	input []*schema.Message,
+	opts ...model.Option,
 ) (*schema.StreamReader[*schema.Message], error) {
-	return nil, errors.New("research model Stream must be guarded via Generate")
+	response, err := m.Generate(ctx, input, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return schema.StreamReaderFromArray([]*schema.Message{response}), nil
 }
 
 func (m *scriptedResearchModel) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
