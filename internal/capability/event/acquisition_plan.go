@@ -23,10 +23,6 @@ type EvidenceSelectionMethod string
 const (
 	SelectionDeterministic EvidenceSelectionMethod = "deterministic"
 	SelectionSemantic      EvidenceSelectionMethod = "semantic"
-	// SelectionUnreviewed means the semantic matcher did not return a
-	// decision for this candidate. The selection is a fail-closed rejection,
-	// not a model judgment that the document is irrelevant.
-	SelectionUnreviewed EvidenceSelectionMethod = "unreviewed"
 )
 
 type EvidenceSelectionDecision struct {
@@ -470,13 +466,6 @@ func applyEvidenceSelection(
 		if _, duplicate := seenDecisions[documentID]; duplicate {
 			return nil, fmt.Errorf(
 				"event selection decision for raw document %q is duplicated",
-				documentID,
-			)
-		}
-		if decision.Method == SelectionUnreviewed &&
-			(decision.Selected || decision.Confidence != 0) {
-			return nil, fmt.Errorf(
-				"unreviewed candidate %q must be rejected with zero confidence",
 				documentID,
 			)
 		}
