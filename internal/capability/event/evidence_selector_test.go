@@ -567,3 +567,30 @@ func TestHybridEvidenceSelectorPartialSemanticMatchesStillRejectsInvalidIDs(t *t
 		})
 	}
 }
+
+func TestApplyEvidenceSelectionRejectsForgedUnreviewedApproval(t *testing.T) {
+	for _, tc := range []struct{
+		name string
+		selected bool
+		confidence float64
+	}{
+		{"selected", true, 0},
+		{"nonzero confidence", false, .6},
+	} {
+		t.Run(tc.name, func(t *testing.T){
+			_,err:=applyEvidenceSelection(
+				[]RawDocument{{ID:"candidate"}},
+				[]EvidenceSelectionDecision{{
+					RawDocumentID:"candidate",
+					Selected:tc.selected,
+					Confidence:tc.confidence,
+					Method:SelectionUnreviewed,
+					Reason:"semantic matcher omitted candidate",
+				}},
+			)
+			if err==nil || !strings.Contains(err.Error(),"must be rejected with zero confidence") {
+				t.Fatalf("error=%v",err)
+			}
+		})
+	}
+}
