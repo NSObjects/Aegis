@@ -213,3 +213,18 @@ func TestManagerGetToolCallingCachesDedicatedProfile(
 		)
 	}
 }
+
+func TestDeepSeekRejectsInvalidMaxTokens(t *testing.T) {
+	t.Setenv("TEST_MODEL_MAX_TOKENS_KEY", "test-key")
+	for _, n := range []int{0, -1} {
+		_, err := newDeepSeekForMode(context.Background(), config.ModelConfig{
+			Provider:  config.ProviderDeepSeek,
+			Model:     "deepseek-chat",
+			APIKeyEnv: "TEST_MODEL_MAX_TOKENS_KEY",
+			MaxTokens: &n,
+		}, deepSeekResponseJSON)
+		if err == nil || !strings.Contains(err.Error(), "max_tokens must be positive") {
+			t.Fatalf("max_tokens=%d, error=%v", n, err)
+		}
+	}
+}
