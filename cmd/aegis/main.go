@@ -41,6 +41,7 @@ func main() {
 		eventLookback time.Duration
 		portfolioReview bool
 		portfolioFile string
+		portfolioMaxAge time.Duration
 	)
 
 	flag.StringVar(
@@ -97,6 +98,12 @@ func main() {
 		"",
 		"JSON portfolio context, e.g. {\"state\":\"NOT_PROVIDED\"}",
 	)
+	flag.DurationVar(
+		&portfolioMaxAge,
+		"portfolio-max-age",
+		0,
+		"optional maximum age of observed portfolio snapshot (e.g. 24h); 0 disables this policy",
+	)
 	flag.Parse()
 
 	if err := run(
@@ -110,6 +117,7 @@ func main() {
 		eventLookback,
 		portfolioReview,
 		portfolioFile,
+		portfolioMaxAge,
 	); err != nil {
 		log.Fatal(err)
 	}
@@ -126,6 +134,7 @@ func run(
 	eventLookback time.Duration,
 	portfolioReview bool,
 	portfolioFile string,
+	portfolioMaxAge time.Duration,
 ) error {
 	// Validate account input before initiating any live research or LLM call.
 	// NOT_PROVIDED is explicit; no implicit empty portfolios.
@@ -139,6 +148,32 @@ func run(
 	} else if strings.TrimSpace(portfolioFile) != "" {
 		return fmt.Errorf("-portfolio-file requires -portfolio-review")
 	}
+	if portfolioMaxAge < 0 {
+		return fmt.Errorf("-portfolio-max-age must not be negative")
+	}
+	if !portfolioReview && portfolioMaxAge != 0 {
+		return fmt.Errorf("-portfolio-max-age requires -portfolio-review")
+	}
+
+	// Establish the single live research cutoff before constructing any LLM
+	// or data source. Snapshot freshness is assessed against this cutoff.
+	location, err := time.LoadLocation(timeZone)
+	if err != nil {
+		return fmt.Errorf("load research timezone %q: %w", timeZone, err)
+	}
+	eventCutoff := time.Now().In(location)
+	workflowInput, err := newLiveResearchInput(
+		symbol, marketQuery, eventCutoff, eventLookback,
+	)
+	if err != nil {
+		return err
+	}
+	if portfolioReview {
+		if err := portfolio.ValidateAt(book, workflowInput.RequestedAsOf, portfolioMaxAge); err != nil {
+			return fmt.Errorf("invalid portfolio snapshot: %w", err)
+		}
+	}
+
 	appCfg, err := config.Load(configPath)
 	if err != nil {
 		return err
@@ -495,27 +530,6 @@ func run(
 		TradingAgent:   tradingAgent,
 	}
 
-	location, err := time.LoadLocation(
-		timeZone,
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"load research timezone %q: %w",
-			timeZone,
-			err,
-		)
-	}
-	eventCutoff := time.Now().In(location)
-
-	workflowInput, err := newLiveResearchInput(
-		symbol,
-		marketQuery,
-		eventCutoff,
-		eventLookback,
-	)
-	if err != nil {
-		return err
-	}
 
 	var result any
 	if portfolioReview {
@@ -542,6 +556,7 @@ func run(
 		result, err = (&research.FullPortfolioWorkflow{
 			Research: upstream,
 			Review: review,
+			MaxPortfolioAge: portfolioMaxAge,
 		}).Run(ctx, workflowInput, book)
 		if err != nil {
 			return err

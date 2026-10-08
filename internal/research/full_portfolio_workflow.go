@@ -15,6 +15,9 @@ import (
 type FullPortfolioWorkflow struct {
 	Research *Workflow
 	Review   *PortfolioReview
+	// MaxPortfolioAge is a caller-defined freshness policy for observed
+	// account snapshots. Zero preserves the previous no-age-limit behavior.
+	MaxPortfolioAge time.Duration
 }
 
 type FullPortfolioResult struct {
@@ -33,25 +36,15 @@ func (w *FullPortfolioWorkflow) Run(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	// Reject invalid/unknown account input before any paid or live research.
-	if err := portfolio.Validate(book); err != nil {
-		return nil, fmt.Errorf("invalid portfolio context: %w", err)
-	}
+	// Validate the account's complete time contract before any paid or
+	// external research. Use the requested research time, not time.Now().
 	if _, err := normalizeWorkflowInput(input); err != nil {
 		return nil, fmt.Errorf("invalid research input: %w", err)
 	}
-	if book.State != portfolio.StateNotProvided {
-		asOf, err := time.Parse(time.RFC3339, book.AsOf)
-		if err != nil {
-			return nil, fmt.Errorf("invalid portfolio as_of: %w", err)
-		}
-		if asOf.After(input.RequestedAsOf) {
-			return nil, fmt.Errorf(
-				"portfolio as_of %q is after research requested_as_of %q",
-				book.AsOf, input.RequestedAsOf.Format(time.RFC3339),
-			)
-		}
+	if err := portfolio.ValidateAt(book, input.RequestedAsOf, w.MaxPortfolioAge); err != nil {
+		return nil, fmt.Errorf("invalid portfolio snapshot: %w", err)
 	}
+
 	artifact, err := w.Research.RunArtifact(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("upstream research: %w", err)

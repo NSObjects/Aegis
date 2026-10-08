@@ -88,3 +88,19 @@ jobs:
           fi
           grep -q 'requires -portfolio-review' "${{ runner.temp }}/cli-err"
           test ! -s "${{ runner.temp }}/cli-out"
+
+          # The real CLI must reject an old but structurally valid account
+          # snapshot before trying to load configuration or API credentials.
+          printf '{"state":"EMPTY","as_of":"2020-01-01T12:00:00+08:00"}\n' \
+            > "${{ runner.temp }}/stale-portfolio.json"
+          if "${{ runner.temp }}/aegis-cli" \
+              -config "${{ runner.temp }}/nonexistent-config.yaml" \
+              -portfolio-review \
+              -portfolio-file "${{ runner.temp }}/stale-portfolio.json" \
+              -portfolio-max-age 24h \
+              > "${{ runner.temp }}/cli-out" 2> "${{ runner.temp }}/cli-err"; then
+            echo "::error::CLI accepted stale observed portfolio snapshot"
+            exit 1
+          fi
+          grep -q 'portfolio snapshot is stale' "${{ runner.temp }}/cli-err"
+          test ! -s "${{ runner.temp }}/cli-out"

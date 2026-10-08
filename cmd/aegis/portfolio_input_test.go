@@ -68,8 +68,42 @@ func TestPortfolioReviewRequiresExplicitInputBeforeResearch(t *testing.T) {
 	// Even when the application config is missing, missing portfolio data
 	// must be detected first, before any external model or network setup.
 	err=run(context.Background(), "missing-config.yaml", "skills", "Asia/Shanghai",
-		"600519.SH", "", ".aegis/evidence", 7*24*time.Hour, true, "")
+		"600519.SH", "", ".aegis/evidence", 7*24*time.Hour, true, "", 0)
 	if err==nil || !strings.Contains(err.Error(),"requires -portfolio-file") {
 		t.Fatalf("error=%v",err)
+	}
+}
+
+func TestRunRejectsStalePortfolioBeforeApplicationConfiguration(t *testing.T) {
+	file := portfolioFixtureFile(t,
+		`{"state":"POSITIONS","as_of":"2020-01-01T12:00:00+08:00","positions":[{"symbol":"600519.SH","quantity":100}]}`)
+	err := run(context.Background(), "missing-config.yaml", "skills", "Asia/Shanghai",
+		"600519.SH", "", ".aegis/evidence", 7*24*time.Hour,
+		true, file, 24*time.Hour)
+	if err == nil || !strings.Contains(err.Error(), "portfolio snapshot is stale") {
+		t.Fatalf("stale snapshot must be rejected before config/models: %v", err)
+	}
+}
+
+func TestRunRejectsInvalidPortfolioAgePolicyBeforeProviderSetup(t *testing.T) {
+	file := portfolioFixtureFile(t, `{"state":"NOT_PROVIDED"}`)
+	for _, tc := range []struct{
+		name string
+		review bool
+		file string
+		age time.Duration
+		want string
+	}{
+		{"negative", true, file, -time.Hour, "must not be negative"},
+		{"age without review", false, "", time.Hour, "requires -portfolio-review"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := run(context.Background(), "missing-config.yaml", "skills", "Asia/Shanghai",
+				"600519.SH", "", ".aegis/evidence", 7*24*time.Hour,
+				tc.review, tc.file, tc.age)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("invalid age policy must fail before provider setup: %v", err)
+			}
+		})
 	}
 }
