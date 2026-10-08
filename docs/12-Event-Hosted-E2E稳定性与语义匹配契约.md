@@ -40,6 +40,14 @@
 
 `UNREVIEWED` **不代表已经确认该新闻无关**，而是**未得到可用的相关性判断**。它必须留在审计结果中，不得作为正向证据、事实或经济影响进入 EventContext。
 
+## 3.1 生成长度配置
+
+模型配置 `ModelConfig.MaxTokens` 对应可选 YAML `models.<profile>.max_tokens`，直接传给 Eino `agenticdeepseek.Config.MaxTokens`。不填写时保留供应商默认值，非正数拒绝创建模型。
+
+Hosted Full Stateless / Full Multi-Agent E2E 使用显式 `max_tokens=16384`，因为这些测试有较长的事件提取输出；此设置是上限而不是要求模型一定输出 16384 tokens，不代表 JSON 或领域契约可以省略校验。
+
+批处理 / 补判针对的是**漏 ID**问题；增加输出预算针对的是**生成过长或可能截断**问题。这两种错误要分别记录和测试。
+
 ## 4. 其他结构化输出
 
 - Event Analyst 的 `generateStrictAgenticJSON` 允许最多两次完整生成，但每次都使用独立解码目标，保留未知字段和多 JSON 值的严格拒绝。
