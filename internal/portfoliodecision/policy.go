@@ -46,7 +46,7 @@ func Validate(result *Decision, intent *tradeintent.Intent, book *portfolio.Cont
 	if err := validateInputs(intent, book, review); err != nil {
 		return err
 	}
-	expected, err := classify(intent.Status, review.Assessment)
+	expected, err := classify(intent.Status, review.Assessment, book.Valuation != nil)
 	if err != nil {
 		return err
 	}
