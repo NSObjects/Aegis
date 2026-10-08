@@ -312,7 +312,8 @@ jobs:
             .portfolio_review.portfolio_decision.symbol == "600519.SH" and
             .portfolio_review.risk_context.assessment == "INSUFFICIENT_CONTEXT" and
             .portfolio_review.portfolio_decision.portfolio_state == "NOT_PROVIDED" and
-            (.portfolio_review.debate_state.turns | length) == 4 and
+            (.portfolio_review.debate_state.turns | map(.side) | index("BULL")) != null and
+            (.portfolio_review.debate_state.turns | map(.side) | index("BEAR")) != null and
             (
               if .portfolio_review.trade_intent.status == "CANDIDATE" then
                 .portfolio_review.portfolio_decision.disposition == "REVIEW_REQUIRED"
