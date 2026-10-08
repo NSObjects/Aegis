@@ -477,14 +477,22 @@ func validateSemanticMatches(
 		)
 	}
 
-	for documentID := range expected {
+	// A well-formed model response can silently omit one or more candidates.
+	// Do not infer relevance for omitted IDs and do not fail the entire
+	// research batch: record an explicit, auditable fail-closed rejection.
+	// Invalid / unknown / duplicate model decisions above remain fatal.
+	for _, document := range documents {
+		documentID := strings.TrimSpace(document.ID)
 		if _, ok := seen[documentID]; ok {
 			continue
 		}
-		return nil, fmt.Errorf(
-			"semantic evidence match is missing for raw document %q",
-			documentID,
-		)
+		decisions = append(decisions, EvidenceSelectionDecision{
+			RawDocumentID: documentID,
+			Selected:      false,
+			Method:        SelectionUnreviewed,
+			Confidence:    0,
+			Reason:        "semantic matcher omitted candidate; relevance was not evaluated, so candidate was excluded",
+		})
 	}
 
 	return decisions, nil
