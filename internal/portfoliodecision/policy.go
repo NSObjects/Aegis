@@ -15,13 +15,13 @@ type policyResult struct {
 }
 
 // Evaluate is deterministic and fail-closed. It never authorizes execution.
-// The current PortfolioContext has neither cash nor monetary exposure / risk limits,
-// so even an ACCEPTABLE risk assessment cannot be promoted to executable approval.
+// Neither observed valuation nor the current limit diagnostics proves a
+// sized, executable trade or verified authorization. ACCEPTABLE never means approved.
 func Evaluate(intent *tradeintent.Intent, book *portfolio.Context, review *risk.Context) (*Decision, error) {
 	if err := validateInputs(intent, book, review); err != nil {
 		return nil, err
 	}
-	outcome, err := classify(intent.Status, review.Assessment)
+	outcome, err := classify(intent.Status, review.Assessment, book.Valuation != nil)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func validateInputs(intent *tradeintent.Intent, book *portfolio.Context, review 
 	return nil
 }
 
-func classify(status tradeintent.Status, assessment risk.Assessment) (policyResult, error) {
+func classify(status tradeintent.Status, assessment risk.Assessment, hasObservedValuation bool) (policyResult, error) {
 	switch status {
 	case tradeintent.StatusMonitor:
 		return policyResult{DispositionNoAction, ReasonMonitorOnly,
@@ -102,8 +102,12 @@ func classify(status tradeintent.Status, assessment risk.Assessment) (policyResu
 			return policyResult{DispositionReviewRequired, ReasonRiskCaution,
 				"Risk review requires caution; a further review is required."}, nil
 		case risk.AssessmentAcceptable:
+			if hasObservedValuation {
+				return policyResult{DispositionReviewRequired, ReasonExecutionContextMissing,
+					"Observed portfolio value is available, but no executable trade size, price or authorization has been assessed."}, nil
+			}
 			return policyResult{DispositionReviewRequired, ReasonAccountDataAbsent,
-				"Risk review found no established concern, but cash, exposure and risk limits are not provided."}, nil
+				"Risk review found no established concern, but portfolio cash and monetary exposure are not provided; execution is not authorized."}, nil
 		}
 	}
 	return policyResult{}, fmt.Errorf("unsupported intent status %q or risk assessment %q", status, assessment)
