@@ -8,6 +8,7 @@ import (
 	"Aegis/internal/research/manager"
 	"Aegis/internal/research/synthesis"
 	"fmt"
+	"strings"
 )
 
 // Disposition is Research Manager classification, NOT a trading action.
@@ -75,11 +76,11 @@ func Build(artifact *synthesis.Artifact, state *debate.State, plan *manager.Rese
 	}
 	accepted := make(map[string]struct{}, len(plan.AcceptedArgumentIDs))
 	for _, id := range plan.AcceptedArgumentIDs {
-		accepted[id] = struct{}{}
+		accepted[strings.TrimSpace(id)] = struct{}{}
 	}
 	unresolved := make(map[string]struct{}, len(plan.UnresolvedArgumentIDs))
 	for _, id := range plan.UnresolvedArgumentIDs {
-		unresolved[id] = struct{}{}
+		unresolved[strings.TrimSpace(id)] = struct{}{}
 	}
 
 	count := 0
@@ -95,15 +96,16 @@ func Build(artifact *synthesis.Artifact, state *debate.State, plan *manager.Rese
 	index := make(map[string]int, count)
 	for _, turn := range state.Turns {
 		for _, arg := range turn.Arguments {
+			id := strings.TrimSpace(arg.ID)
 			disposition := DispositionUnclassified
-			if _, ok := accepted[arg.ID]; ok {
+			if _, ok := accepted[id]; ok {
 				disposition = DispositionAccepted
-			} else if _, ok := unresolved[arg.ID]; ok {
+			} else if _, ok := unresolved[id]; ok {
 				disposition = DispositionUnresolved
 			}
-			index[arg.ID] = len(out.Arguments)
+			index[id] = len(out.Arguments)
 			out.Arguments = append(out.Arguments, Argument{
-				ID: arg.ID, Side: turn.Side, Round: turn.Round,
+				ID: id, Side: turn.Side, Round: turn.Round,
 				Claim: arg.Claim,
 				References: append([]synthesis.Reference{}, arg.References...),
 				Disposition: disposition,
@@ -114,7 +116,7 @@ func Build(artifact *synthesis.Artifact, state *debate.State, plan *manager.Rese
 		for _, rebuttal := range turn.Rebuttals {
 			// Guaranteed to exist and refer to a previous turn by
 			// debate.ValidateState (invoked by manager.Validate above).
-			target, ok := index[rebuttal.TargetArgumentID]
+			target, ok := index[strings.TrimSpace(rebuttal.TargetArgumentID)]
 			if !ok {
 				return nil, fmt.Errorf("rebuttal target %q missing from validated debate", rebuttal.TargetArgumentID)
 			}
