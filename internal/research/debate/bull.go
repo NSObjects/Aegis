@@ -32,21 +32,10 @@ func (r *BullResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.A
 
 	payload, err := json.Marshal(bullInput{Artifact: artifact, Debate: state, Round: round})
 	if err != nil { return Turn{}, fmt.Errorf("encode bull researcher input: %w", err) }
-	response, err := r.Model.Generate(ctx, []*schema.AgenticMessage{
-		schema.SystemAgenticMessage(bullInstruction),
-		schema.UserAgenticMessage(string(payload)),
-	})
-	if err != nil { return Turn{}, fmt.Errorf("generate bull researcher turn: %w", err) }
-	raw := strings.TrimSpace(debateAssistantText(response))
-	if raw == "" { return Turn{}, errors.New("bull researcher returned empty output") }
-	turn, err := decodeTurn(raw)
-	if err != nil { return Turn{}, err }
-	if turn.Side != SideBull { return Turn{}, fmt.Errorf("bull researcher returned side %q", turn.Side) }
-	if turn.Round != round { return Turn{}, fmt.Errorf("bull researcher returned round %d, want %d", turn.Round, round) }
-
-	candidate := &State{Symbol: state.Symbol, Turns: append(append([]Turn(nil), state.Turns...), turn)}
-	if err := ValidateState(candidate, artifact); err != nil { return Turn{}, fmt.Errorf("invalid bull researcher turn: %w", err) }
-	return turn, nil
+	return generateValidatedTurn(
+		ctx, r.Model, bullInstruction, string(payload),
+		artifact, state, round, SideBull,
+	)
 }
 
 func decodeTurn(raw string) (Turn, error) {
