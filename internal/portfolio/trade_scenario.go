@@ -219,6 +219,6 @@ func BuildNotApplicableScenario(s *TradeScenario, limits *Limits, reason string)
 		ScenarioID:s.ScenarioID, ScenarioAsOf:s.AsOf,
 		PolicyID:limits.PolicyID, Symbol:s.Symbol, Side:s.Side,
 		NotionalFen:*s.NotionalFen, Status:ScenarioNotApplicable,
-		Reason:reason,,
+		Reason:reason,
 	}
 }
