@@ -61,6 +61,10 @@ func newDeepSeekForMode(
 		return nil, err
 	}
 
+	if cfg.MaxTokens != nil && *cfg.MaxTokens <= 0 {
+		return nil, errors.New("max_tokens must be positive")
+	}
+
 	responseFormat, err := deepSeekResponseFormat(
 		mode,
 	)
@@ -74,6 +78,7 @@ func newDeepSeekForMode(
 			APIKey:  apiKey,
 			BaseURL: cfg.BaseURL,
 			Model:   cfg.Model,
+			MaxTokens: cfg.MaxTokens,
 
 			ResponseFormatType: responseFormat,
 		},
