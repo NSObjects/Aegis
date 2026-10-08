@@ -83,8 +83,11 @@ type Config struct {
 }
 
 type Workflow struct {
-	runnable       compose.Runnable[Input, *decision.Decision]
-	normalizeInput func(Input) (Input, error)
+	// runnable remains for the explicitly supported pre-Artifact legacy graph.
+	runnable        compose.Runnable[Input, *decision.Decision]
+	artifactRunnable compose.Runnable[Input, *synthesis.Artifact]
+	tradingAgent    artifactTradingAnalyzer
+	normalizeInput  func(Input) (Input, error)
 }
 
 type marketResult struct {
@@ -114,6 +117,24 @@ func New(
 	ctx context.Context,
 	cfg Config,
 ) (*Workflow, error) {
+	if cfg.TradingAgent == nil {
+		return nil, errors.New("research artifact trading agent is required")
+	}
+	workflow, err := NewArtifact(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	workflow.tradingAgent = cfg.TradingAgent
+	return workflow, nil
+}
+
+// NewArtifact builds the shared Market / Technical / Event / Synthesis graph.
+// It does NOT call a Trader. The resulting artifact can be consumed exactly
+// once by either the legacy Decision adapter or the real PortfolioReview loop.
+func NewArtifact(
+	ctx context.Context,
+	cfg Config,
+) (*Workflow, error) {
 	if cfg.MarketAgent == nil {
 		return nil, errors.New(
 			"research market agent is required",
@@ -134,15 +155,9 @@ func New(
 			"research synthesizer is required",
 		)
 	}
-	if cfg.TradingAgent == nil {
-		return nil, errors.New(
-			"research artifact trading agent is required",
-		)
-	}
-
 	workflow := compose.NewWorkflow[
 		Input,
-		*decision.Decision,
+		*synthesis.Artifact,
 	]()
 
 	marketNode := compose.InvokableLambda(
@@ -311,31 +326,6 @@ func New(
 		},
 	)
 
-	tradingNode := compose.InvokableLambda(
-		func(
-			ctx context.Context,
-			artifact *synthesis.Artifact,
-		) (*decision.Decision, error) {
-			if artifact == nil {
-				return nil, errors.New(
-					"research artifact is nil",
-				)
-			}
-
-			result, err :=
-				cfg.TradingAgent.AnalyzeArtifact(
-					ctx,
-					artifact,
-				)
-			if err != nil {
-				return nil, fmt.Errorf(
-					"trading research: %w",
-					err,
-				)
-			}
-			return result, nil
-		},
-	)
 
 	workflow.AddLambdaNode(
 		marketNodeKey,
@@ -379,19 +369,12 @@ func New(
 			),
 		)
 
-	workflow.AddLambdaNode(
-		tradingNodeKey,
-		tradingNode,
-	).AddInput(synthesisNodeKey)
-
-	workflow.End().AddInput(
-		tradingNodeKey,
-	)
+	workflow.End().AddInput(synthesisNodeKey)
 
 	runnable, err := workflow.Compile(
 		ctx,
 		compose.WithGraphName(
-			"aegis_research",
+			"aegis_research_artifact",
 		),
 	)
 	if err != nil {
@@ -402,21 +385,74 @@ func New(
 	}
 
 	return &Workflow{
-		runnable:       runnable,
+		artifactRunnable: runnable,
 		normalizeInput: normalizeWorkflowInput,
 	}, nil
+}
+
+// RunArtifact returns validated research facts from the real upstream graph
+// without invoking Trading, Debate, Risk or Portfolio roles.
+func (w *Workflow) RunArtifact(
+	ctx context.Context,
+	input Input,
+) (*synthesis.Artifact, error) {
+	if w == nil || w.artifactRunnable == nil {
+		return nil, errors.New("research artifact workflow is not initialized")
+	}
+	normalized, err := normalizeWorkflowInput(input)
+	if err != nil {
+		return nil, err
+	}
+	artifact, err := w.artifactRunnable.Invoke(ctx, normalized)
+	if err != nil {
+		return nil, fmt.Errorf("run research artifact workflow: %w", err)
+	}
+	if err := synthesis.Validate(artifact); err != nil {
+		return nil, fmt.Errorf("invalid research artifact: %w", err)
+	}
+	if artifact.Symbol != normalized.Symbol {
+		return nil, fmt.Errorf(
+			"research artifact symbol %q does not match requested %q",
+			artifact.Symbol, normalized.Symbol,
+		)
+	}
+	return artifact, nil
 }
 
 func (w *Workflow) Run(
 	ctx context.Context,
 	input Input,
 ) (*decision.Decision, error) {
-	if w == nil || w.runnable == nil {
-		return nil, errors.New(
-			"research workflow is not initialized",
-		)
+	if w == nil {
+		return nil, errors.New("research workflow is not initialized")
 	}
-
+	if w.artifactRunnable != nil {
+		if w.tradingAgent == nil {
+			return nil, errors.New("research trading agent is not initialized")
+		}
+		artifact, err := w.RunArtifact(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+		result, err := w.tradingAgent.AnalyzeArtifact(ctx, artifact)
+		if err != nil {
+			return nil, fmt.Errorf("trading research: %w", err)
+		}
+		if err := decision.Validate(result); err != nil {
+			return nil, fmt.Errorf("invalid trading decision: %w", err)
+		}
+		if result.Symbol != artifact.Symbol {
+			return nil, fmt.Errorf(
+				"trading decision symbol %q does not match research artifact %q",
+				result.Symbol, artifact.Symbol,
+			)
+		}
+		return result, nil
+	}
+	// Pre-Artifact legacy graph retains its original invoke path.
+	if w.runnable == nil {
+		return nil, errors.New("research workflow is not initialized")
+	}
 	normalize := w.normalizeInput
 	if normalize == nil {
 		normalize = normalizeLegacyWorkflowInput
@@ -425,21 +461,12 @@ func (w *Workflow) Run(
 	if err != nil {
 		return nil, err
 	}
-
-	result, err := w.runnable.Invoke(
-		ctx,
-		normalized,
-	)
+	result, err := w.runnable.Invoke(ctx, normalized)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"run research workflow: %w",
-			err,
-		)
+		return nil, fmt.Errorf("run research workflow: %w", err)
 	}
 	if result == nil {
-		return nil, errors.New(
-			"research workflow returned nil decision",
-		)
+		return nil, errors.New("research workflow returned nil decision")
 	}
 	return result, nil
 }
