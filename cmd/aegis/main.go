@@ -5,11 +5,16 @@ import (
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/agent/trading"
+	portfolioagent "Aegis/internal/agent/portfolio"
+	riskagent "Aegis/internal/agent/risk"
 	eventcap "Aegis/internal/capability/event"
 	technicalcap "Aegis/internal/capability/technical"
 	"Aegis/internal/config"
 	"Aegis/internal/llm"
 	"Aegis/internal/research"
+	"Aegis/internal/research/debate"
+	"Aegis/internal/research/manager"
+	"Aegis/internal/portfolio"
 	"Aegis/internal/research/planning"
 	"Aegis/internal/research/synthesis"
 	"Aegis/internal/runtime"
@@ -34,6 +39,8 @@ func main() {
 		marketQuery   string
 		evidenceStore string
 		eventLookback time.Duration
+		portfolioReview bool
+		portfolioFile string
 	)
 
 	flag.StringVar(
@@ -78,6 +85,18 @@ func main() {
 		7*24*time.Hour,
 		"live event publication lookback",
 	)
+	flag.BoolVar(
+		&portfolioReview,
+		"portfolio-review",
+		false,
+		"run full Research/Trading/Risk/Portfolio workflow (requires -portfolio-file)",
+	)
+	flag.StringVar(
+		&portfolioFile,
+		"portfolio-file",
+		"",
+		"JSON portfolio context, e.g. {\"state\":\"NOT_PROVIDED\"}",
+	)
 	flag.Parse()
 
 	if err := run(
@@ -89,6 +108,8 @@ func main() {
 		marketQuery,
 		evidenceStore,
 		eventLookback,
+		portfolioReview,
+		portfolioFile,
 	); err != nil {
 		log.Fatal(err)
 	}
@@ -103,7 +124,21 @@ func run(
 	marketQuery string,
 	evidenceStore string,
 	eventLookback time.Duration,
+	portfolioReview bool,
+	portfolioFile string,
 ) error {
+	// Validate account input before initiating any live research or LLM call.
+	// NOT_PROVIDED is explicit; no implicit empty portfolios.
+	var book *portfolio.Context
+	if portfolioReview {
+		loaded, err := loadPortfolioContext(portfolioFile)
+		if err != nil {
+			return err
+		}
+		book = loaded
+	} else if strings.TrimSpace(portfolioFile) != "" {
+		return fmt.Errorf("-portfolio-file requires -portfolio-review")
+	}
 	appCfg, err := config.Load(configPath)
 	if err != nil {
 		return err
@@ -452,18 +487,12 @@ func run(
 			Model: synthesisModel,
 		}
 
-	workflow, err := research.New(
-		ctx,
-		research.Config{
-			MarketAgent:    marketAgent,
-			TechnicalAgent: technicalAgent,
-			EventAgent:     liveEventAgent,
-			Synthesizer:    researchSynthesizer,
-			TradingAgent:   tradingAgent,
-		},
-	)
-	if err != nil {
-		return err
+	researchConfig := research.Config{
+		MarketAgent:    marketAgent,
+		TechnicalAgent: technicalAgent,
+		EventAgent:     liveEventAgent,
+		Synthesizer:    researchSynthesizer,
+		TradingAgent:   tradingAgent,
 	}
 
 	location, err := time.LoadLocation(
@@ -488,24 +517,48 @@ func run(
 		return err
 	}
 
-	result, err := workflow.Run(
-		ctx,
-		workflowInput,
-	)
-	if err != nil {
-		return err
+	var result any
+	if portfolioReview {
+		// Production composition of the shared research graph and the
+		// independent Risk/Portfolio review. No test fixture or extra Trader.
+		upstream, err := research.NewArtifact(ctx, researchConfig)
+		if err != nil {
+			return fmt.Errorf("create research artifact workflow: %w", err)
+		}
+		review, err := research.NewPortfolioReview(research.PortfolioReviewConfig{
+			Debate: &debate.Runtime{
+				Bull: &debate.BullResearcher{Model: tradingModel},
+				Bear: &debate.BearResearcher{Model: tradingModel},
+				MaxRounds: 2,
+			},
+			ResearchManager: &manager.ResearchManager{Model: tradingModel},
+			TradingAgent: tradingAgent,
+			RiskAnalyst: &riskagent.Analyst{Model: tradingModel},
+			PortfolioManager: &portfolioagent.Manager{},
+		})
+		if err != nil {
+			return fmt.Errorf("create portfolio review workflow: %w", err)
+		}
+		result, err = (&research.FullPortfolioWorkflow{
+			Research: upstream,
+			Review: review,
+		}).Run(ctx, workflowInput, book)
+		if err != nil {
+			return err
+		}
+	} else {
+		workflow, err := research.New(ctx, researchConfig)
+		if err != nil {
+			return err
+		}
+		result, err = workflow.Run(ctx, workflowInput)
+		if err != nil {
+			return err
+		}
 	}
-
-	data, err := json.MarshalIndent(
-		result,
-		"",
-		"  ",
-	)
+	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		return fmt.Errorf(
-			"marshal research decision: %w",
-			err,
-		)
+		return fmt.Errorf("marshal research result: %w", err)
 	}
 
 	fmt.Println(string(data))
