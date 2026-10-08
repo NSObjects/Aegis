@@ -107,3 +107,65 @@ func TestRunRejectsInvalidPortfolioAgePolicyBeforeProviderSetup(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadPortfolioContextWithObservedCNYValuation(t *testing.T) {
+	book,err:=loadPortfolioContext(portfolioFixtureFile(t,`{
+		"state":"POSITIONS",
+		"as_of":"2026-10-08T09:00:00+08:00",
+		"positions":[{"symbol":"600519.SH","quantity":100}],
+		"valuation":{
+			"scope":"CASH_AND_POSITIONS",
+			"currency":"CNY",
+			"total_value_fen":100000,
+			"cash_fen":40000,
+			"position_values":[{"symbol":"600519.SH","market_value_fen":60000}]
+		}
+	}`))
+	if err!=nil {t.Fatal(err)}
+	exposure,err:=portfolio.ComputeExposure(book)
+	if err!=nil || exposure==nil || len(exposure.Positions)!=1 ||
+		exposure.Positions[0].WeightBps!=6000 {
+		t.Fatalf("CLI JSON observed valuation was not preserved: %+v error=%v",exposure,err)
+	}
+}
+
+func TestLoadPortfolioContextRejectsValuationFabricationOrAmbiguity(t *testing.T) {
+	for _,tc:=range []struct{name,payload,want string}{
+		{
+			"missing one held symbol",
+			`{"state":"POSITIONS","as_of":"2026-10-08T09:00:00+08:00",
+				"positions":[{"symbol":"600519.SH","quantity":100}],
+				"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+					"cash_fen":40000,"total_value_fen":100000,"position_values":[]}}`,
+			"every observed position",
+		},
+		{
+			"money amount cannot be fractional fen",
+			`{"state":"EMPTY","as_of":"2026-10-08T09:00:00+08:00",
+				"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+					"cash_fen":1.5,"total_value_fen":2,"position_values":[]}}`,
+			"unmarshal",
+		},
+		{
+			"unknown valuation field",
+			`{"state":"EMPTY","as_of":"2026-10-08T09:00:00+08:00",
+				"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+					"cash_fen":0,"total_value_fen":0,"broker_cash_fen":10,"position_values":[]}}`,
+			"unknown field",
+		},
+		{
+			"unreconciled amount",
+			`{"state":"EMPTY","as_of":"2026-10-08T09:00:00+08:00",
+				"valuation":{"scope":"CASH_AND_POSITIONS","currency":"CNY",
+					"cash_fen":100,"total_value_fen":200,"position_values":[]}}`,
+			"does not reconcile",
+		},
+	} {
+		t.Run(tc.name,func(t *testing.T){
+			if _,err:=loadPortfolioContext(portfolioFixtureFile(t,tc.payload));
+				err==nil || !strings.Contains(err.Error(),tc.want) {
+				t.Fatalf("load err=%v, want %q",err,tc.want)
+			}
+		})
+	}
+}
