@@ -243,7 +243,7 @@ func NewArtifact(
 			if err != nil {
 				return nil, fmt.Errorf("parse event requested_as_of: %w", err)
 			}
-			if !eventCutoff.Equal(input.RequestedAsOf) {
+			if !eventCutoff.Equal(input.RequestedAsOf.Truncate(time.Second)) {
 				return nil, fmt.Errorf(
 					"event requested_as_of %q does not match research cutoff %q",
 					eventContext.RequestedAsOf, input.RequestedAsOf.Format(time.RFC3339Nano),
