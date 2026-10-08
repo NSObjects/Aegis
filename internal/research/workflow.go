@@ -237,6 +237,18 @@ func NewArtifact(
 					err,
 				)
 			}
+			// Live evidence can be captured at T1 after the caller's T0;
+			// Event.RequestedAsOf must still preserve that original T0.
+			eventCutoff, err := time.Parse(time.RFC3339, eventContext.RequestedAsOf)
+			if err != nil {
+				return nil, fmt.Errorf("parse event requested_as_of: %w", err)
+			}
+			if !eventCutoff.Equal(input.RequestedAsOf) {
+				return nil, fmt.Errorf(
+					"event requested_as_of %q does not match research cutoff %q",
+					eventContext.RequestedAsOf, input.RequestedAsOf.Format(time.RFC3339Nano),
+				)
+			}
 
 			return &eventResult{
 				EventContext: eventContext,
@@ -261,7 +273,7 @@ func NewArtifact(
 					technical.Input{
 						Symbol: input.Symbol,
 						RequestedAsOf:
-							input.RequestedAsOf.Format("20060102"),
+							input.RequestedAsOf.In(time.FixedZone("A-share", 8*60*60)).Format("20060102"),
 					},
 				)
 			if err != nil {
@@ -277,6 +289,40 @@ func NewArtifact(
 					"invalid technical context: %w",
 					err,
 				)
+			}
+			// Technical trading dates follow the Shanghai exchange calendar,
+			// regardless of the caller's local timezone.
+			exchangeAsOf := input.RequestedAsOf.In(time.FixedZone("A-share", 8*60*60)).Format("20060102")
+			if technicalContext.Symbol != input.Symbol {
+				return nil, fmt.Errorf(
+					"technical symbol %q does not match research symbol %q",
+					technicalContext.Symbol, input.Symbol,
+				)
+			}
+			if technicalContext.RequestedAsOf != exchangeAsOf {
+				return nil, fmt.Errorf(
+					"technical requested_as_of %q does not match research trading date %q",
+					technicalContext.RequestedAsOf, exchangeAsOf,
+				)
+			}
+			for _, date := range []struct{ name, value string }{
+				{"effective_as_of", technicalContext.EffectiveAsOf},
+				{"last_trade_date", technicalContext.LastTradeDate},
+			} {
+				if date.value == "" {
+					continue
+				}
+				parsed, err := time.Parse("20060102", date.value)
+				if err != nil {
+					return nil, fmt.Errorf("parse technical %s %q: %w", date.name, date.value, err)
+				}
+				cutoff, _ := time.Parse("20060102", exchangeAsOf)
+				if parsed.After(cutoff) {
+					return nil, fmt.Errorf(
+						"technical %s %q is after requested trading date %q",
+						date.name, date.value, exchangeAsOf,
+					)
+				}
 			}
 
 			return &technicalResult{
