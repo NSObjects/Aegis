@@ -2,7 +2,9 @@ package event
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -11,9 +13,12 @@ import (
 )
 
 type semanticMatcherModel struct {
-	response *schema.AgenticMessage
-	err      error
-	input    []*schema.AgenticMessage
+	response  *schema.AgenticMessage
+	responses []*schema.AgenticMessage
+	err       error
+	input     []*schema.AgenticMessage
+	inputs    [][]*schema.AgenticMessage
+	calls     int
 }
 
 func (m *semanticMatcherModel) Generate(
@@ -22,7 +27,18 @@ func (m *semanticMatcherModel) Generate(
 	_ ...model.Option,
 ) (*schema.AgenticMessage, error) {
 	m.input = input
-	return m.response, m.err
+	m.inputs = append(m.inputs, input)
+	m.calls++
+	if m.err != nil {
+		return nil, m.err
+	}
+	if len(m.responses) > 0 {
+		if m.calls > len(m.responses) {
+			return nil, errors.New("unexpected semantic model request")
+		}
+		return m.responses[m.calls-1], nil
+	}
+	return m.response, nil
 }
 
 func (m *semanticMatcherModel) Stream(
@@ -213,4 +229,83 @@ func TestAgenticSemanticEvidenceMatcherRejectsInvalidOutput(
 			}
 		})
 	}
+}
+
+func TestSemanticMatcherBatchesAndRetriesOnlyMissingIDs(t *testing.T) {
+	model := &semanticMatcherModel{responses: []*schema.AgenticMessage{
+		agenticTextMessage(schema.AgenticRoleTypeAssistant,
+			`{"matches":[{"raw_document_id":"a","relevant":true,"confidence":0.94,"reason":"direct"},{"raw_document_id":"c","relevant":false,"confidence":0.92,"reason":"other"}]}`),
+		agenticTextMessage(schema.AgenticRoleTypeAssistant,
+			`{"matches":[{"raw_document_id":"b","relevant":true,"confidence":0.81,"reason":"direct"}]}`),
+		agenticTextMessage(schema.AgenticRoleTypeAssistant,
+			`{"matches":[{"raw_document_id":"e","relevant":false,"confidence":0.99,"reason":"other"},{"raw_document_id":"f","relevant":true,"confidence":0.85,"reason":"direct"}]}`),
+	}}
+	selector := &HybridEvidenceSelector{
+		TargetResolver: MapEvidenceTargetResolver{
+			"600519.SH": {Name: "贵州茅台"},
+		},
+		SemanticMatcher: &AgenticSemanticEvidenceMatcher{Model: model},
+	}
+	documents := []RawDocument{
+		{ID:"a",Title:"supplier contract"}, {ID:"b",Title:"supply order"},
+		{ID:"c",Title:"industry news"}, {ID:"d",Title:"cls market news"},
+		{ID:"e",Title:"technology headline"}, {ID:"f",Title:"customer story"},
+	}
+	decisions, err := selector.Select(context.Background(),
+		ResearchTask{Symbol:"600519.SH"}, documents)
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+	if model.calls != 3 {
+		t.Fatalf("calls = %d, want 3 (initial batch, omitted retry, second batch)", model.calls)
+	}
+	if len(decisions) != len(documents) {
+		t.Fatalf("decision count = %d", len(decisions))
+	}
+	wantBatches := [][]string{{"a","b","c","d"},{"b","d"},{"e","f"}}
+	for i, messages := range model.inputs {
+		var request semanticEvidencePrompt
+		if err := json.Unmarshal([]byte(agenticAssistantOrUserText(messages[1])), &request); err != nil {
+			t.Fatalf("decode batch %d input: %v", i, err)
+		}
+		ids := make([]string,0,len(request.Documents))
+		for _, item := range request.Documents { ids=append(ids,item.RawDocumentID) }
+		if !reflect.DeepEqual(ids, wantBatches[i]) {
+			t.Fatalf("batch %d ids=%v, want %v",i,ids,wantBatches[i])
+		}
+	}
+	byID := map[string]EvidenceSelectionDecision{}
+	for _, decision := range decisions {byID[decision.RawDocumentID]=decision}
+	if !byID["a"].Selected || !byID["b"].Selected || !byID["f"].Selected {
+		t.Fatalf("grounded positive matches lost: %+v",byID)
+	}
+	if byID["c"].Selected || byID["e"].Selected {
+		t.Fatalf("negative matches promoted: %+v",byID)
+	}
+	if d:=byID["d"]; d.Selected || d.Method!=SelectionUnreviewed || d.Confidence!=0 {
+		t.Fatalf("still omitted candidate should be unreviewed: %+v",d)
+	}
+}
+
+func TestSemanticMatcherRejectsUnknownBatchIDBeforeRetry(t *testing.T) {
+	model := &semanticMatcherModel{response: agenticTextMessage(schema.AgenticRoleTypeAssistant,
+		`{"matches":[{"raw_document_id":"fabricated","relevant":true,"confidence":0.98}]}`)}
+	matcher := &AgenticSemanticEvidenceMatcher{Model:model}
+	_,err := matcher.Match(context.Background(),EvidenceTarget{Symbol:"600519.SH"},
+		[]RawDocument{{ID:"a"},{ID:"b"}})
+	if err == nil || !strings.Contains(err.Error(),"unknown raw document") {
+		t.Fatalf("error = %v",err)
+	}
+	if model.calls != 1 {
+		t.Fatalf("invalid IDs must fail before retry; calls=%d",model.calls)
+	}
+}
+
+func agenticAssistantOrUserText(msg *schema.AgenticMessage) string {
+	if msg == nil { return "" }
+	var b strings.Builder
+	for _, block := range msg.ContentBlocks {
+		if block!=nil && block.UserInputText!=nil {b.WriteString(block.UserInputText.Text)}
+	}
+	return b.String()
 }
