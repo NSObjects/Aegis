@@ -45,3 +45,46 @@ jobs:
 
       - name: Test
         run: go test ./... -count=1
+
+      - name: CLI account input gate (no API credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o "${{ runner.temp }}/aegis-cli" ./cmd/aegis
+
+          # A missing portfolio file must fail before loading config or
+          # accessing any external provider; never fabricate a portfolio.
+          if "${{ runner.temp }}/aegis-cli" \
+              -config "${{ runner.temp }}/nonexistent-config.yaml" \
+              -portfolio-review > "${{ runner.temp }}/cli-out" 2> "${{ runner.temp }}/cli-err"; then
+            echo "::error::CLI accepted missing portfolio input"
+            exit 1
+          fi
+          grep -q 'requires -portfolio-file' "${{ runner.temp }}/cli-err"
+          test ! -s "${{ runner.temp }}/cli-out"
+
+          # Reject unknown financial fields rather than dropping them.
+          printf '{"state":"NOT_PROVIDED","cash":1000}\n' \
+            > "${{ runner.temp }}/invalid-portfolio.json"
+          if "${{ runner.temp }}/aegis-cli" \
+              -config "${{ runner.temp }}/nonexistent-config.yaml" \
+              -portfolio-review \
+              -portfolio-file "${{ runner.temp }}/invalid-portfolio.json" \
+              > "${{ runner.temp }}/cli-out" 2> "${{ runner.temp }}/cli-err"; then
+            echo "::error::CLI accepted unsupported portfolio fields"
+            exit 1
+          fi
+          grep -q 'unknown field' "${{ runner.temp }}/cli-err"
+          test ! -s "${{ runner.temp }}/cli-out"
+
+          # Existing default Decision mode must not silently use the
+          # portfolio flag when portfolio-review is disabled.
+          if "${{ runner.temp }}/aegis-cli" \
+              -config "${{ runner.temp }}/nonexistent-config.yaml" \
+              -portfolio-file "${{ runner.temp }}/invalid-portfolio.json" \
+              > "${{ runner.temp }}/cli-out" 2> "${{ runner.temp }}/cli-err"; then
+            echo "::error::CLI silently accepted portfolio-file without review mode"
+            exit 1
+          fi
+          grep -q 'requires -portfolio-review' "${{ runner.temp }}/cli-err"
+          test ! -s "${{ runner.temp }}/cli-out"
