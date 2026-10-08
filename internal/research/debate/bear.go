@@ -6,10 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
 )
 
 type BearResearcher struct {
@@ -31,21 +29,10 @@ func (r *BearResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.A
 
 	payload, err := json.Marshal(bearInput{Artifact: artifact, Debate: state, Round: round})
 	if err != nil { return Turn{}, fmt.Errorf("encode bear researcher input: %w", err) }
-	response, err := r.Model.Generate(ctx, []*schema.AgenticMessage{
-		schema.SystemAgenticMessage(bearInstruction),
-		schema.UserAgenticMessage(string(payload)),
-	})
-	if err != nil { return Turn{}, fmt.Errorf("generate bear researcher turn: %w", err) }
-	raw := strings.TrimSpace(debateAssistantText(response))
-	if raw == "" { return Turn{}, errors.New("bear researcher returned empty output") }
-	turn, err := decodeTurn(raw)
-	if err != nil { return Turn{}, err }
-	if turn.Side != SideBear { return Turn{}, fmt.Errorf("bear researcher returned side %q", turn.Side) }
-	if turn.Round != round { return Turn{}, fmt.Errorf("bear researcher returned round %d, want %d", turn.Round, round) }
-
-	candidate := &State{Symbol: state.Symbol, Turns: append(append([]Turn(nil), state.Turns...), turn)}
-	if err := ValidateState(candidate, artifact); err != nil { return Turn{}, fmt.Errorf("invalid bear researcher turn: %w", err) }
-	return turn, nil
+	return generateValidatedTurn(
+		ctx, r.Model, bearInstruction, string(payload),
+		artifact, state, round, SideBear,
+	)
 }
 
 const bearInstruction = `You are the Bear Researcher in Aegis' investment research debate.
