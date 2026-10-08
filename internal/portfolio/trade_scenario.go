@@ -10,7 +10,7 @@ import (
 
 // TradeScenario is caller-authored, hypothetical CNY notional movement.
 // It is NOT an order: price, share quantity, fees, settlement, fills and
-// brokerage authorization are deliberately out of scope.
+// broker order workflows are outside the product scope.
 type ScenarioSide string
 
 const (
@@ -46,7 +46,7 @@ type ScenarioLimitCheck struct {
 	Status             LimitReviewStatus `json:"status"`
 }
 
-// ScenarioReview is an indicative mathematical what-if, NEVER an approval.
+// ScenarioReview is an indicative mathematical what-if, always a research-only diagnostic.
 // All projected amounts describe a constant-NAV, zero-fee hypothetical cash
 // / position-value transfer; no prices or executable quantities are implied.
 type ScenarioReview struct {
@@ -62,7 +62,6 @@ type ScenarioReview struct {
 	ProjectedCashFen    *int64               `json:"projected_cash_fen,omitempty"`
 	ProjectedInvestedFen *int64              `json:"projected_invested_fen,omitempty"`
 	Checks              []ScenarioLimitCheck `json:"checks,omitempty"`
-	ExecutionAuthorized bool                 `json:"execution_authorized"`
 }
 
 func ValidateTradeScenarioAt(
@@ -138,7 +137,6 @@ func EvaluateTradeScenario(
 		ScenarioID:scenario.ScenarioID, ScenarioAsOf:scenario.AsOf,
 		PolicyID:limits.PolicyID, Symbol:scenario.Symbol,
 		Side:scenario.Side, NotionalFen:*scenario.NotionalFen,
-		ExecutionAuthorized:false,
 	}
 	if book.State != StateNotProvided {
 		out.AccountAsOf = book.AsOf
@@ -183,7 +181,7 @@ func EvaluateTradeScenario(
 	out.ProjectedCashFen = &cash
 	out.ProjectedInvestedFen = &invested
 	out.Status = ScenarioWithinLimits
-	out.Reason = "modeled current limit checks only; not an executable trade approval"
+	out.Reason = "modeled current limit checks only; a research-only portfolio scenario"
 	out.Checks = make([]ScenarioLimitCheck, 0, len(limits.Rules))
 	for _, rule := range limits.Rules {
 		check := ScenarioLimitCheck{Kind:rule.Kind, LimitBps:*rule.LimitBps}
@@ -207,7 +205,7 @@ func EvaluateTradeScenario(
 		if exceedsLimit(projected, v.TotalValueFen, *rule.LimitBps) {
 			check.Status = LimitReviewBreach
 			out.Status = ScenarioBreach
-			out.Reason = "hypothetical post-trade exposure exceeds a caller-defined current-weight limit"
+			out.Reason = "hypothetical portfolio exposure exceeds a caller-defined current-weight limit"
 		}
 		out.Checks = append(out.Checks, check)
 	}
@@ -221,6 +219,6 @@ func BuildNotApplicableScenario(s *TradeScenario, limits *Limits, reason string)
 		ScenarioID:s.ScenarioID, ScenarioAsOf:s.AsOf,
 		PolicyID:limits.PolicyID, Symbol:s.Symbol, Side:s.Side,
 		NotionalFen:*s.NotionalFen, Status:ScenarioNotApplicable,
-		Reason:reason, ExecutionAuthorized:false,
+		Reason:reason,,
 	}
 }
