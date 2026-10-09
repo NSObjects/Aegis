@@ -1,6 +1,6 @@
 # Research Evidence Ledger — 最小确定性证据追溯清单
 
-> 增量分支：`codex/research-evidence-ledger`，最初从 V2.11.3 的 `main` 创建。PR #86（V2.11.4 组合情景推演）与 PR #87（当前能力文档更新）现已合并至 `main`；本分支尚未对齐最新 `main`，必须在合并前重新验证兼容性。
+> 状态：Evidence Ledger 已在 PR #88 合并至 `main`；Manager Insight 显式论点关联已在 PR #92 合并。V2.12.2 在现有 Ledger 上增加引用重合诊断，独立于 Research Manager 的语义判断。
 >
 > **Aegis 永久是研究与决策辅助系统，不会增加券商下单、执行或审批能力。**
 
@@ -29,6 +29,11 @@
   - `UNCLASSIFIED`：存在于 Debate，但未被 Manager 放进上述两组。**不是 REJECTED，也不是无证据。**
 - `arguments[].challenges[]`：按原始辩论顺序列出后续反驳，关联到真实目标 ID，记录反驳人 `side`、`round`、`claim`、`references`。没有制造反驳 ID。
 - `insights[]`：按 ResearchPlan Opportunities 顺序、再按 Risks 顺序，展示独立的 `OPPORTUNITY / RISK`、`claim` 和原始引用。`argument_ids` 为可选字段：只复制 Research Manager **显式提供、已通过 Debate ID 校验**的论点关联；旧版未提供时不输出该字段，更不凭文本相似性猜测关联。关联 ID 只能证明所引用论点存在，不能独立证明 insight 语义正确。
+- `insights[].argument_reference_audits[]`（V2.12.2，可选）：每个显式 `argument_id` 对应一条 `{"argument_id":"...","reference_alignment":"..."}`。按原始 ID 顺序遍历，不关联未引用的论点。没有 `argument_ids` 时不输出该字段。
+  - `SAME_EVENT_ID`：Insight 与论点共享一个**相同且非空**的 EVENT `event_id`。只能确认共同引用了某事件，不能确认两者的文字推理一致。
+  - `SAME_DOMAIN_ONLY`：只有 MARKET/TECHNICAL 领域粒度的共同引用，或者 EVENT 有一方仅引用事件领域而没有具体 `event_id`。这是非常弱的引用重合，不是“相同事实”。
+  - `NO_SHARED_REFERENCE`：找不到共同引用；包括两者都引用 EVENT 但**具体 `event_id` 不同**的情况。不同引用并不自动证明论点错误，只表示这条关联需要人工复核。
+  - 多个引用时优先显示更具体的 `SAME_EVENT_ID`，否则若有弱领域重合则输出 `SAME_DOMAIN_ONLY`，否则输出 `NO_SHARED_REFERENCE`。算法不比较自然语言、不读取 Rebuttal 来替代论点引用，不修改 ResearchPlan，也不改变下游 Trading/Risk/Portfolio 判断。
 
 ### 结构示例（说明形状，非实际市场研究）
 
