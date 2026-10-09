@@ -52,6 +52,8 @@ type Insight struct {
 	References  []synthesis.Reference `json:"references"`
 	// Explicitly supplied and validated Research Manager argument links only.
 	ArgumentIDs []string              `json:"argument_ids,omitempty"`
+	// A read-only citation-overlap diagnostic, NOT semantic entailment.
+	ArgumentReferenceAudits []ArgumentReferenceAudit `json:"argument_reference_audits,omitempty"`
 }
 
 // Ledger is a projection of validated upstream contracts, not a substitute
@@ -129,20 +131,30 @@ func Build(artifact *synthesis.Artifact, state *debate.State, plan *manager.Rese
 			})
 		}
 	}
-	for _, opportunity := range plan.Opportunities {
+	for i, opportunity := range plan.Opportunities {
+		audits, err := auditArgumentReferences(opportunity.ArgumentIDs, opportunity.References, index, out.Arguments)
+		if err != nil {
+			return nil, fmt.Errorf("opportunity %d: %w", i, err)
+		}
 		out.Insights = append(out.Insights, Insight{
 			Kind: InsightOpportunity,
 			Claim: opportunity.Claim,
 			References: append([]synthesis.Reference{}, opportunity.References...),
 			ArgumentIDs: copyArgumentIDs(opportunity.ArgumentIDs),
+			ArgumentReferenceAudits: audits,
 		})
 	}
-	for _, risk := range plan.Risks {
+	for i, risk := range plan.Risks {
+		audits, err := auditArgumentReferences(risk.ArgumentIDs, risk.References, index, out.Arguments)
+		if err != nil {
+			return nil, fmt.Errorf("risk %d: %w", i, err)
+		}
 		out.Insights = append(out.Insights, Insight{
 			Kind: InsightRisk,
 			Claim: risk.Claim,
 			References: append([]synthesis.Reference{}, risk.References...),
 			ArgumentIDs: copyArgumentIDs(risk.ArgumentIDs),
+			ArgumentReferenceAudits: audits,
 		})
 	}
 	return out, nil
