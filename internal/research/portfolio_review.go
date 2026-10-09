@@ -4,6 +4,7 @@ import (
 	"Aegis/internal/portfolio"
 	"Aegis/internal/portfoliodecision"
 	"Aegis/internal/research/debate"
+	"Aegis/internal/research/evidenceledger"
 	"Aegis/internal/research/manager"
 	"Aegis/internal/research/synthesis"
 	"Aegis/internal/risk"
@@ -53,6 +54,8 @@ type PortfolioReview struct {
 type PortfolioReviewResult struct {
 	Debate            *debate.State               `json:"debate_state"`
 	ResearchPlan      *manager.ResearchPlan       `json:"research_plan"`
+	// Grounded deterministic projection, not inferred from TradeIntent.Evidence.
+	EvidenceLedger    *evidenceledger.Ledger      `json:"evidence_ledger"`
 	TradeIntent       *tradeintent.Intent         `json:"trade_intent"`
 	RiskContext       *risk.Context               `json:"risk_context"`
 	PortfolioDecision *portfoliodecision.Decision `json:"portfolio_decision"`
@@ -122,6 +125,10 @@ func (w *PortfolioReview) Run(
 	if err := manager.Validate(plan, artifact, state); err != nil {
 		return nil, fmt.Errorf("invalid research plan: %w", err)
 	}
+	ledger, err := evidenceledger.Build(artifact, state, plan)
+	if err != nil {
+		return nil, fmt.Errorf("research evidence ledger: %w", err)
+	}
 
 	intent, err := w.cfg.TradingAgent.AnalyzeResearchPlanIntent(ctx, artifact, plan)
 	if err != nil {
@@ -153,6 +160,7 @@ func (w *PortfolioReview) Run(
 	return &PortfolioReviewResult{
 		Debate: state,
 		ResearchPlan: plan,
+		EvidenceLedger: ledger,
 		TradeIntent: intent,
 		RiskContext: riskContext,
 		PortfolioDecision: final,

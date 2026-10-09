@@ -173,6 +173,14 @@ func TestPortfolioReviewCompleteBoundary(t *testing.T) {
 	if len(result.Debate.Turns)!=2 || result.ResearchPlan.Conclusion!=manager.ConclusionBalanced {
 		t.Fatalf("upstream outputs lost: %+v",result)
 	}
+	if result.EvidenceLedger==nil || result.EvidenceLedger.Symbol!="600519.SH" ||
+		len(result.EvidenceLedger.Arguments)!=2 ||
+		result.EvidenceLedger.Arguments[0].ID!="bull-1" ||
+		string(result.EvidenceLedger.Arguments[0].Disposition)!="ACCEPTED" ||
+		result.EvidenceLedger.Arguments[1].ID!="bear-1" ||
+		string(result.EvidenceLedger.Arguments[1].Disposition)!="UNRESOLVED" {
+		t.Fatalf("research ledger not populated from validated upstream IDs: %+v",result.EvidenceLedger)
+	}
 	if result.TradeIntent.Status!=tradeintent.StatusCandidate || result.RiskContext.Assessment!=risk.AssessmentHighRisk {
 		t.Fatalf("typed stage output mismatch: %+v",result)
 	}
@@ -288,5 +296,35 @@ func TestPortfolioReviewRejectsUnreconciledValuationBeforeDebate(t *testing.T) {
 	result,err:=w.Run(context.Background(),reviewArtifactFixture(),book)
 	if err==nil || result!=nil || !strings.Contains(err.Error(),"does not reconcile") || debateAgent.calls!=0 {
 		t.Fatalf("must fail before model-driven debate: result=%+v err=%v debate=%d",result,err,debateAgent.calls)
+	}
+}
+
+func TestPortfolioReviewLedgerDoesNotPromoteFreeTextTradeIntentEvidence(t *testing.T) {
+	w,_,_,trader,_:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentHighRisk))
+	trader.intent.Evidence=[]string{"imaginary citation bull-ghost and non-existent event id"}
+	result,err:=w.Run(context.Background(),reviewArtifactFixture(),reviewBookFixture())
+	if err!=nil {t.Fatal(err)}
+	if result.TradeIntent.Evidence[0]!="imaginary citation bull-ghost and non-existent event id" {
+		t.Fatal("must preserve original trade intent text without changing it")
+	}
+	for _,arg:=range result.EvidenceLedger.Arguments {
+		if strings.Contains(arg.Claim,"ghost") || arg.ID=="bull-ghost" {
+			t.Fatal("unverified TradeIntent.Evidence is not a structured ledger citation")
+		}
+	}
+	if len(result.EvidenceLedger.Arguments)!=2 || len(result.EvidenceLedger.Insights)!=0 {
+		t.Fatalf("ledger contains invented research citations: %+v",result.EvidenceLedger)
+	}
+}
+
+func TestPortfolioReviewUnknownResearchManagerArgumentFailsBeforeTrader(t *testing.T) {
+	w,_,m,trader,riskAgent:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentHighRisk))
+	m.plan.AcceptedArgumentIDs=[]string{"unknown-argument"}
+	result,err:=w.Run(context.Background(),reviewArtifactFixture(),reviewBookFixture())
+	if err==nil || result!=nil || !strings.Contains(err.Error(),"does not exist in debate") {
+		t.Fatalf("invented argument must not leak to trading/risk stages: result=%+v err=%v",result,err)
+	}
+	if trader.calls!=0 || riskAgent.calls!=0 {
+		t.Fatalf("invalid argument should stop before downstream agents; calls=%d/%d",trader.calls,riskAgent.calls)
 	}
 }
