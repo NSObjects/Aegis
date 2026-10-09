@@ -3,6 +3,7 @@ package market
 import (
 	"errors"
 	"fmt"
+	"math"
 )
 
 func Validate(v *Context) error {
@@ -20,7 +21,7 @@ func Validate(v *Context) error {
 		return fmt.Errorf("invalid regime: %s", v.Regime)
 	}
 
-	if v.Confidence < 0 || v.Confidence > 1 {
+	if math.IsNaN(v.Confidence) || v.Confidence < 0 || v.Confidence > 1 {
 		return fmt.Errorf(
 			"confidence out of range: %f",
 			v.Confidence,

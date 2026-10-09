@@ -3,6 +3,7 @@ package event
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 )
@@ -22,7 +23,7 @@ func normalizeAnalystSynthesis(raw AnalystSynthesis, events []Event) (AnalystSyn
 	if raw.Summary=="" { return AnalystSynthesis{},errors.New("analyst synthesis summary is required") }
 	if !validMaterialityLevel(raw.OverallMateriality) { return AnalystSynthesis{},fmt.Errorf("analyst synthesis has invalid materiality %q",raw.OverallMateriality) }
 	if !validImpactDirection(raw.OverallDirection) { return AnalystSynthesis{},fmt.Errorf("analyst synthesis has invalid direction %q",raw.OverallDirection) }
-	if raw.Confidence<0 || raw.Confidence>1 { return AnalystSynthesis{},fmt.Errorf("analyst synthesis confidence out of range: %f",raw.Confidence) }
+	if math.IsNaN(raw.Confidence) || raw.Confidence<0 || raw.Confidence>1 { return AnalystSynthesis{},fmt.Errorf("analyst synthesis confidence out of range: %f",raw.Confidence) }
 
 	eventIDs:=make(map[string]struct{},len(events))
 	for _,event:=range events { eventIDs[event.ID]=struct{}{} }

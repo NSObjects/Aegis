@@ -5,6 +5,7 @@ import (
 	"Aegis/internal/tradeintent"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -36,7 +37,7 @@ func Validate(ctx *Context, intent *tradeintent.Intent, portfolioCtx *portfolio.
 	if strings.TrimSpace(ctx.Summary) == "" {
 		return errors.New("risk context summary is required")
 	}
-	if ctx.Confidence < 0 || ctx.Confidence > 1 {
+	if math.IsNaN(ctx.Confidence) || ctx.Confidence < 0 || ctx.Confidence > 1 {
 		return fmt.Errorf("confidence out of range: %f", ctx.Confidence)
 	}
 

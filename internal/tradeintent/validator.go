@@ -3,6 +3,7 @@ package tradeintent
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -21,7 +22,7 @@ func Validate(intent *Intent) error {
 	default:
 		return fmt.Errorf("invalid trade intent status: %q", intent.Status)
 	}
-	if intent.Confidence < 0 || intent.Confidence > 1 {
+	if math.IsNaN(intent.Confidence) || intent.Confidence < 0 || intent.Confidence > 1 {
 		return errors.New("confidence must be between 0 and 1")
 	}
 	if len(intent.Evidence) == 0 {
