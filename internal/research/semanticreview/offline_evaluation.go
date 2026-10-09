@@ -198,8 +198,14 @@ func validateEvaluationDataset(dataset *EvaluationDataset) error {
 		if len(sample.Gold) != len(sample.Tasks.Items) {
 			return fmt.Errorf("sample %q gold label count mismatch", id)
 		}
+		seenTaskIDs := make(map[string]struct{}, len(sample.Tasks.Items))
 		for j, gold := range sample.Gold {
 			task := sample.Tasks.Items[j]
+			key := fmt.Sprintf("%d/%s", task.InsightIndex, task.ArgumentID)
+			if _, duplicate := seenTaskIDs[key]; duplicate {
+				return fmt.Errorf("sample %q has duplicate task identity at index %d", id, j)
+			}
+			seenTaskIDs[key] = struct{}{}
 			if gold.InsightIndex != task.InsightIndex || gold.ArgumentID != task.ArgumentID || strings.TrimSpace(gold.ArgumentID) == "" {
 				return fmt.Errorf("sample %q gold label %d argument_id or insight_index mismatch", id, j)
 			}
