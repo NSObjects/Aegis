@@ -3,12 +3,36 @@ package research
 import (
 	"Aegis/internal/portfolio"
 	"Aegis/internal/research/synthesis"
+	"Aegis/internal/research/semanticreview"
 	"Aegis/internal/tradeintent"
 	"context"
 	"errors"
 	"fmt"
 	"time"
 )
+
+// semanticReviewRunner is intentionally a narrow optional dependency. The
+// normal research/portfolio flow never constructs or calls a Reviewer.
+type semanticReviewRunner interface {
+	Review(context.Context,*semanticreview.Tasks)(*semanticreview.Report,error)
+}
+
+type SemanticReviewStatus string
+
+const (
+	SemanticReviewCompleted SemanticReviewStatus = "COMPLETED"
+	SemanticReviewNoLinks SemanticReviewStatus = "NO_LINKS"
+	SemanticReviewUnavailable SemanticReviewStatus = "UNAVAILABLE"
+)
+
+// SemanticReviewOutcome records optional advisory availability, not a new
+// trading or risk decision. ReasonCode never contains raw provider output.
+type SemanticReviewOutcome struct {
+	Status SemanticReviewStatus `json:"status"`
+	TaskCount int `json:"task_count"`
+	Report *semanticreview.Report `json:"report,omitempty"`
+	ReasonCode string `json:"reason_code,omitempty"`
+}
 
 // FullPortfolioWorkflow runs a single upstream research graph and hands the
 // exact validated artifact into the independent Debate/Trading/Risk/Portfolio
@@ -24,6 +48,8 @@ type FullPortfolioWorkflow struct {
 	Limits *portfolio.Limits
 	// Scenario is an optional, caller-authored non-executable trade what-if.
 	Scenario *portfolio.TradeScenario
+	// Explicit opt-in only. Runs after all core decisions have completed.
+	SemanticReviewer semanticReviewRunner
 }
 
 type FullPortfolioResult struct {
@@ -32,6 +58,8 @@ type FullPortfolioResult struct {
 	// Absent unless explicit independent risk limits were provided.
 	CurrentLimitsReview *portfolio.LimitReview `json:"current_limits_review,omitempty"`
 	TradeScenarioReview *portfolio.ScenarioReview `json:"trade_scenario_review,omitempty"`
+	// Absent under default configuration; never alters the main decisions.
+	SemanticReview *SemanticReviewOutcome `json:"semantic_review,omitempty"`
 }
 
 func (w *FullPortfolioWorkflow) Run(
@@ -89,10 +117,36 @@ func (w *FullPortfolioWorkflow) Run(
 			}
 		}
 	}
-	return &FullPortfolioResult{
+	fullResult := &FullPortfolioResult{
 		ResearchArtifact: artifact,
 		PortfolioReview: result,
 		CurrentLimitsReview: limitsReview,
 		TradeScenarioReview: scenarioReview,
-	}, nil
+	}
+	// Purely advisory and explicitly enabled; performed AFTER all core stages.
+	// Fail-open with typed availability instead of inventing a verdict or
+	// dropping an already validated portfolio research result.
+	if w.SemanticReviewer != nil {
+		outcome := &SemanticReviewOutcome{Status: SemanticReviewUnavailable}
+		fullResult.SemanticReview = outcome
+		tasks, taskErr := semanticreview.BuildTasks(artifact, result.Debate, result.ResearchPlan)
+		switch {
+		case taskErr != nil:
+			outcome.ReasonCode = "TASK_BUILD_ERROR"
+		case len(tasks.Items) == 0:
+			outcome.Status = SemanticReviewNoLinks
+		default:
+			outcome.TaskCount = len(tasks.Items)
+			advisory, reviewErr := w.SemanticReviewer.Review(ctx, tasks)
+			if reviewErr != nil {
+				outcome.ReasonCode = "REVIEWER_ERROR"
+			} else if err := semanticreview.ValidateReport(tasks, advisory); err != nil {
+				outcome.ReasonCode = "INVALID_REPORT"
+			} else {
+				outcome.Status = SemanticReviewCompleted
+				outcome.Report = advisory
+			}
+		}
+	}
+	return fullResult, nil
 }
