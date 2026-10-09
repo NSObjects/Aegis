@@ -25,6 +25,9 @@ func ValidateState(state *State, artifact *synthesis.Artifact) error {
 
 	argumentIDs := make(map[string]struct{})
 	for index, turn := range state.Turns {
+		if index > 0 && turn.Round < state.Turns[index-1].Round {
+			return fmt.Errorf("turn %d: round %d precedes prior round %d", index, turn.Round, state.Turns[index-1].Round)
+		}
 		if err := validateTurn(turn, artifact, argumentIDs); err != nil {
 			return fmt.Errorf("turn %d: %w", index, err)
 		}
@@ -102,6 +105,9 @@ func validateTurn(turn Turn, artifact *synthesis.Artifact, priorArgumentIDs map[
 }
 
 func validateReference(ref synthesis.Reference, artifact *synthesis.Artifact) error {
+	if ref.EventID != strings.TrimSpace(ref.EventID) {
+		return errors.New("event_id must not contain surrounding whitespace")
+	}
 	switch ref.Domain {
 	case synthesis.DomainMarket, synthesis.DomainTechnical:
 		if strings.TrimSpace(ref.EventID) != "" {

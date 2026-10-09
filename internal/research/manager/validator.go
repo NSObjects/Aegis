@@ -139,6 +139,9 @@ func validateInsight(insight Insight, artifact *synthesis.Artifact) error {
 }
 
 func validateReference(ref synthesis.Reference, artifact *synthesis.Artifact) error {
+	if ref.EventID != strings.TrimSpace(ref.EventID) {
+		return errors.New("event_id must not contain surrounding whitespace")
+	}
 	switch ref.Domain {
 	case synthesis.DomainMarket, synthesis.DomainTechnical:
 		if strings.TrimSpace(ref.EventID) != "" {

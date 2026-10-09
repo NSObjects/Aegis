@@ -117,6 +117,9 @@ func validateEvent(v *Event) error {
 	if strings.TrimSpace(v.ID) == "" {
 		return errors.New("id is required")
 	}
+	if v.ID != strings.TrimSpace(v.ID) {
+		return fmt.Errorf("event id %q must not contain surrounding whitespace", v.ID)
+	}
 	if !validEventType(v.Type) {
 		return fmt.Errorf(
 			"invalid type: %q",

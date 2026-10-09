@@ -84,6 +84,13 @@ func TestValidateEventContext(t *testing.T) {
 			err,
 		)
 	}
+
+	badID := *valid
+	badID.Events = append([]Event(nil), valid.Events...)
+	badID.Events[0].ID = " event_1 "
+	if err := Validate(&badID); err == nil || !strings.Contains(err.Error(), "surrounding whitespace") {
+		t.Fatalf("noncanonical event id was accepted: %v", err)
+	}
 }
 
 

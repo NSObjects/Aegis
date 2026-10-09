@@ -224,6 +224,9 @@ func validateReference(
 	reference Reference,
 	eventIDs map[string]struct{},
 ) error {
+	if reference.EventID != strings.TrimSpace(reference.EventID) {
+		return errors.New("event_id must not contain surrounding whitespace")
+	}
 	switch reference.Domain {
 	case DomainMarket,
 		DomainTechnical:
