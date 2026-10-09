@@ -28,7 +28,7 @@
   - `UNRESOLVED`：ID 出现在 `unresolved_argument_ids`；
   - `UNCLASSIFIED`：存在于 Debate，但未被 Manager 放进上述两组。**不是 REJECTED，也不是无证据。**
 - `arguments[].challenges[]`：按原始辩论顺序列出后续反驳，关联到真实目标 ID，记录反驳人 `side`、`round`、`claim`、`references`。没有制造反驳 ID。
-- `insights[]`：按 ResearchPlan Opportunities 顺序、再按 Risks 顺序，展示独立的 `OPPORTUNITY / RISK`、`claim` 和原始引用。**现有 ResearchPlan Insight 没有 argument_id 字段**，所以不能凭文本相似性将它强行挂到某条 Bull/Bear 论点。
+- `insights[]`：按 ResearchPlan Opportunities 顺序、再按 Risks 顺序，展示独立的 `OPPORTUNITY / RISK`、`claim` 和原始引用。`argument_ids` 为可选字段：只复制 Research Manager **显式提供、已通过 Debate ID 校验**的论点关联；旧版未提供时不输出该字段，更不凭文本相似性猜测关联。关联 ID 只能证明所引用论点存在，不能独立证明 insight 语义正确。
 
 ### 结构示例（说明形状，非实际市场研究）
 

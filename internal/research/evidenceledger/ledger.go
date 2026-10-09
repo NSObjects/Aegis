@@ -47,9 +47,11 @@ const (
 )
 
 type Insight struct {
-	Kind       InsightKind           `json:"kind"`
-	Claim      string                `json:"claim"`
-	References []synthesis.Reference `json:"references"`
+	Kind        InsightKind           `json:"kind"`
+	Claim       string                `json:"claim"`
+	References  []synthesis.Reference `json:"references"`
+	// Explicitly supplied and validated Research Manager argument links only.
+	ArgumentIDs []string              `json:"argument_ids,omitempty"`
 }
 
 // Ledger is a projection of validated upstream contracts, not a substitute
@@ -132,6 +134,7 @@ func Build(artifact *synthesis.Artifact, state *debate.State, plan *manager.Rese
 			Kind: InsightOpportunity,
 			Claim: opportunity.Claim,
 			References: append([]synthesis.Reference{}, opportunity.References...),
+			ArgumentIDs: copyArgumentIDs(opportunity.ArgumentIDs),
 		})
 	}
 	for _, risk := range plan.Risks {
@@ -139,7 +142,21 @@ func Build(artifact *synthesis.Artifact, state *debate.State, plan *manager.Rese
 			Kind: InsightRisk,
 			Claim: risk.Claim,
 			References: append([]synthesis.Reference{}, risk.References...),
+			ArgumentIDs: copyArgumentIDs(risk.ArgumentIDs),
 		})
 	}
 	return out, nil
+}
+
+// copyArgumentIDs preserves the explicit link order while normalizing IDs
+// exactly as manager.Validate/debate.ValidateState do, without source aliasing.
+func copyArgumentIDs(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	result := make([]string, len(ids))
+	for i, id := range ids {
+		result[i] = strings.TrimSpace(id)
+	}
+	return result
 }

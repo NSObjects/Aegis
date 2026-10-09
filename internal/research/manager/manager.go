@@ -107,6 +107,7 @@ Hard constraints:
 - Do not output BUY, SELL, WATCH, AVOID, CANDIDATE, position size, or price targets.
 - This is a research judgment layer, not the final trading decision layer.
 - Every opportunity and risk must cite existing ResearchArtifact references.
+- An insight may optionally include argument_ids to link the insight to genuinely supporting existing Bull/Bear debate arguments. These IDs must be taken from debate_state; omit argument_ids rather than guessing links when the insight cannot be reliably traced to those arguments.
 - accepted_argument_ids and unresolved_argument_ids may reference only argument IDs already present in debate_state.
 - An argument ID may not appear in both accepted_argument_ids and unresolved_argument_ids.
 - trading_constraints are qualitative constraints for the downstream Trading Agent; they must not contain final actions, sizing, or price targets.
@@ -126,10 +127,10 @@ Schema:
   "conclusion":"BULL_LEAN|BEAR_LEAN|BALANCED|INSUFFICIENT_EVIDENCE",
   "summary":"string",
   "opportunities":[
-    {"claim":"string","references":[{"domain":"TECHNICAL"}]}
+    {"claim":"string","references":[{"domain":"TECHNICAL"}],"argument_ids":["existing_argument_id"]}
   ],
   "risks":[
-    {"claim":"string","references":[{"domain":"EVENT","event_id":"existing_event_id"}]}
+    {"claim":"string","references":[{"domain":"EVENT","event_id":"existing_event_id"}],"argument_ids":["existing_argument_id"]}
   ],
   "accepted_argument_ids":["existing_argument_id"],
   "unresolved_argument_ids":["existing_argument_id"],
