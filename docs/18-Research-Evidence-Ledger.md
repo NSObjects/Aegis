@@ -1,6 +1,6 @@
 # Research Evidence Ledger — 最小确定性证据追溯清单
 
-> 增量分支：`codex/research-evidence-ledger`。基线是 V2.11.3 的 `main`，**不依赖**尚未合并的 PR #86（组合情景推演）或 PR #87（文档修订）。
+> 增量分支：`codex/research-evidence-ledger`，最初从 V2.11.3 的 `main` 创建。PR #86（V2.11.4 组合情景推演）与 PR #87（当前能力文档更新）现已合并至 `main`；本分支尚未对齐最新 `main`，必须在合并前重新验证兼容性。
 >
 > **Aegis 永久是研究与决策辅助系统，不会增加券商下单、执行或审批能力。**
 
