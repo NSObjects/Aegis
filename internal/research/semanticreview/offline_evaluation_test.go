@@ -82,6 +82,10 @@ func TestOfflineBatchRejectsUntrustedCoverageAndVersionMismatches(t *testing.T){
 		{"partial token metrics",func(_ *EvaluationDataset,r *EvaluationRun){r.Samples[0].InputTokens=nil},"token"},
 		{"forged report identity",func(_ *EvaluationDataset,r *EvaluationRun){r.Samples[0].Report.Findings[0].ArgumentID="invented"},"argument_id"},
 		{"invalid gold verdict",func(s *EvaluationDataset,_ *EvaluationRun){s.Samples[0].Gold[0].ExpectedVerdict=Verdict("CERTAIN")},"verdict"},
+		{"duplicate task identity",func(s *EvaluationDataset,_ *EvaluationRun){
+			s.Samples[0].Tasks.Items=append(s.Samples[0].Tasks.Items,s.Samples[0].Tasks.Items[0])
+			s.Samples[0].Gold=append(s.Samples[0].Gold,s.Samples[0].Gold[0])
+		},"duplicate"},
 		{"extra prediction result",func(_ *EvaluationDataset,r *EvaluationRun){r.Samples=append(r.Samples,r.Samples[0])},"count"},
 	}{
 		t.Run(tc.name,func(t *testing.T){
