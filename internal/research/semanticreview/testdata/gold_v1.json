@@ -1,0 +1,78 @@
+{
+  "version": "synthetic-v1",
+  "description": "Hand-labeled fictional Chinese claim pairs for schema/evaluator regression only; not real-market labels or measured LLM accuracy.",
+  "cases": [
+    {
+      "insight_index": 0,
+      "argument_id": "case-01",
+      "insight_claim": "盈利改善支持经营质量上行",
+      "argument_claim": "盈利改善可能提高经营质量",
+      "reference_alignment": "SAME_DOMAIN_ONLY",
+      "expected_verdict": "CONSISTENT",
+      "annotation": "语义方向一致但不声称现实真实性"
+    },
+    {
+      "insight_index": 1,
+      "argument_id": "case-02",
+      "insight_claim": "营收在本季度持续增加",
+      "argument_claim": "本季度营收较上季度下降",
+      "reference_alignment": "SAME_DOMAIN_ONLY",
+      "expected_verdict": "CONTRADICTORY",
+      "annotation": "同一研究口径中的直接方向矛盾"
+    },
+    {
+      "insight_index": 2,
+      "argument_id": "case-03",
+      "insight_claim": "公布的政策将促进销量",
+      "argument_claim": "政策文本未提供销量影响结论",
+      "reference_alignment": "SAME_EVENT_ID",
+      "expected_verdict": "UNCERTAIN",
+      "annotation": "相同事件引用但缺乏因果证据"
+    },
+    {
+      "insight_index": 3,
+      "argument_id": "case-04",
+      "insight_claim": "交易量增加可能反映关注度上升",
+      "argument_claim": "关注度提高可能带来交易活跃",
+      "reference_alignment": "NO_SHARED_REFERENCE",
+      "expected_verdict": "CONSISTENT",
+      "annotation": "领域引用不同不能自动推断矛盾"
+    },
+    {
+      "insight_index": 4,
+      "argument_id": "case-05",
+      "insight_claim": "风险敞口预计提高",
+      "argument_claim": "风险敞口预计降低",
+      "reference_alignment": "SAME_EVENT_ID",
+      "expected_verdict": "CONTRADICTORY",
+      "annotation": "即使引用相同事件也可能出现语义冲突"
+    },
+    {
+      "insight_index": 5,
+      "argument_id": "case-06",
+      "insight_claim": "毛利率变化说明商业模式已经稳固",
+      "argument_claim": "毛利率变化不一定能说明商业模式稳固",
+      "reference_alignment": "SAME_DOMAIN_ONLY",
+      "expected_verdict": "CONTRADICTORY",
+      "annotation": "存在明确否定同一推论"
+    },
+    {
+      "insight_index": 6,
+      "argument_id": "case-07",
+      "insight_claim": "板块数据能证明明日涨幅超过百分之十",
+      "argument_claim": "本周板块成交额有所上升",
+      "reference_alignment": "SAME_DOMAIN_ONLY",
+      "expected_verdict": "UNCERTAIN",
+      "annotation": "领域同源并不支持明确的未来收益预测"
+    },
+    {
+      "insight_index": 7,
+      "argument_id": "case-08",
+      "insight_claim": "波动率上升意味着风险有可能增加",
+      "argument_claim": "更高的波动可能对应更大风险",
+      "reference_alignment": "NO_SHARED_REFERENCE",
+      "expected_verdict": "CONSISTENT",
+      "annotation": "语言相容与结构化引用重合是独立维度"
+    }
+  ]
+}
