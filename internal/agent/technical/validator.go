@@ -3,6 +3,7 @@ package technical
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -67,7 +68,7 @@ func Validate(v *Context) error {
 		)
 	}
 
-	if v.Confidence < 0 || v.Confidence > 1 {
+	if math.IsNaN(v.Confidence) || v.Confidence < 0 || v.Confidence > 1 {
 		return fmt.Errorf(
 			"confidence out of range: %f",
 			v.Confidence,
