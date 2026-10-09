@@ -195,6 +195,11 @@ func validateEvaluationDataset(dataset *EvaluationDataset) error {
 		if sample.Tasks == nil || len(sample.Tasks.Items) == 0 || strings.TrimSpace(sample.Tasks.Symbol) == "" {
 			return fmt.Errorf("sample %q must contain nonempty Tasks and symbol", id)
 		}
+		// A purported semantic gold sample without complete source claims,
+		// argument sides or typed citations must not count toward a quality gate.
+		if err := validateReviewerTasks(sample.Tasks, len(sample.Tasks.Items)); err != nil {
+			return fmt.Errorf("sample %q has invalid semantic review tasks: %w", id, err)
+		}
 		if len(sample.Gold) != len(sample.Tasks.Items) {
 			return fmt.Errorf("sample %q gold label count mismatch", id)
 		}
