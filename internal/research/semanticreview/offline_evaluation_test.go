@@ -105,7 +105,7 @@ func TestOfflineGateNeverApprovesSyntheticOrUnreviewedData(t *testing.T){
 		MinExactMatchBps:5000,
 		MaxFalseConsistentOnContradictory:1,
 	}
-	out,err:=CheckQuality(set,result,policy)
+	out,err:=CheckQuality(set,run,policy)
 	if err!=nil||out.Status!=QualityNotEligible {
 		t.Fatalf("synthetic labels must never pass quality gate: %+v err=%v",out,err)
 	}
@@ -131,23 +131,23 @@ func TestOfflineGateBoundaryAndDangerousFalseAgreement(t *testing.T) {
 		MinLabeledItems:3,MinAvailabilityBps:6666,
 		MinExactMatchBps:5000,MaxFalseConsistentOnContradictory:0,
 	}
-	bad,err:=CheckQuality(set,result,policy)
+	bad,err:=CheckQuality(set,run,policy)
 	if err!=nil||bad.Status!=QualityFail||len(bad.Reasons)==0 {
 		t.Fatalf("hazardous false-consistency must fail: %+v %v",bad,err)
 	}
 	policy.MaxFalseConsistentOnContradictory=1
-	good,err:=CheckQuality(set,result,policy)
+	good,err:=CheckQuality(set,run,policy)
 	if err!=nil||good.Status!=QualityPass {
 		t.Fatalf("policy boundary should pass mock metrics: %+v %v",good,err)
 	}
 	policy.MinAvailabilityBps=6667
-	low,err:=CheckQuality(set,result,policy)
+	low,err:=CheckQuality(set,run,policy)
 	if err!=nil||low.Status!=QualityFail{t.Fatalf("availability boundary incorrect: %+v %v",low,err)}
 	policy.MinAvailabilityBps=0
 	policy.MinLabeledItems=4
-	ineligible,err:=CheckQuality(set,result,policy)
+	ineligible,err:=CheckQuality(set,run,policy)
 	if err!=nil||ineligible.Status!=QualityNotEligible{t.Fatalf("small samples must not pass: %+v %v",ineligible,err)}
 	policy.MinLabeledItems=2
 	policy.MinExactMatchBps=10001
-	if _,err=CheckQuality(set,result,policy);err==nil{t.Fatal("invalid policy range accepted")}
+	if _,err=CheckQuality(set,run,policy);err==nil{t.Fatal("invalid policy range accepted")}
 }
