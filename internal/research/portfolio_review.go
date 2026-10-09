@@ -9,7 +9,9 @@ import (
 	"Aegis/internal/research/synthesis"
 	"Aegis/internal/risk"
 	"Aegis/internal/tradeintent"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -129,10 +131,28 @@ func (w *PortfolioReview) Run(
 	if err != nil {
 		return nil, fmt.Errorf("research evidence ledger: %w", err)
 	}
+	// Downstream agents must not mutate already-validated research pointers
+	// after the independently copied Ledger has been constructed.
+	researchInputs := struct {
+		Artifact *synthesis.Artifact
+		Debate   *debate.State
+		Plan     *manager.ResearchPlan
+	}{artifact, state, plan}
+	beforeTrading, err := json.Marshal(researchInputs)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot validated research inputs: %w", err)
+	}
 
 	intent, err := w.cfg.TradingAgent.AnalyzeResearchPlanIntent(ctx, artifact, plan)
 	if err != nil {
 		return nil, fmt.Errorf("trading agent: %w", err)
+	}
+	afterTrading, err := json.Marshal(researchInputs)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot research inputs after trading: %w", err)
+	}
+	if !bytes.Equal(beforeTrading, afterTrading) {
+		return nil, errors.New("trading agent mutated validated research inputs after evidence ledger construction")
 	}
 	if err := tradeintent.Validate(intent); err != nil {
 		return nil, fmt.Errorf("invalid trade intent: %w", err)
