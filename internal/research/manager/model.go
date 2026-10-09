@@ -12,8 +12,10 @@ const (
 )
 
 type Insight struct {
-	Claim      string                `json:"claim"`
-	References []synthesis.Reference `json:"references"`
+	Claim       string                `json:"claim"`
+	References  []synthesis.Reference `json:"references"`
+	// Optional links to existing DebateState arguments; never inferred from claim text.
+	ArgumentIDs []string              `json:"argument_ids,omitempty"`
 }
 
 type ResearchPlan struct {
