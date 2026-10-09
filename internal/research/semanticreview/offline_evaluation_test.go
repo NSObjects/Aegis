@@ -125,7 +125,7 @@ func TestOfflineGateBoundaryAndDangerousFalseAgreement(t *testing.T) {
 	set,run:=evaluationFixture(ProvenanceHumanReviewed)
 	// These metadata values are fictional test fixtures, NOT evidence that
 	// real human annotations or real provider evaluations exist.
-	result,err:=EvaluateRun(set,run)
+	_,err:=EvaluateRun(set,run)
 	if err!=nil{t.Fatal(err)}
 	policy:=QualityPolicy{
 		MinLabeledItems:3,MinAvailabilityBps:6666,
