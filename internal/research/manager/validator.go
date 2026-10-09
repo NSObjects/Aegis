@@ -5,6 +5,7 @@ import (
 	"Aegis/internal/research/synthesis"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -66,7 +67,7 @@ func ValidateForTrading(plan *ResearchPlan, artifact *synthesis.Artifact) error 
 	if strings.TrimSpace(plan.Summary) == "" {
 		return errors.New("research plan summary is required")
 	}
-	if plan.Confidence < 0 || plan.Confidence > 1 {
+	if math.IsNaN(plan.Confidence) || plan.Confidence < 0 || plan.Confidence > 1 {
 		return fmt.Errorf("confidence out of range: %f", plan.Confidence)
 	}
 

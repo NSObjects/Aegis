@@ -4,6 +4,7 @@ import (
 	"Aegis/internal/research/synthesis"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -44,7 +45,7 @@ func validateTurn(turn Turn, artifact *synthesis.Artifact, priorArgumentIDs map[
 	if strings.TrimSpace(turn.Thesis) == "" {
 		return errors.New("thesis is required")
 	}
-	if turn.Confidence < 0 || turn.Confidence > 1 {
+	if math.IsNaN(turn.Confidence) || turn.Confidence < 0 || turn.Confidence > 1 {
 		return fmt.Errorf("confidence out of range: %f", turn.Confidence)
 	}
 	if len(turn.Arguments) == 0 {
