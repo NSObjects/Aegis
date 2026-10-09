@@ -28,6 +28,16 @@ func Validate(plan *ResearchPlan, artifact *synthesis.Artifact, state *debate.St
 	if err := validateKnownArgumentIDs(plan.UnresolvedArgumentIDs, "unresolved_argument_ids", argumentIDs); err != nil {
 		return err
 	}
+	for i, insight := range plan.Opportunities {
+		if err := validateKnownArgumentIDs(insight.ArgumentIDs, fmt.Sprintf("opportunities[%d].argument_ids", i), argumentIDs); err != nil {
+			return err
+		}
+	}
+	for i, insight := range plan.Risks {
+		if err := validateKnownArgumentIDs(insight.ArgumentIDs, fmt.Sprintf("risks[%d].argument_ids", i), argumentIDs); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -110,6 +120,9 @@ func validateKnownArgumentIDs(ids []string, field string, known map[string]struc
 }
 
 func validateInsight(insight Insight, artifact *synthesis.Artifact) error {
+	if err := validateArgumentIDShape(insight.ArgumentIDs, "argument_ids", map[string]string{}); err != nil {
+		return err
+	}
 	if strings.TrimSpace(insight.Claim) == "" {
 		return errors.New("claim is required")
 	}
