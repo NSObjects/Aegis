@@ -1,6 +1,7 @@
 package semanticreview
 
 import (
+	"Aegis/internal/research/synthesis"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,7 +15,14 @@ func evaluationFixture(provenance DatasetProvenance) (*EvaluationDataset, *Evalu
 			ID: id,
 			Tasks: &Tasks{
 				Symbol: "FICTIONAL.RESEARCH",
-				Items: []Task{{InsightIndex: 0, ArgumentID: argument}},
+				Items: []Task{{
+					InsightIndex: 0, ArgumentID: argument,
+					InsightKind: "OPPORTUNITY", InsightClaim: "synthetic researcher statement",
+					ArgumentSide: "BULL", ArgumentClaim: "synthetic debate statement",
+					ReferenceAlignment: "SAME_DOMAIN_ONLY",
+					InsightReferences: []synthesis.Reference{{Domain: synthesis.DomainMarket}},
+					ArgumentReferences: []synthesis.Reference{{Domain: synthesis.DomainMarket}},
+				}},
 			},
 			Gold: []GoldLabel{{InsightIndex: 0, ArgumentID: argument, ExpectedVerdict: expected}},
 			EvidenceRef: "fictional-test-evidence/" + id,
@@ -82,6 +90,9 @@ func TestOfflineBatchRejectsUntrustedCoverageAndVersionMismatches(t *testing.T){
 		{"partial token metrics",func(_ *EvaluationDataset,r *EvaluationRun){r.Samples[0].InputTokens=nil},"token"},
 		{"forged report identity",func(_ *EvaluationDataset,r *EvaluationRun){r.Samples[0].Report.Findings[0].ArgumentID="invented"},"argument_id"},
 		{"invalid gold verdict",func(s *EvaluationDataset,_ *EvaluationRun){s.Samples[0].Gold[0].ExpectedVerdict=Verdict("CERTAIN")},"verdict"},
+		{"missing semantic claim",func(s *EvaluationDataset,_ *EvaluationRun){
+			s.Samples[0].Tasks.Items[0].InsightClaim=""
+		},"claim"},
 		{"duplicate task identity",func(s *EvaluationDataset,_ *EvaluationRun){
 			s.Samples[0].Tasks.Items=append(s.Samples[0].Tasks.Items,s.Samples[0].Tasks.Items[0])
 			s.Samples[0].Gold=append(s.Samples[0].Gold,s.Samples[0].Gold[0])
