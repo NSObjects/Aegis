@@ -6,6 +6,7 @@ import (
 	"Aegis/internal/agent/technical"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -118,7 +119,8 @@ func validateSynthesis(
 			"research synthesis summary is required",
 		)
 	}
-	if value.Confidence < 0 ||
+	if math.IsNaN(value.Confidence) ||
+		value.Confidence < 0 ||
 		value.Confidence > 1 {
 		return fmt.Errorf(
 			"research synthesis confidence out of range: %f",
