@@ -113,12 +113,14 @@ func Validate(
 	return validateSynthesis(
 		artifact.Synthesis,
 		artifact.Event,
+		artifact.Fundamental != nil,
 	)
 }
 
 func validateSynthesis(
 	value Synthesis,
 	eventContext *event.Context,
+	fundamentalPresent ...bool,
 ) error {
 	if strings.TrimSpace(value.Summary) == "" {
 		return errors.New(
@@ -134,6 +136,7 @@ func validateSynthesis(
 		)
 	}
 
+	available := len(fundamentalPresent)>0 && fundamentalPresent[0]
 	eventIDs := make(
 		map[string]struct{},
 		len(eventContext.Events),
@@ -229,6 +232,7 @@ func validateSynthesis(
 func validateReference(
 	reference Reference,
 	eventIDs map[string]struct{},
+	fundamentalPresent bool,
 ) error {
 	if reference.EventID != strings.TrimSpace(reference.EventID) {
 		return errors.New("event_id must not contain surrounding whitespace")
@@ -244,6 +248,9 @@ func validateReference(
 				reference.Domain,
 			)
 		}
+	case DomainFundamental:
+		if !fundamentalPresent {return errors.New("fundamental reference requires FundamentalContext")}
+		if reference.EventID!=""{return errors.New("fundamental reference cannot carry event_id")}
 	case DomainEvent:
 		eventID := strings.TrimSpace(
 			reference.EventID,
