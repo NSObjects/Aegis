@@ -293,7 +293,7 @@ func runWithFundamental(
 	// Stage progress goes to stderr; stdout stays a single JSON document.
 	// Enable after validating caller inputs so invalid invocations stay quiet.
 	ctx = research.WithProgress(ctx, os.Stderr)
-	fmt.Fprintf(os.Stderr, "[Aegis] stage=Workflow status=START symbol=%s fundamental=%t portfolio_review=%t\\n", workflowInput.Symbol, withFundamental, portfolioReview)
+	fmt.Fprintf(os.Stderr, "[Aegis] stage=Workflow status=START symbol=%s fundamental=%t portfolio_review=%t\n", workflowInput.Symbol, withFundamental, portfolioReview)
 	appCfg, err := config.Load(configPath)
 	if err != nil {
 		return err
