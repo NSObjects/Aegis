@@ -82,6 +82,7 @@ export default function LiveResearchWorkbench() {
   const [streamRecord, setStreamRecord] = useState<{ runId: string; status: "connected" | "disconnected" } | null>(null);
   const streamState = streamRecord?.runId === selectedId ? streamRecord.status : "idle";
   const selected = useMemo(() => runs.find(run => run.run_id === selectedId) ?? null, [runs, selectedId]);
+  const selectedState = selected?.state;
   const mounted = useRef(true);
 
   const refresh = useCallback(async () => {
@@ -123,7 +124,7 @@ export default function LiveResearchWorkbench() {
   }, [selectedId, session?.authenticated]);
 
   useEffect(() => {
-    if (!session?.authenticated || !selectedId || selected?.state !== "COMPLETED") return;
+    if (!session?.authenticated || !selectedId || selectedState !== "COMPLETED") return;
     let disposed = false;
     jsonRequest<LiveArtifact>(`${base}/runs/${selectedId}/artifact`).then(value => {
       if (!disposed && value && typeof value === "object" && !Array.isArray(value)) setArtifactRecord({ runId: selectedId, value });
@@ -131,7 +132,6 @@ export default function LiveResearchWorkbench() {
     return () => { disposed = true; };
   }, [selectedId, selectedState, session?.authenticated]);
 
-  const selectedState = selected?.state;
   useEffect(() => {
     if (!session?.authenticated || !selectedId || !selectedState || isTerminal(selectedState)) return;
     const stream = new EventSource(`${base}/runs/${selectedId}/stream`);
