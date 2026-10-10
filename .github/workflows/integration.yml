@@ -323,6 +323,15 @@ jobs:
             .portfolio_review.portfolio_decision.portfolio_state == "NOT_PROVIDED" and
             (.portfolio_review.debate_state.turns | map(.side) | index("BULL")) != null and
             (.portfolio_review.debate_state.turns | map(.side) | index("BEAR")) != null and
+            (.portfolio_review.debate_state.turns | length) == 4 and
+            (.portfolio_review.debate_state.turns | map(.side)) == ["BULL","BEAR","BULL","BEAR"] and
+            (
+              .portfolio_review.debate_state.turns as $turns |
+              all(range(1;4); . as $i |
+                [$turns[:$i][] | select(.side != $turns[$i].side) | .arguments[] | .id] as $opposing |
+                any($turns[$i].rebuttals[]?; .target_argument_id as $target | $opposing | index($target) != null)
+              )
+            ) and
             (
               if .portfolio_review.trade_intent.status == "CANDIDATE" then
                 .portfolio_review.portfolio_decision.disposition == "REVIEW_REQUIRED"
@@ -423,6 +432,15 @@ jobs:
             .portfolio_review.portfolio_decision.portfolio_state == "NOT_PROVIDED" and
             (.portfolio_review.debate_state.turns | map(.side) | index("BULL")) != null and
             (.portfolio_review.debate_state.turns | map(.side) | index("BEAR")) != null and
+            (.portfolio_review.debate_state.turns | length) == 4 and
+            (.portfolio_review.debate_state.turns | map(.side)) == ["BULL","BEAR","BULL","BEAR"] and
+            (
+              .portfolio_review.debate_state.turns as $turns |
+              all(range(1;4); . as $i |
+                [$turns[:$i][] | select(.side != $turns[$i].side) | .arguments[] | .id] as $opposing |
+                any($turns[$i].rebuttals[]?; .target_argument_id as $target | $opposing | index($target) != null)
+              )
+            ) and
             (
               if .portfolio_review.trade_intent.status == "CANDIDATE" then
                 .portfolio_review.portfolio_decision.disposition == "REVIEW_REQUIRED"
