@@ -174,7 +174,7 @@ Rules:
 - Preserve uncertainty from NO_DATA, SUSPENDED, NO_EVENT, or INSUFFICIENT_EVIDENCE states.
 - Every agreement must cite at least one supplied domain.
 - Every conflict must cite at least two different supplied domains.
-- Reference domain must be MARKET, TECHNICAL, or EVENT. When fundamental data exists, incorporate it in summary/risks, but do not invent a FUNDAMENTAL reference domain.
+- Reference domain must be MARKET, TECHNICAL, EVENT, or FUNDAMENTAL (only if fundamental context is present). FUNDAMENTAL must not carry event_id.
 - event_id may be supplied only for EVENT references and must come from the provided EventContext.
 - confidence must be between 0 and 1.
 
