@@ -5,12 +5,15 @@
 
 ## 当前开发路线与下一项任务
 
-**开发导航唯一入口：**[DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。先看文档顶部的「当前开发状态与下一步」，按 R0 → R1 → R2… 及任务编号执行。**R0/V1 完成后，第一项任务是 R1-01：抽离 CLI 与 Web 共用的 Application Service**，然后继续 R1-02 任务持久化、R1-03 HTTP/SSE、R1-04 Web、R1-05 基础对话。
+**开发唯一导航入口：** [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。查看其顶部「当前任务/下一项」并按任务编号执行。**V1 内核验收后首先开发完整研究工作台**，而不是仓位管理。
 
-- [MULTI_AGENT_ROADMAP.md](MULTI_AGENT_ROADMAP.md)：仅作当前 R0 / F0～F4 收尾和真实 Hosted E2E 的详细验收清单；长期下一阶段顺序以开发路线图为准。
-- [10-多Agent架构与职责边界.md](10-多Agent架构与职责边界.md)：永久架构与研究边界，不作为任务进度表。
+- **R1 研究工作台**：R1-01 共用 Application Service → R1-02 任务生命周期 → R1-03 持久化 → R1-04 HTTP/SSE → R1-05 Web 任务页 → R1-06 结构化报告 → R1-07 历史/Dashboard → R1-08 Web E2E。
+- **R2 对话式研究**：在已可用的工作台上接 Conversation Agent，支持发起研究、证据追问、多轮上下文和历史比较。
+- **R7 组合与动态仓位管理**：单独的大型后续 Epic，**非 R1/R2 上线依赖**；现有 Risk/Portfolio 审查先保留，不当作完整的仓位管理功能。
 
-> 下方「截至 V2.11.4」的历史能力描述不是当前任务进度；开发前请核对最新 main、PR 和 CI/Hosted 证据。
+[MULTI_AGENT_ROADMAP.md](MULTI_AGENT_ROADMAP.md) 只负责当前 R0/F0～F4 的收尾；[10-多Agent架构与职责边界.md](10-多Agent架构与职责边界.md) 是永久权威架构与研究边界。
+
+> 下方「截至 V2.11.4」的描述为历史能力索引；每次实施前按最新 main/PR/CI/Hosted 证据核实，不按旧索引认定开发状态。
 
 ## 产品定位
 
