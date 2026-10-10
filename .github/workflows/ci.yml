@@ -142,3 +142,7 @@ jobs:
           fi
           grep -q 'trade scenario as_of is after research requested_as_of' "${{ runner.temp }}/cli-err"
           test ! -s "${{ runner.temp }}/cli-out"
+
+      - name: Local dev HTTP smoke (no auth or provider credentials)
+        shell: bash
+        run: bash .github/scripts/smoke-local-dev.sh
