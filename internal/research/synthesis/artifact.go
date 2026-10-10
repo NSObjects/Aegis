@@ -13,6 +13,7 @@ const (
 	DomainMarket    Domain = "MARKET"
 	DomainTechnical Domain = "TECHNICAL"
 	DomainEvent     Domain = "EVENT"
+	DomainFundamental Domain = "FUNDAMENTAL"
 )
 
 type Reference struct {
