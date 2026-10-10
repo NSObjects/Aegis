@@ -69,6 +69,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
+
       - name: Verify integration secret
         shell: bash
         run: |
@@ -106,6 +114,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
 
 
       - name: Verify integration secrets
@@ -154,6 +170,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
+
 
       - name: Verify full E2E secrets
         shell: bash
@@ -192,6 +216,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
 
       - name: Verify multi-agent E2E secrets
         shell: bash
@@ -234,6 +266,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
+
       - name: Verify risk portfolio E2E secrets
         shell: bash
         run: |
@@ -268,6 +308,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
 
       - name: Verify production dependencies
         shell: bash
@@ -323,6 +371,15 @@ jobs:
             .portfolio_review.portfolio_decision.portfolio_state == "NOT_PROVIDED" and
             (.portfolio_review.debate_state.turns | map(.side) | index("BULL")) != null and
             (.portfolio_review.debate_state.turns | map(.side) | index("BEAR")) != null and
+            (.portfolio_review.debate_state.turns | length) == 4 and
+            (.portfolio_review.debate_state.turns | map(.side)) == ["BULL","BEAR","BULL","BEAR"] and
+            (
+              .portfolio_review.debate_state.turns as $turns |
+              all(range(1;4); . as $i |
+                [$turns[:$i][] | select(.side != $turns[$i].side) | .arguments[] | .id] as $opposing |
+                any($turns[$i].rebuttals[]?; .target_argument_id as $target | $opposing | index($target) != null)
+              )
+            ) and
             (
               if .portfolio_review.trade_intent.status == "CANDIDATE" then
                 .portfolio_review.portfolio_decision.disposition == "REVIEW_REQUIRED"
@@ -363,6 +420,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
 
       - name: Verify production dependencies
         shell: bash
@@ -423,6 +488,15 @@ jobs:
             .portfolio_review.portfolio_decision.portfolio_state == "NOT_PROVIDED" and
             (.portfolio_review.debate_state.turns | map(.side) | index("BULL")) != null and
             (.portfolio_review.debate_state.turns | map(.side) | index("BEAR")) != null and
+            (.portfolio_review.debate_state.turns | length) == 4 and
+            (.portfolio_review.debate_state.turns | map(.side)) == ["BULL","BEAR","BULL","BEAR"] and
+            (
+              .portfolio_review.debate_state.turns as $turns |
+              all(range(1;4); . as $i |
+                [$turns[:$i][] | select(.side != $turns[$i].side) | .arguments[] | .id] as $opposing |
+                any($turns[$i].rebuttals[]?; .target_argument_id as $target | $opposing | index($target) != null)
+              )
+            ) and
             (
               if .portfolio_review.trade_intent.status == "CANDIDATE" then
                 .portfolio_review.portfolio_decision.disposition == "REVIEW_REQUIRED"
