@@ -109,7 +109,9 @@ func (w *PortfolioReview) Run(
 	if err != nil {
 		return nil, fmt.Errorf("compute portfolio exposure: %w", err)
 	}
+	finishDebate := startProgress(ctx,"Debate")
 	state, err := w.cfg.Debate.Run(ctx, artifact)
+	finishDebate(&err)
 	if err != nil {
 		return nil, fmt.Errorf("research debate: %w", err)
 	}
@@ -120,7 +122,9 @@ func (w *PortfolioReview) Run(
 		return nil, errors.New("research debate returned no turns")
 	}
 
+	finishManager := startProgress(ctx,"ResearchManager")
 	plan, err := w.cfg.ResearchManager.BuildPlan(ctx, artifact, state)
+	finishManager(&err)
 	if err != nil {
 		return nil, fmt.Errorf("research manager: %w", err)
 	}
@@ -143,7 +147,9 @@ func (w *PortfolioReview) Run(
 		return nil, fmt.Errorf("snapshot validated research inputs: %w", err)
 	}
 
+	finishTrading := startProgress(ctx,"Trading")
 	intent, err := w.cfg.TradingAgent.AnalyzeResearchPlanIntent(ctx, artifact, plan)
+	finishTrading(&err)
 	if err != nil {
 		return nil, fmt.Errorf("trading agent: %w", err)
 	}
@@ -182,7 +188,9 @@ func (w *PortfolioReview) Run(
 		return nil
 	}
 
+	finishRisk := startProgress(ctx,"Risk")
 	riskContext, err := w.cfg.RiskAnalyst.Review(ctx, intent, book)
+	finishRisk(&err)
 	if unchangedErr := assertUnchanged("risk analyst"); unchangedErr != nil { return nil, unchangedErr }
 	if err != nil {
 		return nil, fmt.Errorf("risk analyst: %w", err)
@@ -195,7 +203,9 @@ func (w *PortfolioReview) Run(
 	// even when its edits would make the final deterministic check self-consistent.
 	validatedRisk, err := json.Marshal(riskContext)
 	if err != nil { return nil, fmt.Errorf("snapshot validated risk context: %w", err) }
+	finishPortfolio := startProgress(ctx,"Portfolio")
 	final, err := w.cfg.PortfolioManager.Review(ctx, intent, book, riskContext)
+	finishPortfolio(&err)
 	if unchangedErr := assertUnchanged("portfolio manager"); unchangedErr != nil { return nil, unchangedErr }
 	currentRisk, snapshotErr := json.Marshal(riskContext)
 	if snapshotErr != nil { return nil, fmt.Errorf("snapshot risk context after portfolio manager: %w", snapshotErr) }
