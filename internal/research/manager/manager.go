@@ -104,7 +104,8 @@ func omitUnknownManagerLinks(plan ResearchPlan, known []string) (ResearchPlan, i
 		return out,removed
 	}
 	count := 0
-	plan.AcceptedArgumentIDs,n := filter(plan.AcceptedArgumentIDs);count+=n
+	var n int
+	plan.AcceptedArgumentIDs,n = filter(plan.AcceptedArgumentIDs);count+=n
 	plan.UnresolvedArgumentIDs,n = filter(plan.UnresolvedArgumentIDs);count+=n
 	plan.Opportunities = append([]Insight(nil),plan.Opportunities...)
 	plan.Risks = append([]Insight(nil),plan.Risks...)
