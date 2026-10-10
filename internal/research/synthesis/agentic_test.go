@@ -214,23 +214,6 @@ func TestAgenticSynthesizerRejectsInvalidModelOutput(
 			}`,
 			want: "does not exist in EventContext",
 		},
-		{
-			name: "single-domain conflict",
-			response: `{
-				"summary":"x",
-				"conflicts":[
-					{
-						"description":"x",
-						"references":[
-							{"domain":"MARKET"},
-							{"domain":"MARKET"}
-						]
-					}
-				],
-				"confidence":0.5
-			}`,
-			want: "two distinct domains",
-		},
 	}
 
 	for _, test := range tests {
@@ -353,5 +336,43 @@ func TestAgenticSynthesizerRepairOmitsUnsupportedSingleDomainConflict(t *testing
  if m.calls!=2 || len(artifact.Synthesis.Conflicts)!=0 {t.Fatalf("must remove unsupported conflict without inventing evidence: calls=%d artifact=%+v",m.calls,artifact.Synthesis)}
  if !strings.Contains(agenticTestText(m.input[len(m.input)-1]),"Do not attach an unrelated domain citation") {
   t.Fatal("repair prompt must forbid fabricated cross-domain support")
+ }
+}
+
+func TestAgenticSynthesizerOmitsUnsupportedSameDomainAfterRepair(t *testing.T) {
+ raw := `{"summary":"original summary","conflicts":[{"description":"same-domain candidate","references":[{"domain":"MARKET"},{"domain":"MARKET"}]},{"description":"valid cross-domain disagreement","references":[{"domain":"TECHNICAL"},{"domain":"EVENT","event_id":"event_contract"}]}],"risks":["original risk"],"confidence":0.5}`
+ m := &synthesisModel{response:synthesisAssistantMessage(raw)}
+ input:=validSynthesisInput()
+ result,err:=(&AgenticSynthesizer{Model:m}).Synthesize(context.Background(),input)
+ if err!=nil {t.Fatal(err)}
+ if m.calls!=2 {t.Fatalf("calls=%d, want correction attempt",m.calls)}
+ if len(result.Synthesis.Conflicts)!=1 || result.Synthesis.Conflicts[0].Description!="valid cross-domain disagreement" {
+  t.Fatalf("valid cross-domain conflict must survive, got %+v",result.Synthesis.Conflicts)
+ }
+ if len(result.Synthesis.Risks)!=2 || result.Synthesis.Risks[0]!="original risk" || !strings.Contains(result.Synthesis.Risks[1],"omitted") {
+  t.Fatalf("omission must be visible as an explicit limitation, risks=%v",result.Synthesis.Risks)
+ }
+ if result.Market!=input.Market || result.Technical!=input.Technical || result.Event!=input.Event {
+  t.Fatal("upstream contexts must remain untouched")
+ }
+ if err:=Validate(result);err!=nil {t.Fatalf("repaired artifact must pass original validator: %v",err)}
+}
+
+func TestAgenticSynthesizerCannotDropInvalidReferenceAsSingleDomain(t *testing.T) {
+ raw := `{"summary":"x","conflicts":[{"description":"invalid event reference","references":[{"domain":"EVENT","event_id":"unknown"},{"domain":"EVENT","event_id":"unknown"}]}],"confidence":0.5}`
+ m:=&synthesisModel{response:synthesisAssistantMessage(raw)}
+ artifact,err:=(&AgenticSynthesizer{Model:m}).Synthesize(context.Background(),validSynthesisInput())
+ if err==nil || artifact!=nil || !strings.Contains(err.Error(),"does not exist in EventContext") {
+  t.Fatalf("invalid reference cannot be omitted to claim success: artifact=%+v err=%v",artifact,err)
+ }
+ if m.calls!=2 {t.Fatalf("calls=%d, want no extra retries",m.calls)}
+}
+
+func TestAgenticSynthesizerDoesNotOmitMalformedConflict(t *testing.T) {
+ raw:=`{"summary":"x","conflicts":[{"description":"","references":[{"domain":"MARKET"},{"domain":"MARKET"}]}],"confidence":0.5}`
+ m:=&synthesisModel{response:synthesisAssistantMessage(raw)}
+ artifact,err:=(&AgenticSynthesizer{Model:m}).Synthesize(context.Background(),validSynthesisInput())
+ if err==nil||artifact!=nil||!strings.Contains(err.Error(),"description is required") {
+  t.Fatalf("other invalid contracts must fail closed: artifact=%+v err=%v",artifact,err)
  }
 }
