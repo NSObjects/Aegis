@@ -3,6 +3,13 @@
 > 状态基准：2026-10-08 · `main` 已合并 V2.11.4（PR #86）；该版本的 What-if 组合情景研究能力已进入主线。  
 > **权威架构**：[10-多Agent架构与职责边界.md](10-多Agent架构与职责边界.md)。本文是按仓库代码整理的能力索引，不覆盖该架构约束。
 
+## 产品路线图与当前开发主线
+
+- [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)：产品总路线图，覆盖产品 V1 多 Agent/仓位管理、G0 API 任务层、V1.1 Web、V1.2 对话、V1.5 机会发现以及 V2 持续研究与策略验证；**产品里程碑编号不等于仓库工程迭代版本号**。
+- [MULTI_AGENT_ROADMAP.md](MULTI_AGENT_ROADMAP.md)：当前多 Agent F0～F4 功能收尾和真实 Hosted E2E 验收清单；完成后进入仓位 V1 与 Web 阶段。
+
+> 本页下方「截至 V2.11.4」的表格保留为历史能力索引，最新提交和未完成事项应以实际 main/PR/CI 及上述路线图的核验记录为准。
+
 ## 产品定位
 
 Aegis 是面向 A 股的**投资研究与决策辅助系统**，借鉴 [TradingAgents](research/tradingagents/README.md) 的分角色研究、Bull/Bear 论证与研究管理方式。
