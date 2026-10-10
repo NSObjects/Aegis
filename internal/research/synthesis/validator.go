@@ -165,6 +165,7 @@ func validateSynthesis(
 			if err := validateReference(
 				reference,
 				eventIDs,
+				available,
 			); err != nil {
 				return fmt.Errorf(
 					"agreement %d reference %d: %w",
@@ -198,6 +199,7 @@ func validateSynthesis(
 			if err := validateReference(
 				reference,
 				eventIDs,
+				available,
 			); err != nil {
 				return fmt.Errorf(
 					"conflict %d reference %d: %w",
