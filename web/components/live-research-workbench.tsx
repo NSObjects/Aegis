@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowRight, Ban, BookOpenText, CheckCircle2, ChevronRight, CircleDot,
+  Activity, ArrowRight, Ban, BookOpenText, ChevronRight, CircleDot,
   Clock3, Database, Download, FileClock, LockKeyhole, LogOut, Radar, RefreshCcw,
   Search, ShieldCheck, TerminalSquare, TriangleAlert, Wifi, WifiOff,
 } from "lucide-react";
@@ -69,13 +69,18 @@ export default function LiveResearchWorkbench() {
   const [marketQuery, setMarketQuery] = useState("");
   const [runs, setRuns] = useState<LiveRun[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [events, setEvents] = useState<LiveStageEvent[]>([]);
-  const [artifact, setArtifact] = useState<LiveArtifact | null>(null);
+  // Associate responses with their Run ID so a selection change can never
+  // flash a previous run's artifact or evidence events before effects execute.
+  const [eventRecord, setEventRecord] = useState<{ runId: string; values: LiveStageEvent[] } | null>(null);
+  const [artifactRecord, setArtifactRecord] = useState<{ runId: string; value: LiveArtifact } | null>(null);
+  const events = eventRecord?.runId === selectedId ? eventRecord.values : [];
+  const artifact = artifactRecord?.runId === selectedId ? artifactRecord.value : null;
   const [view, setView] = useState<"workspace" | "history">("workspace");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
-  const [streamState, setStreamState] = useState<"idle" | "connected" | "disconnected">("idle");
+  const [streamRecord, setStreamRecord] = useState<{ runId: string; status: "connected" | "disconnected" } | null>(null);
+  const streamState = streamRecord?.runId === selectedId ? streamRecord.status : "idle";
   const selected = useMemo(() => runs.find(run => run.run_id === selectedId) ?? null, [runs, selectedId]);
   const mounted = useRef(true);
 
@@ -105,16 +110,12 @@ export default function LiveResearchWorkbench() {
   }, [session?.authenticated, refresh]);
 
   useEffect(() => {
-    // Selecting another Run must not display a previous Run's report or events.
-    setArtifact(null);
-    setEvents([]);
-    setStreamState("idle");
     if (!session?.authenticated || !selectedId) return;
     let disposed = false;
     const load = async () => {
       try {
         const result = await jsonRequest<{ events: unknown[] }>(`${base}/runs/${selectedId}/events`);
-        if (!disposed) setEvents(current => mergeStageEvents(current, Array.isArray(result.events) ? result.events.filter(isLiveEvent) : []));
+        if (!disposed) setEventRecord(current => ({ runId: selectedId, values: mergeStageEvents(current?.runId === selectedId ? current.values : [], Array.isArray(result.events) ? result.events.filter(isLiveEvent) : []) }));
       } catch { /* SSE can still provide events; list polling keeps status visible. */ }
     };
     void load();
@@ -125,24 +126,25 @@ export default function LiveResearchWorkbench() {
     if (!session?.authenticated || !selectedId || selected?.state !== "COMPLETED") return;
     let disposed = false;
     jsonRequest<LiveArtifact>(`${base}/runs/${selectedId}/artifact`).then(value => {
-      if (!disposed && value && typeof value === "object" && !Array.isArray(value)) setArtifact(value);
+      if (!disposed && value && typeof value === "object" && !Array.isArray(value)) setArtifactRecord({ runId: selectedId, value });
     }).catch(err => { if (!disposed) setError((err as Error).message); });
     return () => { disposed = true; };
-  }, [selectedId, selected?.state, session?.authenticated]);
+  }, [selectedId, selectedState, session?.authenticated]);
 
+  const selectedState = selected?.state;
   useEffect(() => {
-    if (!session?.authenticated || !selectedId || !selected || isTerminal(selected.state)) return;
+    if (!session?.authenticated || !selectedId || !selectedState || isTerminal(selectedState)) return;
     const stream = new EventSource(`${base}/runs/${selectedId}/stream`);
-    stream.onopen = () => setStreamState("connected");
-    stream.onerror = () => setStreamState("disconnected");
+    stream.onopen = () => setStreamRecord({ runId: selectedId, status: "connected" });
+    stream.onerror = () => setStreamRecord({ runId: selectedId, status: "disconnected" });
     stream.addEventListener("research_stage", e => {
       try {
         const parsed: unknown = JSON.parse((e as MessageEvent<string>).data);
-        if (isLiveEvent(parsed)) setEvents(current => mergeStageEvents(current, [parsed]));
+        if (isLiveEvent(parsed)) setEventRecord(current => ({ runId: selectedId, values: mergeStageEvents(current?.runId === selectedId ? current.values : [], [parsed]) }));
       } catch { /* malformed event is not presented as a stage */ }
     });
     return () => { stream.close(); };
-  }, [selectedId, selected?.state, session?.authenticated]);
+  }, [selectedId, selectedState, session?.authenticated]);
 
   async function signIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setBusy(true);
@@ -153,7 +155,7 @@ export default function LiveResearchWorkbench() {
   }
   async function signOut() {
     try { await jsonRequest(`${base}/session`, { method: "DELETE" }); } catch { /* local session closes regardless */ }
-    setSession(current => current && { ...current, authenticated: false }); setRuns([]); setSelectedId(null); setEvents([]); setArtifact(null);
+    setSession(current => current && { ...current, authenticated: false }); setRuns([]); setSelectedId(null); setEventRecord(null); setArtifactRecord(null);
   }
   async function startRun(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(""); setInfo("");
