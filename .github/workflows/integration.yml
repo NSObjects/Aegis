@@ -69,6 +69,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
+
       - name: Verify integration secret
         shell: bash
         run: |
@@ -106,6 +114,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
 
 
       - name: Verify integration secrets
@@ -154,6 +170,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
+
 
       - name: Verify full E2E secrets
         shell: bash
@@ -192,6 +216,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
 
       - name: Verify multi-agent E2E secrets
         shell: bash
@@ -234,6 +266,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
+
       - name: Verify risk portfolio E2E secrets
         shell: bash
         run: |
@@ -268,6 +308,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
 
       - name: Verify production dependencies
         shell: bash
@@ -372,6 +420,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install ripgrep for research grep tool
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          command -v rg
+          rg --version
 
       - name: Verify production dependencies
         shell: bash
