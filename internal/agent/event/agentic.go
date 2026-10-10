@@ -361,17 +361,37 @@ func (a *AgenticEventImpactMechanismAnalyzer) AnalyzeImpactMechanisms(
 	if a == nil || a.Model == nil {
 		return ImpactMechanismDetectionResult{}, errors.New("event impact mechanism analyzer model is required")
 	}
-	var output ImpactMechanismDetectionResult
-	if err := generateStrictAgenticJSON(
-		ctx, a.Model, impactMechanismInstruction,
-		impactMechanismPrompt{
-			Symbol:task.Symbol, AsOf:task.AsOf.UTC().Format(timeRFC3339), Facts:facts,
-			Contradictions:contradictions, FactRelations:factRelations,
-		}, &output,
-	); err != nil {
-		return ImpactMechanismDetectionResult{}, fmt.Errorf("event impact mechanism model: %w",err)
+	payload := impactMechanismPrompt{
+		Symbol: task.Symbol, AsOf: task.AsOf.UTC().Format(timeRFC3339), Facts: facts,
+		Contradictions: contradictions, FactRelations: factRelations,
 	}
-	return output,nil
+	instruction := impactMechanismInstruction
+	for attempt := 0; attempt < 2; attempt++ {
+		var output ImpactMechanismDetectionResult
+		if err := generateStrictAgenticJSON(ctx, a.Model, instruction, payload, &output); err != nil {
+			return ImpactMechanismDetectionResult{}, fmt.Errorf("event impact mechanism model: %w", err)
+		}
+		if err := validateDetectedImpactEnums(output.Mechanisms); err == nil {
+			return output, nil
+		} else if attempt == 1 {
+			return ImpactMechanismDetectionResult{}, fmt.Errorf("event impact mechanism invalid enum after correction: %w", err)
+		} else {
+			instruction = impactMechanismInstruction + "\\n\\nYour previous output failed deterministic enum validation: " + err.Error() + ". Regenerate the complete JSON using only the exact channel and direction values specified above. Do not silently translate a market-price effect into a business mechanism; omit any mechanism without a supported permitted channel."
+		}
+	}
+	return ImpactMechanismDetectionResult{}, errors.New("event impact mechanism correction attempts exhausted")
+}
+
+func validateDetectedImpactEnums(mechanisms []DetectedImpactMechanism) error {
+	for i, mechanism := range mechanisms {
+		if !validImpactChannel(mechanism.Channel) {
+			return fmt.Errorf("impact mechanism %d has invalid channel %q", i, mechanism.Channel)
+		}
+		if !validImpactDirection(mechanism.Direction) {
+			return fmt.Errorf("impact mechanism %d has invalid direction %q", i, mechanism.Direction)
+		}
+	}
+	return nil
 }
 
 func (a *AgenticEventSynthesisAnalyzer) Synthesize(ctx context.Context, task capevent.ResearchTask, events []Event) (AnalystSynthesis,error) {
