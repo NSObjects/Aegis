@@ -60,3 +60,20 @@ No changes in this PR to the Go agent graph, CLI, CI secrets, execution permissi
 - Select **数据源失败** to simulate a fail-closed Event Analyst. Failed and cancelled runs do not receive a report or allow JSON export.
 - Cancel a running demo, open older run IDs from the archive, and filter history by status. Refresh recovers history; any unfinished local-only run is marked failed with `DEMO_SESSION_INTERRUPTED`.
 - Browser localStorage holds at most 50 mock records; nothing is submitted to Aegis Go. Clearing site storage resets the demo. Real HTTP/SSE task storage is a future backend slice.
+
+## Research trace & evidence navigator (mock-only)
+
+- Completed demo runs expose a linked research reading view with four synthetic
+  claims (Bull, Bear, Research Manager and Risk), sample debate rounds and a
+  non-executable handoff. Select a claim to highlight its linked evidence and
+  Agent stage; select evidence to see which claims reference it.
+- These relationships are deliberately generated from static per-stock fixtures.
+  **Opening multiple historical Demo runs for the same stock does not create
+  genuine historical evidence or independent Agent outputs.** Each report is
+  clearly identified by its mock run ID, and does not claim live provenance.
+- A failed, cancelled, pending or still-running demo run has no completed report,
+  research trace or evidence inspection. The JSON export includes a trace only
+  for a completed demo run. The Go `EvidenceLedger` and typed Debate/Manager
+  artifacts will replace this fixture mapping when real APIs are available.
+- `npm test` includes fail-closed trace tests, missing-reference checks and
+  claim/evidence/stage referential-integrity assertions.

@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowRight, ArrowUpRight, Bell, BookOpenText, Check, Ban, RotateCcw,
+  Activity, ArrowRight, ArrowUpRight, Bell, BookOpenText, Check, Ban, RotateCcw, Link2,
   CheckCircle2, ChevronRight, CircleDot, Database, Download, FileClock,
   LayoutDashboard, Layers3, MoreHorizontal, Play, Radar, Search,
-  Settings2, ShieldCheck, SlidersHorizontal, Sparkles, TrendingDown,
+  Settings2, ShieldCheck, SlidersHorizontal, Sparkles,
   TrendingUp, TriangleAlert, Zap,
 } from "lucide-react";
 import {
@@ -20,6 +20,8 @@ import {
   describeDemoRun, formatDemoRunTime, initialDemoRuns, keepRecentDemoRuns,
   restoreDemoRuns, type DemoRun, type DemoScenario,
 } from "@/lib/demo-run-store";
+import { claimsForEvidence, claimsForStage, demoTraceForRun, type DemoResearchTrace } from "@/lib/research-trace";
+import ResearchTracePanel from "@/components/research-trace-panel";
 import { cn } from "@/lib/utils";
 
 type View = "overview" | "research" | "history" | "settings";
@@ -124,19 +126,7 @@ function InsightPanel({ stock, onNavigate }: { stock: StockFixture; onNavigate: 
   );
 }
 
-function DebatePanel({ stock }: { stock: StockFixture }) {
-  return (
-    <section className="surface">
-      <div className="panel-head"><div><h2>多空研究辩论</h2><p>观点碰撞 · Bull / Bear debate</p></div><SmallPill tone="gray">2 组观点 · 演示</SmallPill></div>
-      <div className="debate-grid">
-        <article className="debate"><div className="debate-title"><TrendingUp size={15} /> BULL · 多头观点</div><p>{stock.bull}</p><small>论点引用 · EV / sample</small></article>
-        <article className="debate bear"><div className="debate-title"><TrendingDown size={15} /> BEAR · 空头观点</div><p>{stock.bear}</p><small>反证与失效条件 · sample</small></article>
-      </div>
-    </section>
-  );
-}
-
-function AgentPanel({ run, selected, onSelect }: { run: DemoRun | null; selected: string; onSelect: (s: string) => void }) {
+function AgentPanel({ run, trace, selected, onSelect, onSelectClaim }: { run: DemoRun | null; trace: DemoResearchTrace | null; selected: string; onSelect: (s: string) => void; onSelectClaim: (id: string) => void }) {
   const current = stages.find(s => s.id === selected) ?? stages[0];
   const completed = run?.completedStages ?? 0;
   const status = run?.status ?? "PENDING";
@@ -160,27 +150,44 @@ function AgentPanel({ run, selected, onSelect }: { run: DemoRun | null; selected
           </button>;
         })}
       </div>
-      <div className="stage-detail"><strong style={{ color: "#cbd8e7" }}>{current.name}</strong><br />{current.detail}<br />
+      <div className="stage-detail"><strong style={{ color: "#cbd8e7" }}>{current.name}</strong><br />
+        {run && stages.findIndex(item => item.id === current.id) < completed
+          ? current.detail
+          : "本次阶段尚未完成，没有可查看的研究产物。"}<br />
         {run?.failureStage === current.id && <span className="stage-error">{run.failureReason}<br /></span>}
         <span style={{ color: "#5e9f9b" }}>数据源：DEMO / 仅用于页面演示</span>
+        {trace && claimsForStage(trace, current.id).length > 0 && <div className="stage-linked-claims"><span>关联观点（示例）</span>{claimsForStage(trace, current.id).map(claim => <button type="button" key={claim.id} onClick={() => onSelectClaim(claim.id)}><Link2 size={12} /> {claim.title} <ArrowRight size={12} /></button>)}</div>}
       </div>
       {run?.status === "FAILED" && <div className="run-failure" role="alert"><TriangleAlert size={14}/><span>{run.failureReason}</span></div>}
     </section>
   );
 }
 
-function EvidencePanel({ stock, selected, onSelect }: { stock: StockFixture; selected: string; onSelect: (id: string) => void }) {
-  const active: Evidence | undefined = stock.evidence.find(e => e.id === selected) ?? stock.evidence[0];
+function EvidencePanel({ stock, trace, selected, selectedClaimId, onSelect, onSelectClaim }: {
+  stock: StockFixture; trace: DemoResearchTrace | null; selected: string; selectedClaimId: string;
+  onSelect: (id: string) => void; onSelectClaim: (id: string) => void;
+}) {
+  const active: Evidence | undefined = trace ? stock.evidence.find(e => e.id === selected) ?? stock.evidence[0] : undefined;
+  const related = trace && active ? claimsForEvidence(trace, active.id) : [];
   return (
-    <section className="surface evidence-panel">
-      <div className="panel-head"><div><h2>研究证据</h2><p>可追溯信息 · Evidence</p></div><span style={{ color: "#869eb6", fontSize: 11 }}>{stock.evidence.length} 条</span></div>
-      <div style={{ paddingTop: 10 }}>
-        {stock.evidence.map((entry) => <button key={entry.id} type="button" className={cn("evidence-entry", selected === entry.id && "active")} onClick={() => onSelect(entry.id)} aria-pressed={selected === entry.id}>
-          <span className={cn("evidence-icon", entry.kind)}>{entry.kind === "support" ? <CheckCircle2 size={14} /> : entry.kind === "risk" ? <TriangleAlert size={14} /> : <BookOpenText size={14} />}</span>
-          <span style={{ flex: 1 }}><strong>{entry.title}</strong><small>{entry.category} · {entry.id}</small></span><ChevronRight size={14} color="#6e8aa1" />
-        </button>)}
-      </div>
-      {active && <div className="evidence-expanded"><h3>{active.title}</h3><p>{active.note}</p><small>{active.source} · {active.asOf}</small></div>}
+    <section className="surface evidence-panel" id="evidence-inspector">
+      <div className="panel-head"><div><h2>证据检查</h2><p>论点追踪 · Evidence Inspector</p></div><span style={{ color: "#869eb6", fontSize: 11 }}>{trace ? `${stock.evidence.length} 条 · DEMO` : "尚无证据"}</span></div>
+      {!trace ? <div className="evidence-empty"><BookOpenText size={19}/><p>本次研究尚未成功完成。为避免把股票静态样例当作本次运行证据，暂不展示关联引用。</p></div> : <>
+        <div className="evidence-list">
+          {stock.evidence.map(entry => <button key={entry.id} type="button" className={cn("evidence-entry", selected === entry.id && "active")} onClick={() => onSelect(entry.id)} aria-pressed={selected === entry.id}>
+            <span className={cn("evidence-icon", entry.kind)}>{entry.kind === "support" ? <CheckCircle2 size={14} /> : entry.kind === "risk" ? <TriangleAlert size={14} /> : <BookOpenText size={14} />}</span>
+            <span style={{ flex: 1 }}><strong>{entry.title}</strong><small>{entry.category} · {entry.id}</small></span><ChevronRight size={14} color="#6e8aa1" />
+          </button>)}
+        </div>
+        {active && <div className="evidence-expanded">
+          <div className="reference-provenance">{active.id} · SYNTHETIC REFERENCE</div>
+          <h3>{active.title}</h3><p>{active.note}</p>
+          <div className="reference-meta"><span>来源：{active.source}</span><span>样例截止：{active.asOf}</span></div>
+          <div className="evidence-related"><strong>关联研究观点 · {related.length}</strong>
+            {related.length ? related.map(claim => <button className={cn("related-claim", selectedClaimId === claim.id && "active")} key={claim.id} type="button" onClick={() => onSelectClaim(claim.id)}><Link2 size={12}/>{claim.title}<ArrowRight size={12}/></button>) : <small>该引用未被任何观点使用</small>}
+          </div>
+        </div>}
+      </>}
     </section>
   );
 }
@@ -234,6 +241,7 @@ export default function ResearchWorkbench() {
   const [timeframe, setTimeframe] = useState<Timeframe>("3M");
   const [selectedStage, setSelectedStage] = useState("debate");
   const [selectedEvidence, setSelectedEvidence] = useState("EV-001");
+  const [selectedClaimId, setSelectedClaimId] = useState("");
   const [runs, setRuns] = useState<DemoRun[]>(initialDemoRuns);
   const [runsLoaded, setRunsLoaded] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(initialDemoRuns[0].id);
@@ -244,6 +252,7 @@ export default function ResearchWorkbench() {
   const selectedRun = runs.find(run => run.id === activeRunId) ?? null;
   const isRunning = selectedRun?.status === "RUNNING";
   const hasCompletedReport = selectedRun?.status === "COMPLETED";
+  const trace = demoTraceForRun(selectedRun, stock);
 
   // Browser-only demo data; server rendering starts with deterministic fixtures.
   useEffect(() => {
@@ -300,6 +309,7 @@ export default function ResearchWorkbench() {
     const mostRecent = runs.find(run => run.symbol === next);
     setActiveRunId(mostRecent?.id ?? null);
     setSelectedEvidence(findStock(next).evidence[0].id);
+    setSelectedClaimId("");
     setSelectedStage(mostRecent?.status === "FAILED" ? mostRecent.failureStage ?? "event" : "debate");
     setView("overview");
     setToast(`已切换至 ${findStock(next).name}（演示样本）`);
@@ -312,6 +322,7 @@ export default function ResearchWorkbench() {
     setActiveRunId(id);
     setSelectedStage(run.failureStage ?? (run.status === "RUNNING" ? stages[Math.min(run.completedStages, stages.length - 1)].id : "debate"));
     setSelectedEvidence(findStock(run.symbol).evidence[0].id);
+    setSelectedClaimId("");
     setView("research");
     setToast(`正在查看 ${id} · ${describeDemoRun(run)}`);
   };
@@ -330,8 +341,30 @@ export default function ResearchWorkbench() {
     setRuns(current => keepRecentDemoRuns([created, ...current]));
     setActiveRunId(created.id);
     setSelectedStage("market");
+    setSelectedClaimId("");
     setView("research");
     setToast(nextScenario === "provider_failure" ? "正在模拟 Event 数据源失败与安全停止。" : "本地模拟运行已开始，没有调用真实 Go Agent。");
+  };
+
+  const focusClaim = (id: string) => {
+    if (!trace) return;
+    const claim = trace.claims.find(item => item.id === id);
+    if (!claim) return;
+    setSelectedClaimId(id);
+    setSelectedStage(claim.stageId);
+    const validRef = claim.evidenceIds.find(ref => stock.evidence.some(item => item.id === ref));
+    if (validRef) setSelectedEvidence(validRef);
+    setView("research");
+  };
+
+  const focusEvidence = (id: string) => {
+    if (!trace || !stock.evidence.some(item => item.id === id)) return;
+    setSelectedEvidence(id);
+    const matchingClaim = claimsForEvidence(trace, id)[0];
+    if (matchingClaim) {
+      setSelectedClaimId(matchingClaim.id);
+      setSelectedStage(matchingClaim.stageId);
+    } else setSelectedClaimId("");
   };
 
   const cancelRun = () => {
@@ -353,6 +386,7 @@ export default function ResearchWorkbench() {
       source: "frontend-local-mock", conclusion: reportStock.researchSummary,
       bull: reportStock.bull, bear: reportStock.bear, risk: reportStock.risk,
       portfolio_context: { state: "NOT_PROVIDED" }, evidence: reportStock.evidence,
+      research_trace: demoTraceForRun(selectedRun, reportStock),
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
@@ -415,13 +449,13 @@ export default function ResearchWorkbench() {
             <StockChart stock={stock} timeframe={timeframe} onChange={setTimeframe} />
             {hasCompletedReport ? <>
               <InsightPanel stock={stock} onNavigate={() => setView("research")} />
-              <DebatePanel stock={stock} />
+              {trace && <ResearchTracePanel trace={trace} stock={stock} selectedClaimId={selectedClaimId} onSelectClaim={focusClaim} onSelectEvidence={focusEvidence} />}
             </> : <section className="surface report-placeholder"><FileClock size={19}/><div><h2>本次研究尚无有效结论</h2><p>{isRunning ? "Agent 演示正在运行；本次报告会在全部阶段模拟完成后显示。" : selectedRun?.status === "FAILED" ? "模拟数据源失败后，流程已安全停止。本次不生成研究报告。" : selectedRun?.status === "CANCELLED" ? "任务已经取消，本次不生成研究报告。" : "选择已完成的演示任务，或者启动一次模拟研究。"}</p></div></section>}
             {view === "research" && hasCompletedReport && <section className="surface detail-intro"><div className="eyebrow">Research artifact / Demo</div><h2>完整研究结论</h2><p>Research Manager：{stock.researchSummary}</p><p style={{ marginTop: 13 }}>Risk Analyst：{stock.risk}</p><p style={{ marginTop: 13, color: "#81d5bb" }}>组合状态：NOT_PROVIDED · 当前仓位未知 · 不生成目标仓位。</p><div style={{ marginTop: 17, display: "flex", gap: 9, flexWrap: "wrap" }}><SmallPill tone="blue">TradeIntent · MONITOR（演示）</SmallPill><SmallPill>Portfolio · REVIEW_REQUIRED（演示）</SmallPill></div></section>}
           </div>
           <div className="right-stack">
-            <AgentPanel run={selectedRun} selected={selectedStage} onSelect={setSelectedStage} />
-            <EvidencePanel stock={stock} selected={selectedEvidence} onSelect={setSelectedEvidence} />
+            <AgentPanel run={selectedRun} trace={trace} selected={selectedStage} onSelect={setSelectedStage} onSelectClaim={focusClaim} />
+            <EvidencePanel stock={stock} trace={trace} selected={selectedEvidence} selectedClaimId={selectedClaimId} onSelect={focusEvidence} onSelectClaim={focusClaim} />
             <HistoryPanel runs={runs} onViewAll={() => setView("history")} onOpen={openRun} />
           </div>
         </div>}
