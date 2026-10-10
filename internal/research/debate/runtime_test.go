@@ -21,7 +21,10 @@ type researcherCall struct {
 func (s *researcherStub) GenerateTurn(_ context.Context, _ *synthesis.Artifact, state *State, round int) (Turn, error) {
 	s.calls = append(s.calls, researcherCall{round: round, turns: len(state.Turns)})
 	id := fmt.Sprintf("%s-r%d-a1", strings.ToLower(string(s.side)), round)
+	rebuttals:=[]Rebuttal{}
+	if len(state.Turns)>0 { previous:=state.Turns[len(state.Turns)-1]; rebuttals=append(rebuttals,Rebuttal{Claim:"counterargument",TargetArgumentID:previous.Arguments[0].ID,References:[]synthesis.Reference{{Domain:synthesis.DomainMarket}}}) }
 	return Turn{
+		Rebuttals:rebuttals,
 		Round: round,
 		Side:  s.side,
 		Thesis: string(s.side) + " thesis",
@@ -109,4 +112,13 @@ func TestRuntimeResearcherCannotMutatePriorReferences(t *testing.T) {
 	if got != synthesis.DomainMarket {
 		t.Fatalf("prior reference domain = %q, want %q", got, synthesis.DomainMarket)
 	}
+}
+
+type silentOpponent struct { side Side }
+func (s *silentOpponent) GenerateTurn(_ context.Context,_ *synthesis.Artifact,_ *State,round int)(Turn,error){
+ return Turn{Round:round,Side:s.side,Thesis:"thesis",Arguments:[]Argument{{ID:fmt.Sprintf("%s-%d",s.side,round),Claim:"claim",References:[]synthesis.Reference{{Domain:synthesis.DomainMarket}}}},Confidence:0.5},nil
+}
+func TestRuntimeRejectsIndependentMonologues(t *testing.T){
+ _,err:=(&Runtime{Bull:&silentOpponent{side:SideBull},Bear:&silentOpponent{side:SideBear},MaxRounds:2}).Run(context.Background(),validArtifact())
+ if err==nil||!strings.Contains(err.Error(),"must rebut at least one prior"){t.Fatalf("expected missing opposition engagement error, got %v",err)}
 }
