@@ -1,5 +1,7 @@
 # Aegis Multi-Agent 功能优先路线图
 
+> **本文件职责**：只管理当前 R0 / F0～F4 多 Agent 研究内核收尾。**R0 完成后的下一开发任务与后续完整顺序**，统一在 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 顶部维护；下文历史基线不自动代表最新 main。
+
 > 2026-10-10 基线：main commit `55967260b5bc0c5853256b496ee56a922c8941a9`（PR #111 / V2.12.9）。本文件是后续功能开发的任务顺序，不宣称已在本次文档 PR 中运行 Hosted E2E。
 
 ## 本阶段唯一目标
