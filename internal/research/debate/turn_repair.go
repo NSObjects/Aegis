@@ -100,8 +100,12 @@ func parseValidatedTurn(
 		Turns: append(append([]Turn(nil), state.Turns...), turn),
 	}
 	if err := ValidateState(candidate, artifact); err != nil {
-		return Turn{}, fmt.Errorf("invalid %s researcher turn: %w",
-			strings.ToLower(string(expectedSide)), err)
-	}
-	return turn, nil
+        return Turn{}, fmt.Errorf("invalid %s researcher turn: %w", strings.ToLower(string(expectedSide)), err)
+    }
+    opposing := SideBull
+    if expectedSide == SideBull { opposing = SideBear }
+    if err := requireOpposingEngagement(turn, state, opposing); err != nil {
+        return Turn{}, fmt.Errorf("invalid %s researcher turn: %w", strings.ToLower(string(expectedSide)), err)
+    }
+    return turn, nil
 }
