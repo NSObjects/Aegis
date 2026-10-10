@@ -1,5 +1,7 @@
 # Aegis Multi-Agent 功能优先路线图
 
+> **本文件职责**：只管理当前 F0～F4 多 Agent 闭环开发。Web、对话、组合仓位策略、持续研究/Memory、回测等后续产品里程碑统一见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)。下文提交基线为历史快照，执行前应重新核对最新 main 和 PR/CI。
+
 > 2026-10-10 基线：main commit `55967260b5bc0c5853256b496ee56a922c8941a9`（PR #111 / V2.12.9）。本文件是后续功能开发的任务顺序，不宣称已在本次文档 PR 中运行 Hosted E2E。
 
 ## 本阶段唯一目标
