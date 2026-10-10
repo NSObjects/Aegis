@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowRight, ArrowUpRight, Bell, BookOpenText, Check,
+  Activity, ArrowRight, ArrowUpRight, Bell, BookOpenText, Check, Ban, RotateCcw,
   CheckCircle2, ChevronRight, CircleDot, Database, Download, FileClock,
   LayoutDashboard, Layers3, MoreHorizontal, Play, Radar, Search,
   Settings2, ShieldCheck, SlidersHorizontal, Sparkles, TrendingDown,
@@ -12,9 +12,14 @@ import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  demoHistory, demoStocks, findStock, stages,
+  demoStocks, findStock, stages,
   type Evidence, type StockFixture, type StockId,
 } from "@/lib/mock-research";
+import {
+  advanceDemoRun, cancelDemoRun, createDemoRun, demoStorageKey,
+  describeDemoRun, formatDemoRunTime, initialDemoRuns, keepRecentDemoRuns,
+  restoreDemoRuns, type DemoRun, type DemoScenario,
+} from "@/lib/demo-run-store";
 import { cn } from "@/lib/utils";
 
 type View = "overview" | "research" | "history" | "settings";
@@ -131,26 +136,35 @@ function DebatePanel({ stock }: { stock: StockFixture }) {
   );
 }
 
-function AgentPanel({ completed, running, selected, onSelect }: { completed: number; running: boolean; selected: string; onSelect: (s: string) => void }) {
+function AgentPanel({ run, selected, onSelect }: { run: DemoRun | null; selected: string; onSelect: (s: string) => void }) {
   const current = stages.find(s => s.id === selected) ?? stages[0];
+  const completed = run?.completedStages ?? 0;
+  const status = run?.status ?? "PENDING";
+  const running = status === "RUNNING";
   return (
     <section className="surface run-panel">
       <div className="panel-head">
-        <div><h2>Agent 运行链路</h2><p>研究任务 · Demo graph</p></div>
-        <div className="run-stat"><i className={cn("status-dot", running && "running")} />{running ? "演示运行中" : "演示已完成"}</div>
+        <div><h2>Agent 运行链路</h2><p>{run ? `${run.id} · Demo graph` : "当前股票没有选中研究任务"}</p></div>
+        <div className="run-stat"><i className={cn("status-dot", running && "running", status === "FAILED" && "failed", status === "CANCELLED" && "cancelled")} />{run ? describeDemoRun(run) : "未开始"}</div>
       </div>
-      <div className="progress-bar" aria-label="模拟研究进度"><div style={{ width: `${Math.round(completed / stages.length * 100)}%` }} /></div>
+      <div className="progress-bar" role="progressbar" aria-label="模拟研究进度" aria-valuenow={completed} aria-valuemin={0} aria-valuemax={stages.length}><div style={{ width: `${Math.round(completed / stages.length * 100)}%` }} /></div>
       <div className="stage-list">
         {stages.map((stage, index) => {
-          const state = index < completed ? "done" : index === completed && running ? "running" : "pending";
+          const state = index < completed ? "done" :
+            index === completed && running ? "running" :
+            index === completed && status === "FAILED" ? "failed" : "pending";
           return <button type="button" key={stage.id} className={cn("stage", state, selected === stage.id && "selected")} aria-pressed={selected === stage.id} onClick={() => onSelect(stage.id)}>
-            <span className="stage-icon">{state === "done" ? <Check size={15} /> : stage.short}</span>
+            <span className="stage-icon">{state === "done" ? <Check size={15} /> : state === "failed" ? <TriangleAlert size={14} /> : stage.short}</span>
             <span className="copy"><strong>{stage.name}</strong><small>{stage.title}</small></span>
-            {state === "done" ? <span className="stage-time">{stage.duration}</span> : state === "running" ? <span className="stage-time">执行中</span> : <span className="stage-time">等待</span>}
+            {state === "done" ? <span className="stage-time">{stage.duration}</span> : state === "running" ? <span className="stage-time">执行中</span> : state === "failed" ? <span className="stage-time">失败</span> : <span className="stage-time">等待</span>}
           </button>;
         })}
       </div>
-      <div className="stage-detail"><strong style={{ color: "#cbd8e7" }}>{current.name}</strong><br />{current.detail}<br /><span style={{ color: "#5e9f9b" }}>数据源：DEMO / 仅用于页面演示</span></div>
+      <div className="stage-detail"><strong style={{ color: "#cbd8e7" }}>{current.name}</strong><br />{current.detail}<br />
+        {run?.failureStage === current.id && <span className="stage-error">{run.failureReason}<br /></span>}
+        <span style={{ color: "#5e9f9b" }}>数据源：DEMO / 仅用于页面演示</span>
+      </div>
+      {run?.status === "FAILED" && <div className="run-failure" role="alert"><TriangleAlert size={14}/><span>{run.failureReason}</span></div>}
     </section>
   );
 }
@@ -171,25 +185,34 @@ function EvidencePanel({ stock, selected, onSelect }: { stock: StockFixture; sel
   );
 }
 
-function HistoryPanel({ onViewAll, onOpen }: { onViewAll: () => void; onOpen: (symbol: StockId) => void }) {
+function HistoryPanel({ runs, onViewAll, onOpen }: { runs: DemoRun[]; onViewAll: () => void; onOpen: (id: string) => void }) {
   return (
     <section className="surface history-panel">
       <div className="panel-head"><div><h2>最近研究</h2><p>Research archive · 演示</p></div><button type="button" className="icon-button" onClick={onViewAll} aria-label="查看全部历史"><ArrowUpRight size={16} /></button></div>
       <div className="history-list">
-        {demoHistory.slice(0, 3).map(h => <button type="button" key={h.id} className="history-row" onClick={() => onOpen(h.symbol)}>
-          <span className="evidence-icon neutral"><FileClock size={15} /></span><span className="history-text"><strong>{findStock(h.symbol).name}</strong><small>{h.when}</small></span><ChevronRight size={15} color="#70869f" />
+        {runs.slice(0, 3).map(h => <button type="button" key={h.id} className="history-row" onClick={() => onOpen(h.id)}>
+          <span className="evidence-icon neutral"><FileClock size={15} /></span><span className="history-text"><strong>{findStock(h.symbol).name}</strong><small>{formatDemoRunTime(h)} · {describeDemoRun(h)}</small></span><ChevronRight size={15} color="#70869f" />
         </button>)}
       </div>
-      <div className="pale-foot">历史记录为固定演示样本</div>
+      <div className="pale-foot">本地演示记录 · 无真实研究产物</div>
     </section>
   );
 }
 
-function HistoryView({ onOpen }: { onOpen: (symbol: StockId) => void }) {
+function HistoryView({ runs, onOpen }: { runs: DemoRun[]; onOpen: (id: string) => void }) {
+  const [filter, setFilter] = useState<"ALL" | "COMPLETED" | "FAILED" | "RUNNING" | "CANCELLED">("ALL");
+  const filtered = filter === "ALL" ? runs : runs.filter(h => h.status === filter);
+  const labels: Array<{ value: typeof filter; label: string }> = [
+    { value: "ALL", label: "全部" }, { value: "COMPLETED", label: "已完成" },
+    { value: "RUNNING", label: "进行中" }, { value: "FAILED", label: "失败" },
+    { value: "CANCELLED", label: "已取消" },
+  ];
   return <div className="view-page">
-    <div className="surface detail-intro"><div className="eyebrow">Research / Archive</div><h2>研究历史</h2><p>比较每次研究的标的、结论和状态。当前展示的是固定的演示样本；持久化 API 将在 Go 服务阶段对接。</p></div>
-    <div className="surface table-wrap"><table className="data-table"><thead><tr><th>股票标的</th><th>研究时间（示例）</th><th>研究结论</th><th>任务状态</th><th>耗时</th><th></th></tr></thead><tbody>{demoHistory.map(h => <tr key={h.id} tabIndex={0} onClick={() => onOpen(h.symbol)} onKeyDown={event => { if (event.key === "Enter") onOpen(h.symbol); }}><td><strong>{findStock(h.symbol).name}</strong><div style={{ color: "#728ba4", fontSize: 10, marginTop: 5 }}>{h.symbol}</div></td><td style={{ color: "#9fb2c6" }}>{h.when}</td><td>{h.headline}</td><td><SmallPill tone={h.state === "FAILED" ? "red" : "green"}>{h.state === "FAILED" ? "演示失败" : "演示完成"}</SmallPill></td><td style={{ color: "#9fb2c6" }}>{h.duration}</td><td><ArrowUpRight size={15} /></td></tr>)}</tbody></table></div>
-    <div className="surface empty-notice">注意：这是用于验证表格操作的前端 Mock。点击历史记录会切换到相应股票的示例研究，而非加载真实归档或复现历史决策。</div>
+    <div className="surface detail-intro"><div className="eyebrow">Research / Archive</div><h2>研究历史</h2><p>每次 Mock 运行都有独立 ID、状态和阶段记录。点击历史可以打开当时的模拟任务；数据保存在本地浏览器，不是 Go Agent 归档。</p></div>
+    <div className="history-filters" aria-label="过滤研究状态">{labels.map(item => <button key={item.value} type="button" className={cn("filter-chip", filter === item.value && "active")} aria-pressed={filter === item.value} onClick={() => setFilter(item.value)}>{item.label}</button>)}</div>
+    <div className="surface table-wrap"><table className="data-table"><thead><tr><th>股票标的</th><th>研究时间（演示）</th><th>研究结论 / 失败原因</th><th>任务状态</th><th>阶段</th><th>详情</th></tr></thead><tbody>{filtered.map(h => <tr key={h.id}><td><strong>{findStock(h.symbol).name}</strong><div style={{ color: "#728ba4", fontSize: 10, marginTop: 5 }}>{h.symbol}</div></td><td style={{ color: "#9fb2c6" }}>{formatDemoRunTime(h)}<div className="run-id-short">{h.id}</div></td><td>{h.failureReason || h.headline || "前端模拟研究"}</td><td><SmallPill tone={h.status === "FAILED" ? "red" : h.status === "COMPLETED" ? "green" : "gray"}>{describeDemoRun(h)}</SmallPill></td><td style={{ color: "#9fb2c6" }}>{h.completedStages}/{stages.length}</td><td><button className="btn ghost" type="button" onClick={() => onOpen(h.id)} aria-label={`打开 ${h.id}`}><ArrowUpRight size={15} /> 打开</button></td></tr>)}</tbody></table>
+      {filtered.length === 0 && <div className="empty-notice">此状态下没有演示任务。可返回研究工作区启动新的模拟运行。</div>}</div>
+    <div className="surface empty-notice">所有价格与结论依然是固定模拟样本。只有状态为「演示完成」的运行，才能查看对应样本报告；失败或取消的运行不生成研究结论。</div>
   </div>;
 }
 
@@ -211,28 +234,49 @@ export default function ResearchWorkbench() {
   const [timeframe, setTimeframe] = useState<Timeframe>("3M");
   const [selectedStage, setSelectedStage] = useState("debate");
   const [selectedEvidence, setSelectedEvidence] = useState("EV-001");
-  const [completedCount, setCompletedCount] = useState(stages.length);
-  const [isRunning, setIsRunning] = useState(false);
-  const [lastRunId, setLastRunId] = useState("DEMO-20260924-001");
+  const [runs, setRuns] = useState<DemoRun[]>(initialDemoRuns);
+  const [runsLoaded, setRunsLoaded] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(initialDemoRuns[0].id);
+  const [scenario, setScenario] = useState<DemoScenario>("success");
   const [toast, setToast] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const stock = findStock(symbol);
+  const selectedRun = runs.find(run => run.id === activeRunId) ?? null;
+  const isRunning = selectedRun?.status === "RUNNING";
+  const hasCompletedReport = selectedRun?.status === "COMPLETED";
+
+  // Browser-only demo data; server rendering starts with deterministic fixtures.
+  useEffect(() => {
+    let active = true;
+    // Defer synchronization of the browser-only store until after hydration.
+    queueMicrotask(() => {
+      if (!active) return;
+      let saved: string | null = null;
+      try { saved = window.localStorage.getItem(demoStorageKey); }
+      catch { /* Private browsing can disable storage. */ }
+      const restored = restoreDemoRuns(saved);
+      setRuns(restored);
+      setActiveRunId(restored[0]?.id ?? null);
+      setRunsLoaded(true);
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
-    if (!isRunning) return;
-    if (completedCount >= stages.length) return;
-    const timeout = window.setTimeout(() => setCompletedCount(value => value + 1), 760);
-    return () => window.clearTimeout(timeout);
-  }, [isRunning, completedCount]);
+    if (!runsLoaded) return;
+    try { window.localStorage.setItem(demoStorageKey, JSON.stringify(runs)); }
+    catch { /* A private browser may disable storage; keep the in-memory demo usable. */ }
+  }, [runs, runsLoaded]);
 
+  // Tick every active local mock run, not just the selected stock. Switching views
+  // must never leave a fake Agent run stuck or complete an unrelated stock.
   useEffect(() => {
-    if (!isRunning || completedCount < stages.length) return;
-    const timeout = window.setTimeout(() => {
-      setIsRunning(false);
-      setToast("演示研究完成：未调用 Go Agent，也未访问真实市场数据。");
-    }, 200);
-    return () => window.clearTimeout(timeout);
-  }, [isRunning, completedCount]);
+    if (!runs.some(run => run.status === "RUNNING")) return;
+    const timer = window.setInterval(() => {
+      setRuns(current => current.map(advanceDemoRun));
+    }, 760);
+    return () => window.clearInterval(timer);
+  }, [runs]);
 
   useEffect(() => {
     if (!toast) return;
@@ -253,12 +297,23 @@ export default function ResearchWorkbench() {
   const chooseStock = (next: StockId) => {
     setSymbol(next);
     setQuery("");
-    setIsRunning(false);
-    setCompletedCount(stages.length);
+    const mostRecent = runs.find(run => run.symbol === next);
+    setActiveRunId(mostRecent?.id ?? null);
     setSelectedEvidence(findStock(next).evidence[0].id);
-    setSelectedStage("debate");
+    setSelectedStage(mostRecent?.status === "FAILED" ? mostRecent.failureStage ?? "event" : "debate");
     setView("overview");
     setToast(`已切换至 ${findStock(next).name}（演示样本）`);
+  };
+
+  const openRun = (id: string) => {
+    const run = runs.find(item => item.id === id);
+    if (!run) { setToast("当前演示历史中不存在该任务。"); return; }
+    setSymbol(run.symbol);
+    setActiveRunId(id);
+    setSelectedStage(run.failureStage ?? (run.status === "RUNNING" ? stages[Math.min(run.completedStages, stages.length - 1)].id : "debate"));
+    setSelectedEvidence(findStock(run.symbol).evidence[0].id);
+    setView("research");
+    setToast(`正在查看 ${id} · ${describeDemoRun(run)}`);
   };
 
   const submitSearch = () => {
@@ -269,27 +324,39 @@ export default function ResearchWorkbench() {
     chooseStock(found.symbol);
   };
 
-  const startDemo = () => {
-    if (isRunning) return;
-    setView("research");
-    setLastRunId(`DEMO-${symbol}-${Date.now().toString().slice(-6)}`);
-    setCompletedCount(0);
+  const startDemo = (nextScenario: DemoScenario = scenario) => {
+    if (!runsLoaded) { setToast("正在加载本地演示记录。"); return; }
+    const created = createDemoRun(symbol, nextScenario);
+    setRuns(current => keepRecentDemoRuns([created, ...current]));
+    setActiveRunId(created.id);
     setSelectedStage("market");
-    setIsRunning(true);
-    setToast("已启动本地研究流程演示（无真实模型或 API 调用）。");
+    setView("research");
+    setToast(nextScenario === "provider_failure" ? "正在模拟 Event 数据源失败与安全停止。" : "本地模拟运行已开始，没有调用真实 Go Agent。");
+  };
+
+  const cancelRun = () => {
+    if (!selectedRun || selectedRun.status !== "RUNNING") return;
+    setRuns(current => current.map(run => run.id === selectedRun.id ? cancelDemoRun(run) : run));
+    setToast("已取消当前模拟任务；不会生成本次研究结论。");
   };
 
   const downloadReport = () => {
+    if (!selectedRun || selectedRun.status !== "COMPLETED") {
+      setToast("只能导出已完成的演示研究；失败、取消、运行中的任务没有报告。");
+      return;
+    }
+    const reportStock = findStock(selectedRun.symbol);
     const file = {
       demo: true, warning: "SYNTHETIC UI FIXTURE — NOT FINANCIAL ADVICE — NO LIVE MARKET DATA",
-      run_id: lastRunId, symbol: stock.symbol, research_as_of: "2026-09-24",
-      source: "frontend-local-mock", conclusion: stock.researchSummary,
-      bull: stock.bull, bear: stock.bear, risk: stock.risk,
-      portfolio_context: { state: "NOT_PROVIDED" }, evidence: stock.evidence,
+      run_id: selectedRun.id, status: selectedRun.status, symbol: reportStock.symbol,
+      started_at: selectedRun.createdAt, research_as_of: "2026-09-24",
+      source: "frontend-local-mock", conclusion: reportStock.researchSummary,
+      bull: reportStock.bull, bear: reportStock.bear, risk: reportStock.risk,
+      portfolio_context: { state: "NOT_PROVIDED" }, evidence: reportStock.evidence,
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
-    link.href = url; link.download = `aegis-DEMO-${stock.symbol}.json`;
+    link.href = url; link.download = `aegis-${selectedRun.id}.json`;
     document.body.appendChild(link); link.click(); link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1500);
     setToast("已导出明确标注为演示数据的 JSON 文件。");
@@ -306,7 +373,7 @@ export default function ResearchWorkbench() {
   return <div className="workspace">
     <aside className="sidebar" aria-label="主导航">
       <div className="brand"><AegisMark /><div><div className="brand-title">AEGIS<span style={{ color: "#7ceac7" }}>.</span></div><div className="brand-sub">Research intelligence</div></div></div>
-      <nav aria-label="研究导航"><div className="nav-label">WORKSPACE</div>{navItems.map(item => <button key={item.id} type="button" className={cn("nav-item", view === item.id && "active")} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}><item.icon size={17} strokeWidth={1.9} /><span>{item.label}</span>{item.id === "history" && <span className="nav-count">4</span>}</button>)}</nav>
+      <nav aria-label="研究导航"><div className="nav-label">WORKSPACE</div>{navItems.map(item => <button key={item.id} type="button" className={cn("nav-item", view === item.id && "active")} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}><item.icon size={17} strokeWidth={1.9} /><span>{item.label}</span>{item.id === "history" && <span className="nav-count">{runs.length}</span>}</button>)}</nav>
       <div className="sidebar-sep" />
       <div className="watch-title">快速切换 <span>DEMO</span></div>
       {demoStocks.map(item => <button key={item.symbol} type="button" className={cn("watch-item", symbol === item.symbol && "chosen")} onClick={() => chooseStock(item.symbol)}><div><strong>{item.name}</strong><small>{item.symbol}</small></div><span className={cn("watch-change", item.change >= 0 ? "up" : "down")}>{item.change >= 0 ? "+" : ""}{item.change.toFixed(2)}%</span></button>)}
@@ -326,24 +393,36 @@ export default function ResearchWorkbench() {
       <div className="content">
         <div className="page-heading">
           <div><div className="eyebrow">Investment research / Workspace</div><h1>{sectionTitle}</h1><p>{view === "history" ? "回顾研究过程与结论，不让研究只停留在一次执行。" : view === "settings" ? "查看演示环境以及未来 API 接入边界。" : "让每一次研究都可观察、可解释、可追溯。"}</p></div>
-          <div className="heading-right"><ModeBadge /><button type="button" className="btn" onClick={downloadReport}><Download size={15} />导出演示 JSON</button></div>
+          <div className="heading-right"><ModeBadge /><button type="button" className="btn" onClick={downloadReport} disabled={!hasCompletedReport} title={!hasCompletedReport ? "只有已完成的演示任务可导出" : undefined}><Download size={15} />导出演示 JSON</button></div>
         </div>
 
         <div className="demo-banner"><TriangleAlert size={16} /><span><strong>演示环境：</strong> 股票价格、走势、观点、Agent 进度与历史任务均为虚构样本。未接入真实行情、LLM、Go API 或账户。</span><CircleDot size={12} /></div>
 
-        {view === "history" ? <HistoryView onOpen={chooseStock} /> : view === "settings" ? <SettingsView /> : <div className="main-grid">
+        {view === "history" ? <HistoryView runs={runs} onOpen={openRun} /> : view === "settings" ? <SettingsView /> : <div className="main-grid">
           <div className="left-stack">
-            <StockHero stock={stock} isRunning={isRunning} onRun={startDemo} />
+            <StockHero stock={stock} isRunning={isRunning} onRun={() => startDemo()} />
+            <section className="surface run-toolbar" aria-label="演示任务控制">
+              <div className="run-toolbar-meta"><span>当前任务</span><strong>{selectedRun?.id ?? "未选择"}</strong><small>{selectedRun ? `${describeDemoRun(selectedRun)} · ${formatDemoRunTime(selectedRun)}` : "切换股票或运行一次演示"}</small></div>
+              <div className="run-toolbar-actions">
+                <label className="demo-scenario">演示场景 <select aria-label="下一次研究的模拟场景" value={scenario} onChange={event => setScenario(event.target.value as DemoScenario)}><option value="success">正常完成</option><option value="provider_failure">数据源失败</option></select></label>
+                <button type="button" className="btn" onClick={() => startDemo()} disabled={!runsLoaded || isRunning}><RotateCcw size={14} />{selectedRun?.status === "FAILED" || selectedRun?.status === "CANCELLED" ? "重新演示" : "新建演示"}</button>
+                {isRunning && <button type="button" className="btn danger" onClick={cancelRun}><Ban size={14} />取消任务</button>}
+              </div>
+              {selectedRun?.status === "FAILED" && <div className="run-toolbar-warning" role="alert">{selectedRun.failureReason}</div>}
+              {selectedRun?.status === "CANCELLED" && <div className="run-toolbar-warning">当前模拟任务已取消。可选择重新演示。</div>}
+            </section>
             <Metrics stock={stock} />
             <StockChart stock={stock} timeframe={timeframe} onChange={setTimeframe} />
-            <InsightPanel stock={stock} onNavigate={() => setView("research")} />
-            <DebatePanel stock={stock} />
-            {view === "research" && <section className="surface detail-intro"><div className="eyebrow">Research artifact / Demo</div><h2>完整研究结论</h2><p>Research Manager：{stock.researchSummary}</p><p style={{ marginTop: 13 }}>Risk Analyst：{stock.risk}</p><p style={{ marginTop: 13, color: "#81d5bb" }}>组合状态：NOT_PROVIDED · 当前仓位未知 · 不生成目标仓位。</p><div style={{ marginTop: 17, display: "flex", gap: 9, flexWrap: "wrap" }}><SmallPill tone="blue">TradeIntent · MONITOR（演示）</SmallPill><SmallPill>Portfolio · REVIEW_REQUIRED（演示）</SmallPill></div></section>}
+            {hasCompletedReport ? <>
+              <InsightPanel stock={stock} onNavigate={() => setView("research")} />
+              <DebatePanel stock={stock} />
+            </> : <section className="surface report-placeholder"><FileClock size={19}/><div><h2>本次研究尚无有效结论</h2><p>{isRunning ? "Agent 演示正在运行；本次报告会在全部阶段模拟完成后显示。" : selectedRun?.status === "FAILED" ? "模拟数据源失败后，流程已安全停止。本次不生成研究报告。" : selectedRun?.status === "CANCELLED" ? "任务已经取消，本次不生成研究报告。" : "选择已完成的演示任务，或者启动一次模拟研究。"}</p></div></section>}
+            {view === "research" && hasCompletedReport && <section className="surface detail-intro"><div className="eyebrow">Research artifact / Demo</div><h2>完整研究结论</h2><p>Research Manager：{stock.researchSummary}</p><p style={{ marginTop: 13 }}>Risk Analyst：{stock.risk}</p><p style={{ marginTop: 13, color: "#81d5bb" }}>组合状态：NOT_PROVIDED · 当前仓位未知 · 不生成目标仓位。</p><div style={{ marginTop: 17, display: "flex", gap: 9, flexWrap: "wrap" }}><SmallPill tone="blue">TradeIntent · MONITOR（演示）</SmallPill><SmallPill>Portfolio · REVIEW_REQUIRED（演示）</SmallPill></div></section>}
           </div>
           <div className="right-stack">
-            <AgentPanel completed={completedCount} running={isRunning} selected={selectedStage} onSelect={setSelectedStage} />
+            <AgentPanel run={selectedRun} selected={selectedStage} onSelect={setSelectedStage} />
             <EvidencePanel stock={stock} selected={selectedEvidence} onSelect={setSelectedEvidence} />
-            <HistoryPanel onViewAll={() => setView("history")} onOpen={chooseStock} />
+            <HistoryPanel runs={runs} onViewAll={() => setView("history")} onOpen={openRun} />
           </div>
         </div>}
         <footer style={{ marginTop: 24, fontSize: 11, color: "#698099", textAlign: "right" }}>AEGIS RESEARCH WORKSPACE · MOCK PREVIEW · 研究辅助，不含交易执行</footer>
