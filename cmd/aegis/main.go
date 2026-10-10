@@ -2,6 +2,8 @@ package main
 
 import (
 	eventagent "Aegis/internal/agent/event"
+	"Aegis/internal/agent/fundamental"
+	fundamentalcap "Aegis/internal/capability/fundamental"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/agent/trading"
@@ -44,6 +46,7 @@ func main() {
 		portfolioMaxAge time.Duration
 		riskLimitsFile string
 		tradeScenarioFile string
+		withFundamental bool
 	)
 
 	flag.StringVar(
@@ -118,9 +121,10 @@ func main() {
 		"",
 		"optional explicitly supplied CNY trade what-if; requires -portfolio-review and -risk-limits-file",
 	)
+	flag.BoolVar(&withFundamental,"fundamental",false,"run the actual Fundamental Analyst; requires TUSHARE_TOKEN and TuShare income access")
 	flag.Parse()
 
-	if err := runWithScenario(
+	if err := runWithFundamental(
 		context.Background(),
 		configPath,
 		skillsDir,
@@ -134,6 +138,7 @@ func main() {
 		portfolioMaxAge,
 		riskLimitsFile,
 		tradeScenarioFile,
+		withFundamental,
 	); err != nil {
 		log.Fatal(err)
 	}
@@ -194,6 +199,25 @@ func runWithScenario(
 	portfolioMaxAge time.Duration,
 	riskLimitsFile string,
 	tradeScenarioFile string,
+) error {
+	return runWithFundamental(ctx,configPath,skillsDir,timeZone,symbol,marketQuery,evidenceStore,eventLookback,portfolioReview,portfolioFile,portfolioMaxAge,riskLimitsFile,tradeScenarioFile,false)
+}
+
+func runWithFundamental(
+	ctx context.Context,
+	configPath string,
+	skillsDir string,
+	timeZone string,
+	symbol string,
+	marketQuery string,
+	evidenceStore string,
+	eventLookback time.Duration,
+	portfolioReview bool,
+	portfolioFile string,
+	portfolioMaxAge time.Duration,
+	riskLimitsFile string,
+	tradeScenarioFile string,
+	withFundamental bool,
 ) error {
 	// Validate account input before initiating any live research or LLM call.
 	// NOT_PROVIDED is explicit; no implicit empty portfolios.
@@ -622,6 +646,12 @@ func runWithScenario(
 		TradingAgent:   tradingAgent,
 	}
 
+	if withFundamental {
+		source := &fundamentalcap.IncomeSource{Token:os.Getenv("TUSHARE_TOKEN")}
+		analyst, err := fundamental.New(ctx,source,tradingModel)
+		if err != nil {return fmt.Errorf("create fundamental agent: %w",err)}
+		researchConfig.FundamentalAgent=analyst
+	}
 
 	var result any
 	if portfolioReview {
