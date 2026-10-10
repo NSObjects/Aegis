@@ -225,3 +225,27 @@ func TestAnalystRejectsUnbalancedValuationWithoutModelCall(t *testing.T) {
 		t.Fatalf("unreconciled account must fail before LLM: calls=%d err=%v",m.calls,err)
 	}
 }
+
+func TestAnalystAllowsExactJSONModeMetadata(t *testing.T) {
+ m:=&modelStub{output:`{"type":"json_object","symbol":"600519.SH","assessment":"INSUFFICIENT_CONTEXT","summary":"Exposure is unknown without portfolio valuation","confidence":0.5}`}
+ got,err:=(&Analyst{Model:m}).Review(context.Background(),testIntent(),testPositionsPortfolio())
+ if err!=nil||got==nil||got.Assessment!=riskctx.AssessmentInsufficientContext {
+  t.Fatalf("valid JSON-mode metadata must not invalidate otherwise grounded risk output: %+v %v",got,err)
+ }
+}
+func TestAnalystRejectsUnexpectedJSONModeType(t *testing.T) {
+ for _,value:=range []string{`"unexpected"`,`17`,`null`} {
+  m:=&modelStub{output:`{"type":`+value+`,"symbol":"600519.SH","assessment":"CAUTION","summary":"x","confidence":0.5}`}
+  got,err:=(&Analyst{Model:m}).Review(context.Background(),testIntent(),testPositionsPortfolio())
+  if err==nil||got!=nil||!strings.Contains(err.Error(),"invalid type metadata"){
+   t.Fatalf("type=%s unexpectedly accepted: %+v, %v",value,got,err)
+  }
+ }
+}
+func TestAnalystRejectsExtraFieldEvenWithJSONModeMetadata(t *testing.T){
+ m:=&modelStub{output:`{"type":"json_object","symbol":"600519.SH","assessment":"CAUTION","summary":"x","confidence":0.5,"action":"BUY"}`}
+ got,err:=(&Analyst{Model:m}).Review(context.Background(),testIntent(),testPositionsPortfolio())
+ if got!=nil||err==nil||!strings.Contains(err.Error(),"unknown field"){
+  t.Fatalf("other unknown fields must fail closed: %+v %v",got,err)
+ }
+}
