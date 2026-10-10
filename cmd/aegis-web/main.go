@@ -12,11 +12,35 @@ import (
 
 	"Aegis/internal/application"
 	"Aegis/internal/httpapi"
+	"Aegis/internal/settings"
 )
+
+// liveExecutor resolves the latest encrypted provider credentials for each
+// new research run. It does not mutate global environment variables or switch
+// credentials on an already-running workflow.
+type liveExecutor struct {
+	options     application.LiveServiceOptions
+	credentials *settings.Store
+}
+
+func (e *liveExecutor) Run(ctx context.Context, request application.ResearchRequest) (*application.ResearchResponse, error) {
+	values, err := e.credentials.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	opts := e.options
+	opts.Credentials = values
+	service, err := application.NewLiveResearchService(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return service.Run(ctx, request)
+}
 
 func main() {
 	addr := flag.String("listen", "127.0.0.1:8686", "bind address (loopback by default)")
 	path := flag.String("store", ".aegis/runs", "single-process run store")
+	credentialsPath := flag.String("credential-store", ".aegis/credentials.enc", "encrypted single-operator provider credentials")
 	cfg := flag.String("config", "configs/config.yaml", "model configuration")
 	skills := flag.String("skills", "skills", "runtime skills")
 	zone := flag.String("timezone", "Asia/Shanghai", "research timezone")
@@ -33,18 +57,19 @@ func main() {
 	if *full {
 		mode = application.ModePortfolio
 	}
-	service, err := application.NewLiveResearchService(ctx, application.LiveServiceOptions{
-		ConfigPath: *cfg, SkillsDir: *skills, TimeZone: *zone, EvidenceStore: *evidence,
-		EventLookback: *lookback, PortfolioReview: *full,
-	})
+	credentialStore, err := settings.NewStore(*credentialsPath, os.Getenv("AEGIS_CREDENTIAL_MASTER_KEY"))
 	if err != nil {
 		log.Fatal(err)
 	}
+	executor := &liveExecutor{options: application.LiveServiceOptions{
+		ConfigPath: *cfg, SkillsDir: *skills, TimeZone: *zone, EvidenceStore: *evidence,
+		EventLookback: *lookback, PortfolioReview: *full,
+	}, credentials: credentialStore}
 	store, err := application.NewFileRunStore(*path)
 	if err != nil {
 		log.Fatal(err)
 	}
-	runs, err := application.NewRunManager(service, store, *parallel, *maxActive)
+	runs, err := application.NewRunManager(executor, store, *parallel, *maxActive)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,6 +78,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	handler.WithCredentialStore(credentialStore)
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 16 << 10}
 	go func() {
 		<-ctx.Done()
