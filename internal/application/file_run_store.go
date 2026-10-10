@@ -85,6 +85,11 @@ func checkRunRecord(record RunRecord) error {
 			return errors.New("terminal run requires completion time")
 		}
 	}
+	for i, ev := range record.Events {
+		if ev.Seq != uint64(i+1) || ev.Stage == "" || ev.Status == "" || ev.At.IsZero() || ev.DurationMS < 0 {
+			return errors.New("invalid research event sequence")
+		}
+	}
 	if record.State == RunPending && (record.StartedAt != nil || record.FinishedAt != nil) {
 		return errors.New("pending run cannot have execution times")
 	}

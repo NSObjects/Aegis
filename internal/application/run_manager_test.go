@@ -321,3 +321,85 @@ func TestFileStoreRejectsInvalidRecord(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+type stageReporter struct{ calls int }
+
+func (x *stageReporter) Run(ctx context.Context, req ResearchRequest) (*ResearchResponse, error) {
+	x.calls++
+	research.ReportProgress(ctx, research.ProgressEvent{Stage: "Market", Status: "START"})
+	research.ReportProgress(ctx, research.ProgressEvent{Stage: "Market", Status: "DONE", DurationMS: 12})
+	research.ReportProgress(ctx, research.ProgressEvent{Stage: "Portfolio", Status: "START"})
+	research.ReportProgress(ctx, research.ProgressEvent{Stage: "Portfolio", Status: "DONE", DurationMS: 4})
+	return &ResearchResponse{Mode: ModeDecision, Decision: &decision.Decision{Symbol: req.Input.Symbol, Action: decision.ActionWatch, MarketView: "fixture", Evidence: []string{"fixture"}}}, nil
+}
+func TestRunStageEventsPersistAndReplayAfterRestart(t *testing.T) {
+	store := newStore(t)
+	executor := &stageReporter{}
+	manager := newMgr(t, executor, store, 1, 2)
+	rec, err := manager.Submit(context.Background(), runFixture("600519.SH"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := awaitRun(t, manager, rec.ID, RunCompleted)
+	if executor.calls != 1 || len(completed.Events) != 7 {
+		t.Fatalf("wrong event count %+v", completed.Events)
+	}
+	expected := []string{"PENDING", "RUNNING", "START", "DONE", "START", "DONE", "COMPLETED"}
+	for i, ev := range completed.Events {
+		if ev.Seq != uint64(i+1) || ev.Status != expected[i] || ev.At.IsZero() {
+			t.Fatalf("bad event %d: %+v", i, ev)
+		}
+	}
+	manager.Close()
+	restarted := newMgr(t, &stageReporter{}, store, 1, 2)
+	recovered, err := restarted.Get(context.Background(), rec.ID)
+	if err != nil || len(recovered.Events) != 7 {
+		t.Fatalf("lost stage events after restart: %+v %v", recovered.Events, err)
+	}
+}
+func TestCorruptStageEventSequenceFailsClosed(t *testing.T) {
+	store := newStore(t)
+	r := RunRecord{ID: strings.Repeat("c", 32), Mode: ModeDecision, Symbol: "600519.SH", RequestedAsOf: time.Now(), CreatedAt: time.Now(), State: RunPending, Events: []RunEvent{{Seq: 2, Stage: "Run", Status: "PENDING", At: time.Now()}}}
+	if err := store.Save(context.Background(), r); err == nil {
+		t.Fatal("out of sequence event was accepted")
+	}
+}
+
+type failingEventStore struct{ RunStore }
+
+func (s failingEventStore) Save(ctx context.Context, rec RunRecord) error {
+	if len(rec.Events) > 0 {
+		last := rec.Events[len(rec.Events)-1]
+		if last.Stage == "Market" && last.Status == "START" {
+			return errors.New("simulated disk error")
+		}
+	}
+	return s.RunStore.Save(ctx, rec)
+}
+
+type waitingStageExecutor struct{ stopped chan struct{} }
+
+func (x *waitingStageExecutor) Run(ctx context.Context, _ ResearchRequest) (*ResearchResponse, error) {
+	research.ReportProgress(ctx, research.ProgressEvent{Stage: "Market", Status: "START"})
+	<-ctx.Done()
+	close(x.stopped)
+	return nil, ctx.Err()
+}
+func TestRunManagerStopsPaidWorkWhenStagePersistenceFails(t *testing.T) {
+	store := failingEventStore{newStore(t)}
+	ex := &waitingStageExecutor{stopped: make(chan struct{})}
+	m := newMgr(t, ex, store, 1, 2)
+	rec, e := m.Submit(context.Background(), runFixture("600519.SH"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	done := awaitRun(t, m, rec.ID, RunFailed)
+	if done.FailureCode != FailurePersistence || len(done.Artifact) != 0 {
+		t.Fatalf("persistence failure not safe: %+v", done)
+	}
+	select {
+	case <-ex.stopped:
+	case <-time.After(time.Second):
+		t.Fatal("research worker did not receive cancellation after stage persistence failure")
+	}
+}
