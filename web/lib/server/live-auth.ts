@@ -13,8 +13,11 @@ export function liveConfig() {
   try {
     const parsed = new URL(upstream);
     if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || parsed.pathname !== "/") return null;
-    if (apiToken.length < 24 || password.length < 16 || sessionSecret.length < 32) return null;
-    return { baseURL: parsed.origin, apiToken, password, sessionSecret, mode };
+    const localDev = process.env.AEGIS_WEB_DEV_MODE === "1" &&
+      process.env.NODE_ENV === "development" && parsed.hostname === "127.0.0.1" &&
+      parsed.protocol === "http:";
+    if (!localDev && (apiToken.length < 24 || password.length < 16 || sessionSecret.length < 32)) return null;
+    return { baseURL: parsed.origin, apiToken, password, sessionSecret, mode, localDev };
   } catch { return null; }
 }
 
@@ -25,6 +28,7 @@ export function newSession(config: Config, now = Date.now()) {
   return `${payload}.${sign(payload, config.sessionSecret)}`;
 }
 export function isSessionValid(cookie: string | undefined, config: Config, now = Date.now()): boolean {
+  if (config.localDev) return true;
   if (!cookie || cookie.length > 300) return false;
   const parts = cookie.split(".");
   if (parts.length !== 3 || !/^\d{13}$/.test(parts[0]) || !/^[a-zA-Z0-9_-]{27}$/.test(parts[1]) || !/^[a-zA-Z0-9_-]{43}$/.test(parts[2])) return false;

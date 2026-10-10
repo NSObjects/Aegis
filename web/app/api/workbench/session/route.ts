@@ -6,12 +6,13 @@ export const dynamic = "force-dynamic";
 const noCache = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 export function GET(req: NextRequest) {
   const config = liveConfig();
-  return NextResponse.json({ configured: !!config, authenticated: !!config && isSessionValid(req.cookies.get(COOKIE_NAME)?.value, config), mode: config?.mode ?? "PORTFOLIO_REVIEW" }, { headers: noCache });
+  return NextResponse.json({ configured: !!config, authenticated: !!config && isSessionValid(req.cookies.get(COOKIE_NAME)?.value, config), mode: config?.mode ?? "PORTFOLIO_REVIEW", local_dev: !!config?.localDev }, { headers: noCache });
 }
 export async function POST(req: NextRequest) {
   if (!sameOriginMutation(req)) return NextResponse.json({ error: "invalid origin" }, { status: 403, headers: noCache });
   const config = liveConfig();
   if (!config) return NextResponse.json({ error: "live mode not configured" }, { status: 503, headers: noCache });
+  if (config.localDev) return NextResponse.json({ authenticated: true, configured: true, mode: config.mode, local_dev: true }, { headers: noCache });
   let body: unknown;
   try { const raw = await req.text(); if (raw.length > 1024) throw Error("oversize"); body = JSON.parse(raw); } catch { return NextResponse.json({ error: "invalid login" }, { status: 400, headers: noCache }); }
   if (!body || typeof body !== "object" || !matchesPassword((body as { password?: unknown }).password, config))

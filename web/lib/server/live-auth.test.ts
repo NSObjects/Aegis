@@ -36,3 +36,25 @@ describe("single-operator server-side session", () => {
     expect(sameOriginMutation(new Request(url, { method: "POST" }))).toBe(false);
   });
 });
+
+describe("loopback-only local debug mode", () => {
+  it("permits session-free local access only in opt-in development", () => {
+    config();
+    process.env.AEGIS_WEB_DEV_MODE = "1";
+    process.env = { ...process.env, NODE_ENV: "development" };
+    delete process.env.AEGIS_WEB_API_TOKEN;
+    delete process.env.AEGIS_WEB_ACCESS_PASSWORD;
+    delete process.env.AEGIS_WEB_SESSION_SECRET;
+    const local = liveConfig();
+    expect(local?.localDev).toBe(true);
+    if (!local) throw Error("missing dev config");
+    expect(isSessionValid(undefined, local)).toBe(true);
+    process.env = { ...process.env, NODE_ENV: "production" };
+    expect(liveConfig()).toBeNull();
+    process.env = { ...process.env, NODE_ENV: "development" };
+    process.env.AEGIS_WEB_API_URL = "http://192.168.1.5:8686";
+    expect(liveConfig()).toBeNull();
+    process.env.AEGIS_WEB_API_URL = "http://example.com:8686";
+    expect(liveConfig()).toBeNull();
+  });
+});

@@ -42,6 +42,7 @@ type Handler struct {
 	lookback time.Duration
 	now      func() time.Time
 	poll     time.Duration
+	localDev bool
 	credentials *settings.Store
 }
 
@@ -61,13 +62,25 @@ func NewHandler(runs RunController, token string, mode application.ResearchMode,
 	return &Handler{runs: runs, token: token, mode: mode, lookback: lookback, now: func() time.Time { return time.Now().UTC() }, poll: 300 * time.Millisecond}, nil
 }
 
+// NewLocalDevHandler is permitted only by a loopback-bound CLI listener.
+// A production HTTP server must always use NewHandler with a real bearer token.
+func NewLocalDevHandler(runs RunController, mode application.ResearchMode, lookback time.Duration) (*Handler, error) {
+	h, err := NewHandler(runs, strings.Repeat("aegis-local-dev-", 2), mode, lookback)
+	if err != nil {
+		return nil, err
+	}
+	h.localDev = true
+	h.token = ""
+	return h, nil
+}
+
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// Equal length comparison avoids leaking token prefixes.
 	const prefix = "Bearer "
 	auth := r.Header.Get("Authorization")
-	if !strings.HasPrefix(auth, prefix) || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(auth, prefix)), []byte(h.token)) != 1 {
+	if !h.localDev && (!strings.HasPrefix(auth, prefix) || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(auth, prefix)), []byte(h.token)) != 1) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return

@@ -149,3 +149,21 @@ AEGIS_WEB_ACCESS_PASSWORD, AEGIS_WEB_SESSION_SECRET or the encryption key.
 Those deployment secrets must be installed separately; this page manages
 **provider** keys only. Already-running research jobs retain their existing
 provider configuration; newly started jobs read updated overrides.
+
+## 本地免鉴权联调（单机开发专用）
+
+使用两个终端，无需设置 `AEGIS_WEB_API_TOKEN`、网页登录密码、Session Secret 或加密主密钥：
+
+```bash
+# Aegis 仓库根目录
+go run ./cmd/aegis-web -dev
+
+# 第二个终端
+cd web
+npm run dev:live
+```
+
+访问 http://127.0.0.1:3000 ，直接进入 Live 研究工作台。点击侧栏「凭证设置」填写 DeepSeek / TuShare / Tavily 密钥。
+Go 第一次运行时生成 `.aegis/.local-dev-master.key`（已被 Git 忽略）并在下次运行复用；密钥与密文存放在同一个本地目录，因此这只是调试便利功能，不是针对主机失陷的安全防护。
+
+只有显式 `-dev` 加上 literal loopback IP 时 Go 才免鉴权；Web 只有 `dev:live` 且 Next.js `development` runtime 才免登录。生产模式不变。不要通过外网端口转发、反向代理、隧道或共享电脑暴露该模式。

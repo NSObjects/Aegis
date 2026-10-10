@@ -154,3 +154,16 @@ func TestHTTPEndpointsAndReplay(t *testing.T) {
 		t.Fatalf("leaked invalid artifact: %d", noArtifact.Code)
 	}
 }
+
+func TestLocalDevHandlerAllowsLoopbackDebugRequests(t *testing.T) {
+	f := &fakeRuns{rec: testRecord()}
+	h, err := NewLocalDevHandler(f, application.ModeDecision, 7*24*time.Hour)
+	if err != nil { t.Fatal(err) }
+	if w := apiRequest(t, h, http.MethodGet, "/api/v1/research/runs", "", false, nil); w.Code != http.StatusOK {
+		t.Fatalf("local dev should allow unauthenticated requests: %d", w.Code)
+	}
+	production := mkHandler(t, f, application.ModeDecision)
+	if w := apiRequest(t, production, http.MethodGet, "/api/v1/research/runs", "", false, nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("production handler must still require bearer: %d", w.Code)
+	}
+}
