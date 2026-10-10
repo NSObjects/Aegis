@@ -2,7 +2,7 @@
 
 > 更新：2026-10-10。目的：当前阶段结束后，打开本文件即可找到**下一项应实施的任务**、实施范围、验收条件、完成证据；不需要重新讨论产品方向。
 >
-> 基线参考：本次核查 `main` 为 `0ed06de9bdc1f079530cc9b0f901c9d6847aef8e`，PR #123 已合并；核查时 PR #125 仍开放。当前 main/CI 状态以后续实际核查为准，**PR 合并不等于真实 Hosted E2E 已通过**。
+> 基线参考：2026-10-10 本次核查 `main` 为 `d79aee1cbb6422cecb33f0d6bc12e90be6b6d05c`，PR #123、#125、#126 均已有合并提交；这些包括 F4 CLI 风控校验与失败回归，不能代替单独核实最新 Hosted E2E 是否成功。开发前仍需刷新 SHA/CI/运行证据。
 >
 > 原有仓库工程版本（如 V2.13）保持不变。这里的「V1 完成」专指**当前 Multi-Agent 研究内核完整闭环验收**；后续用 R0～R8 作为**路线任务编号**，不擅自重新给代码编号。
 >
@@ -12,7 +12,7 @@
 
 **现在：R0 — 当前多 Agent V1 收尾。**
 
-**下一项：R0-01 — 结合已合并 PR #123 与待核实 PR #125，固定当前 main SHA，检查真实 CLI/Hosted E2E、Go tests/vet、完整结果与失败路径。**
+**下一项：R0-01 — 固定最新 main SHA，核实已合并 PR #123/#125/#126 后的真实 CLI/Hosted E2E、Go tests/vet、完整结果及失败路径。**
 
 **R0 验收完成后：直接进入 R1-01 — 为研究工作台抽离可复用 Application Service。**
 
@@ -46,7 +46,7 @@
 **产出**：真实研究数据 → Market/Technical/Event/可选 Fundamental → Synthesis → Bull/Bear → Research Manager → TradeIntent → Risk Analyst → Portfolio Manager → 可核验 JSON。参照 [F0～F4](MULTI_AGENT_ROADMAP.md)；现有角色不重复实现。
 
 - [ ] **R0-01 验证最新 main 的真实执行**
-  - 对照 PR #123 合并内容及 PR #125 实际状态；固定 main SHA，执行 `go test ./... -count=1`、`go vet ./...` 与正式 `.github/workflows/integration.yml` 适用的真实 CLI/Hosted 工作流。
+  - 对照已合并 PR #123/#125/#126 内容，固定当前 main SHA，执行 `go test ./... -count=1`、`go vet ./...` 与正式 `.github/workflows/integration.yml` 适用的真实 CLI/Hosted 工作流。
   - **验收**：证明同一次运行的 `research_artifact`、辩论、`research_plan`、`trade_intent`、`risk_context`、`portfolio_decision` 连贯，附运行 URL、提交 SHA、来源说明；至少一个真实正常场景和一个受控失败/不足场景。
 - [ ] **R0-02 修复 R0-01 发现的真正阻断缺陷**
   - 只修错误交接、核心契约、真实来源失败或风控安全问题；没有阻断项则明确记录跳过。
