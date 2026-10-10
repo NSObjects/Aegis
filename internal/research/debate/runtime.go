@@ -51,6 +51,7 @@ func (r *Runtime) Run(ctx context.Context, artifact *synthesis.Artifact) (*State
 		if err != nil {
 			return nil, fmt.Errorf("bull round %d: %w", round, err)
 		}
+		if err := requireOpposingEngagement(bullTurn, state, SideBear); err != nil { return nil, fmt.Errorf("bull round %d: %w",round,err) }
 		if err := appendExpectedTurn(state, artifact, bullTurn, round, SideBull); err != nil {
 			return nil, fmt.Errorf("bull round %d: %w", round, err)
 		}
@@ -62,6 +63,7 @@ func (r *Runtime) Run(ctx context.Context, artifact *synthesis.Artifact) (*State
 		if err != nil {
 			return nil, fmt.Errorf("bear round %d: %w", round, err)
 		}
+		if err := requireOpposingEngagement(bearTurn, state, SideBull); err != nil { return nil, fmt.Errorf("bear round %d: %w",round,err) }
 		if err := appendExpectedTurn(state, artifact, bearTurn, round, SideBear); err != nil {
 			return nil, fmt.Errorf("bear round %d: %w", round, err)
 		}
@@ -108,4 +110,18 @@ func cloneTurn(turn Turn) Turn {
 		out.Rebuttals[i].References = append([]synthesis.Reference(nil), rebuttal.References...)
 	}
 	return out
+}
+
+// A multi-turn debate is not two independent monologues. Once the opposing
+// researcher has argued, a turn must directly address at least one prior
+// opposing argument. validateTurn separately checks target IDs and evidence.
+func requireOpposingEngagement(turn Turn, state *State, opposing Side) error {
+ previous:=make(map[string]struct{})
+ for _,prior:=range state.Turns{
+  if prior.Side!=opposing{continue}
+  for _,arg:=range prior.Arguments{previous[arg.ID]=struct{}{}}
+ }
+ if len(previous)==0{return nil}
+ for _,reply:=range turn.Rebuttals{if _,ok:=previous[reply.TargetArgumentID];ok{return nil}}
+ return fmt.Errorf("%s turn must rebut at least one prior %s argument",turn.Side,opposing)
 }
