@@ -2,7 +2,7 @@
 
 > **2026-10-10 修订版**。目标：围绕 Aegis 已有多 Agent 研究内核，逐步建设「可交互、可持续研究、可验证」的 A 股投资研究工作台，而不是另一份 CLI 功能清单。
 >
-> **基线**：本次核对的 main 提交为 \`41c32faf59b0a92e26de8311705ed16754c1c3c4\`（PR #122 已合并）；当时 PR #123 正在审查。已有 V2.13 等是**工程开发版本号**，本文仅采用 **M0、M1… 的产品里程碑**，不重新命名已有代码，也不代表任何里程碑已经上线。
+> **基线**：本次核对的 main 提交为 `41c32faf59b0a92e26de8311705ed16754c1c3c4`（PR #122 已合并）；当时 PR #123 正在审查。已有 V2.13 等是**工程开发版本号**，本文仅采用 **M0、M1… 的产品里程碑**，不重新命名已有代码，也不代表任何里程碑已经上线。
 >
 > **权威约束**：[10-多Agent架构与职责边界.md](10-多Agent架构与职责边界.md) 优先于本文件；当前功能收尾沿用 [MULTI_AGENT_ROADMAP.md](MULTI_AGENT_ROADMAP.md) 的 F0～F4；具体实现由后续 Issue/ADR 决定。本路线图是产品方向、依赖、范围、验收和优先级的统一索引，不是实时完成状态。
 >
@@ -75,7 +75,7 @@
 | Analyst | Market、Technical、Event；近期 Fundamental 已进入主线 | 冻结 SHA 运行真实 Hosted/外部数据，核对数据质量与不足处理 |
 | Research | Synthesis、Bull/Bear 多轮反驳、Research Manager、Evidence Ledger | 真实模型的跨角色交接和研究产物一致性 |
 | Trading/Risk | TradeIntent、Risk Analyst、确定性 Portfolio Decision、账户时点/估值/限制/What-if | PR #123/F4 最终真实验证；更明确的仓位建议尚不存在 |
-| Orchestration | \`internal/research/full_portfolio_workflow.go\`；\`cmd/aegis\` | 面向服务入口的任务状态/持久化/API；CLI 不应变成唯一运行入口 |
+| Orchestration | `internal/research/full_portfolio_workflow.go`；`cmd/aegis` | 面向服务入口的任务状态/持久化/API；CLI 不应变成唯一运行入口 |
 | 可视化/对话 | 尚未视为已交付 | Web、实时运行过程、对话工具及短期上下文 |
 | 持续研究 | 结构化研究产物、部分归档/审查机制 | 历史查询、假设生命周期、反思/记忆、主动监控 |
 | 离线策略 | 权威架构已有 Strategy/Backtest 双团队理念 | 可复现策略回放、独立验证、策略/仓位比较 |
@@ -104,7 +104,7 @@
 
 交付内容：
 
-- 冻结目标 main SHA，执行 \`go test ./... -count=1\`、\`go vet ./...\`；检查正式 CLI 的输入校验及 JSON。
+- 冻结目标 main SHA，执行 `go test ./... -count=1`、`go vet ./...`；检查正式 CLI 的输入校验及 JSON。
 - 记录一次**真实外部模型和数据来源**的完整研究：Market / Technical / Event / 可用时 Fundamental → Synthesis → Bull/Bear → Research Manager → Trading Agent → Risk Analyst → Portfolio Manager。
 - 核实最近合并的 Risk Gate 以及 PR #123（如仍有）真正状态，不能依据 PR 文案宣称通过；观察 Evidence Ledger / TradeIntent / PortfolioDecision 的同次运行交接。
 - 覆盖数据源失败、LLM JSON/enum 失败、输入不合法、账户 NOT_PROVIDED 等受控退出；不放宽风控以保证测试通过。
@@ -163,10 +163,10 @@ Conversation Tool 读取同一 run_id / Debate Artifact
 
 **最小对话工具**（先少后多）：
 
-1. \`ReadCurrentResearch\`：查看当前 run 的结构化研究结果与多空证据。
-2. \`StartResearch\`：经应用服务启动真实研究任务；明确标的与时点。
-3. \`ListAndCompareResearch\`：选择同一标的两次研究并比较结论/证据的差异。
-4. \`QueryPortfolioScenario\`：读取/评估已有明确账户与政策的情景；未来接 M2 的 sizing。
+1. `ReadCurrentResearch`：查看当前 run 的结构化研究结果与多空证据。
+2. `StartResearch`：经应用服务启动真实研究任务；明确标的与时点。
+3. `ListAndCompareResearch`：选择同一标的两次研究并比较结论/证据的差异。
+4. `QueryPortfolioScenario`：读取/评估已有明确账户与政策的情景；未来接 M2 的 sizing。
 
 对话本身不创造研究事实：普通解释直接回答；需要最新数据时调用现有 Capability；需要全量研究时启动现有 Workflow；数据不足时要求必要输入或说明无法计算。多轮指代将「它/刚才/上周」解析到明确 symbol / run_id / as_of；历史事实不能假冒当日现值。M1 不要求完整长期 Memory/RAG。
 
