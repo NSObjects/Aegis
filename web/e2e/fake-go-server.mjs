@@ -8,6 +8,9 @@ const port = 18686;
 const secret = "ci-go-api-fixture-only-secret-32-characters";
 const runs = new Map();
 const prefix = "/api/v1/research/runs";
+const providerSecrets = new Map();
+const providerNames = ["DEEPSEEK_API_KEY", "TUSHARE_TOKEN", "TAVILY_API_KEY"];
+const providerStatus = () => ({ editable: true, configured: Object.fromEntries(providerNames.map(n => [n, providerSecrets.has(n)])) });
 const asOf = () => new Date().toISOString();
 const json = (res, code, value) => {
   res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
@@ -56,6 +59,23 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${host}:${port}`);
   if (url.pathname === "/healthz") return json(res, 200, { fixture: true });
   if (req.headers.authorization !== `Bearer ${secret}`) return json(res, 401, { error: "unauthorized" });
+  if (url.pathname === "/api/v1/settings/credentials") {
+    if (req.method === "GET") return json(res, 200, providerStatus());
+    if (req.method === "PUT") {
+      let body;
+      try { body = await readBody(req); } catch { return json(res, 400, { error: "invalid" }); }
+      for (const [key, value] of Object.entries(body.changes ?? {})) {
+        if (!providerNames.includes(key) || typeof value !== "string" || value.length < 8) return json(res, 400, { error: "invalid" });
+        providerSecrets.set(key, value);
+      }
+      for (const key of body.clear ?? []) {
+        if (!providerNames.includes(key)) return json(res, 400, { error: "invalid" });
+        providerSecrets.delete(key);
+      }
+      return json(res, 200, providerStatus());
+    }
+    return json(res, 405, { error: "method not allowed" });
+  }
   if (url.pathname === prefix && req.method === "GET") {
     const list = [...runs.values()].reverse().map(r => { evolve(r); return metadata(r); });
     return json(res, 200, { runs: list });
