@@ -2,6 +2,7 @@ package research
 
 import (
 	"Aegis/internal/portfolio"
+	"Aegis/internal/portfoliodecision"
 	"Aegis/internal/research/synthesis"
 	"Aegis/internal/research/semanticreview"
 	"Aegis/internal/tradeintent"
@@ -52,11 +53,47 @@ type FullPortfolioWorkflow struct {
 	SemanticReviewer semanticReviewRunner
 }
 
+// FinalRiskGate combines the independently validated current-limit diagnosis
+// with the canonical non-executable PortfolioDecision. It never authorizes a trade.
+// The original PortfolioDecision is preserved as an auditable input.
+type FinalRiskGate struct {
+	Disposition portfoliodecision.Disposition `json:"disposition"`
+	Reason string `json:"reason"`
+	PolicyID string `json:"policy_id,omitempty"`
+	CurrentLimitsStatus portfolio.LimitReviewStatus `json:"current_limits_status,omitempty"`
+}
+
+func evaluateFinalRiskGate(decision *portfoliodecision.Decision, limits *portfolio.LimitReview) (*FinalRiskGate, error) {
+	if decision == nil { return nil, errors.New("final risk gate requires portfolio decision") }
+	gate := &FinalRiskGate{Disposition:decision.Disposition, Reason:"PORTFOLIO_DECISION"}
+	if limits == nil { return gate,nil }
+	gate.PolicyID=limits.PolicyID
+	gate.CurrentLimitsStatus=limits.Status
+	switch limits.Status {
+	case portfolio.LimitReviewBreach:
+		if decision.Disposition != portfoliodecision.DispositionNoAction {
+			gate.Disposition=portfoliodecision.DispositionBlocked
+			gate.Reason="CURRENT_LIMIT_BREACH"
+		} else { gate.Reason="NO_ACTION_WITH_CURRENT_LIMIT_BREACH" }
+	case portfolio.LimitReviewInsufficientData:
+		if decision.Disposition != portfoliodecision.DispositionNoAction && decision.Disposition != portfoliodecision.DispositionBlocked {
+			gate.Disposition=portfoliodecision.DispositionReviewRequired
+			gate.Reason="CURRENT_LIMITS_INSUFFICIENT_DATA"
+		}
+	case portfolio.LimitReviewPass:
+		// Passing a current exposure rule never upgrades review to approval.
+	default:
+		return nil,fmt.Errorf("unknown current limits status %q",limits.Status)
+	}
+	return gate,nil
+}
+
 type FullPortfolioResult struct {
 	ResearchArtifact *synthesis.Artifact `json:"research_artifact"`
 	PortfolioReview  *PortfolioReviewResult `json:"portfolio_review"`
 	// Absent unless explicit independent risk limits were provided.
 	CurrentLimitsReview *portfolio.LimitReview `json:"current_limits_review,omitempty"`
+	FinalRiskGate *FinalRiskGate `json:"final_risk_gate"`
 	TradeScenarioReview *portfolio.ScenarioReview `json:"trade_scenario_review,omitempty"`
 	// Absent under default configuration; never alters the main decisions.
 	SemanticReview *SemanticReviewOutcome `json:"semantic_review,omitempty"`
@@ -117,10 +154,13 @@ func (w *FullPortfolioWorkflow) Run(
 			}
 		}
 	}
+	gate, err := evaluateFinalRiskGate(result.PortfolioDecision, limitsReview)
+	if err != nil { return nil, fmt.Errorf("final risk gate: %w",err) }
 	fullResult := &FullPortfolioResult{
 		ResearchArtifact: artifact,
 		PortfolioReview: result,
 		CurrentLimitsReview: limitsReview,
+		FinalRiskGate: gate,
 		TradeScenarioReview: scenarioReview,
 	}
 	// Purely advisory and explicitly enabled; performed AFTER all core stages.
