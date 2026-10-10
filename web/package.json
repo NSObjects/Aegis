@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "dev:live": "AEGIS_WEB_MODE=live AEGIS_WEB_DEV_MODE=1 next dev --hostname 127.0.0.1",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
