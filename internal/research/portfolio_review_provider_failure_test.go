@@ -35,3 +35,16 @@ func TestPortfolioReviewFailsClosedWhenRiskModelUnavailable(t *testing.T){
  }
  if failing.called!=1{t.Fatalf("risk calls=%d",failing.called)}
 }
+
+func TestPortfolioReviewFailsClosedWhenDebateModelUnavailable(t *testing.T){
+ w,_,manager,trader,riskAgent:=reviewWorkflowFixture(t,reviewContextFixture(risk.AssessmentHighRisk))
+ failing:=&failedDebateModel{}
+ w.cfg.Debate=failing
+ result,err:=w.Run(context.Background(),reviewArtifactFixture(),reviewBookFixture())
+ if result!=nil||err==nil||!strings.Contains(err.Error(),"research debate:")||!strings.Contains(err.Error(),"provider unavailable"){
+  t.Fatalf("must not enter downstream stages after debate failure: result=%+v err=%v",result,err)
+ }
+ if failing.called!=1||manager.calls!=0||trader.calls!=0||riskAgent.calls!=0{
+  t.Fatalf("unexpected downstream execution: debate=%d manager=%d trader=%d risk=%d",failing.called,manager.calls,trader.calls,riskAgent.calls)
+ }
+}
