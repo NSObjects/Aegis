@@ -101,3 +101,27 @@ login endpoint is not a complete Internet-facing identity provider. The Go
 backend has no live market chart endpoint yet; live mode therefore **does not
 show synthetic prices, scores or evidence citations**. Do not mistake the
 absence of those views for unavailable or negative market data.
+
+## Browser contract E2E (no real provider credentials)
+
+The Web CI includes a separate Chromium Playwright job. It starts a **synthetic
+protocol fixture** at `127.0.0.1:18686` implementing only the subset of Go
+ResearchRun API exercised by the app, then starts the **production Next.js
+server** in Live mode at `127.0.0.1:3100`. Run from `web/`:
+
+```bash
+npm install
+npx playwright install chromium
+npm run build
+npm run e2e
+```
+
+These tests cover browser login, 401 for anonymous requests, explicit unknown
+portfolio input, creation of a real HTTP Run, SSE stage updates, `Last-Event-ID`
+replay, completed artifact retrieval, history after reload, cancellation and
+provider failure with no artifact. The mock's text includes
+`PROTOCOL_FIXTURE_ONLY` so it **cannot be mistaken for Go/Eino output or a
+market-data source**. These tests verify browser↔BFF↔HTTP protocol wiring,
+**not** real Go/Eino research, provider credentials, point-in-time finance
+accuracy or multi-user production deployment. Real integrated Hosted E2E
+remains separately required before claiming the workstation is production ready.
