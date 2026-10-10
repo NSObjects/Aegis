@@ -367,6 +367,9 @@ jobs:
             .portfolio_review.trade_intent.symbol == "600519.SH" and
             .portfolio_review.risk_context.symbol == "600519.SH" and
             .portfolio_review.portfolio_decision.symbol == "600519.SH" and
+            .final_risk_gate.disposition == .portfolio_review.portfolio_decision.disposition and
+            .final_risk_gate.reason == "PORTFOLIO_DECISION" and
+            (.final_risk_gate | has("policy_id") | not) and
             .portfolio_review.risk_context.assessment == "INSUFFICIENT_CONTEXT" and
             .portfolio_review.portfolio_decision.portfolio_state == "NOT_PROVIDED" and
             (.portfolio_review.debate_state.turns | map(.side) | index("BULL")) != null and
@@ -484,6 +487,9 @@ jobs:
             .portfolio_review.trade_intent.symbol == "600519.SH" and
             .portfolio_review.risk_context.symbol == "600519.SH" and
             .portfolio_review.portfolio_decision.symbol == "600519.SH" and
+            .final_risk_gate.disposition == .portfolio_review.portfolio_decision.disposition and
+            .final_risk_gate.reason == "PORTFOLIO_DECISION" and
+            (.final_risk_gate | has("policy_id") | not) and
             .portfolio_review.risk_context.assessment == "INSUFFICIENT_CONTEXT" and
             .portfolio_review.portfolio_decision.portfolio_state == "NOT_PROVIDED" and
             (.portfolio_review.debate_state.turns | map(.side) | index("BULL")) != null and
