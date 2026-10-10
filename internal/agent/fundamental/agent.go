@@ -57,12 +57,28 @@ func (a *Agent) Analyze(ctx context.Context,in Input,opts ...adk.AgentRunOption)
  if report==nil||report.Symbol!=in.Symbol{return nil,errors.New("fundamental source returned mismatched report")}
  facts,err:=json.Marshal(report);if err!=nil{return nil,err}
  query:=fmt.Sprintf("Research cutoff: %s\nVerified income statement (CNY yuan): %s\nExplain what these numbers imply, and what cannot be inferred.",in.RequestedAsOf,string(facts))
+ interpretation,err:=a.runInterpretation(ctx,query,opts...)
+ if err!=nil{return nil,err}
+ if interpretation==""{
+  // Retry only an empty, otherwise successful model result. The verified
+  // financial statement and research cutoff are supplied again unchanged.
+  // Provider errors and cancelled contexts never trigger another request.
+  if err:=ctx.Err();err!=nil{return nil,err}
+  repairQuery:=query+"\nThe previous response was empty. Return a nonempty plain-text interpretation grounded only in the verified statement above, with explicit limitations. Do not invent amounts, comparisons, trends or missing facts."
+  interpretation,err=a.runInterpretation(ctx,repairQuery,opts...)
+  if err!=nil{return nil,fmt.Errorf("fundamental interpretation retry: %w",err)}
+ }
+ if interpretation==""{return nil,errors.New("fundamental model returned no interpretation after 2 attempts")}
+ return &Context{Symbol:in.Symbol,RequestedAsOf:in.RequestedAsOf,Income:report,Interpretation:interpretation},nil
+}
+
+func (a *Agent) runInterpretation(ctx context.Context,query string,opts ...adk.AgentRunOption)(string,error){
  iter:=a.runner.Query(ctx,query,opts...)
  var interpretation string
  for {
   e,ok:=iter.Next();if !ok{break}
   if e==nil{continue}
-  if e.Err!=nil{return nil,fmt.Errorf("fundamental model: %w",e.Err)}
+  if e.Err!=nil{return "",fmt.Errorf("fundamental model: %w",e.Err)}
   if e.Output==nil||e.Output.MessageOutput==nil||e.Output.MessageOutput.Message==nil{continue}
   msg:=e.Output.MessageOutput.Message
   if msg.Role!=schema.AgenticRoleTypeAssistant{continue}
@@ -73,6 +89,5 @@ func (a *Agent) Analyze(ctx context.Context,in Input,opts ...adk.AgentRunOption)
    }
   }
  }
- if interpretation==""{return nil,errors.New("fundamental model returned no interpretation")}
- return &Context{Symbol:in.Symbol,RequestedAsOf:in.RequestedAsOf,Income:report,Interpretation:interpretation},nil
+ return interpretation,nil
 }
