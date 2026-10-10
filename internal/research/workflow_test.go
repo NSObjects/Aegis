@@ -3,6 +3,8 @@ package research
 import (
 	eventagent "Aegis/internal/agent/event"
 	"Aegis/internal/agent/market"
+	"Aegis/internal/agent/fundamental"
+	fundamentalcap "Aegis/internal/capability/fundamental"
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/agent/trading"
 	eventcap "Aegis/internal/capability/event"
@@ -119,6 +121,7 @@ func (s *fakeSynthesizer) Synthesize(
 		Market:    input.Market,
 		Technical: input.Technical,
 		Event:     input.Event,
+		Fundamental: input.Fundamental,
 		Synthesis: synthesis.Synthesis{
 			Summary:    "cross-domain synthesis",
 			Confidence: 0.8,
@@ -873,4 +876,53 @@ func TestWorkflowAcceptsEventCutoffAtRFC3339Seconds(t *testing.T) {
 	if _,err=w.RunArtifact(context.Background(),input);err!=nil {
 		t.Fatalf("RFC3339 second-precision Event cutoff must remain valid: %v",err)
 	}
+}
+
+type fakeFundamentalAgent struct {
+ calls int
+ result *fundamental.Context
+ err error
+}
+func (f *fakeFundamentalAgent) Analyze(_ context.Context,_ fundamental.Input,_ ...adk.AgentRunOption)(*fundamental.Context,error){
+ f.calls++
+ if f.err!=nil{return nil,f.err}
+ return f.result,nil
+}
+func TestWorkflowFundamentalReachesSynthesis(t *testing.T){
+ f:=&fakeFundamentalAgent{result:&fundamental.Context{
+  Symbol:"600519.SH",RequestedAsOf:"20260923",
+  Income:&fundamentalcap.FinancialStatement{Symbol:"600519.SH",AnnouncementDate:"20260820",PeriodEnd:"20260630",Source:"TUSHARE_INCOME"},
+  Interpretation:"已披露的半年报，不能推断未来业绩",
+ }}
+ synth:=&fakeSynthesizer{}
+ w,err:=NewArtifact(context.Background(),Config{
+  MarketAgent:&fakeMarketAgent{result:validMarketContext()},
+  TechnicalAgent:&fakeTechnicalAgent{result:validTechnicalContext()},
+  EventAgent:&fakeEventAgent{result:validEventContext()},
+  FundamentalAgent:f,
+  Synthesizer:synth,
+ })
+ if err!=nil{t.Fatal(err)}
+ a,err:=w.RunArtifact(context.Background(),validWorkflowInput())
+ if err!=nil{t.Fatal(err)}
+ if f.calls!=1||synth.calls!=1||synth.input.Fundamental!=f.result||a.Fundamental!=f.result{
+  t.Fatalf("fundamental not passed through graph: calls=%d input=%+v artifact=%+v",f.calls,synth.input.Fundamental,a.Fundamental)
+ }
+}
+func TestWorkflowFundamentalRejectsFutureReport(t *testing.T){
+ f:=&fakeFundamentalAgent{result:&fundamental.Context{
+  Symbol:"600519.SH",RequestedAsOf:"20260923",
+  Income:&fundamentalcap.FinancialStatement{Symbol:"600519.SH",AnnouncementDate:"20261001",PeriodEnd:"20260630",Source:"TUSHARE_INCOME"},
+  Interpretation:"unavailable",
+ }}
+ synth:=&fakeSynthesizer{}
+ w,err:=NewArtifact(context.Background(),Config{
+  MarketAgent:&fakeMarketAgent{result:validMarketContext()},
+  TechnicalAgent:&fakeTechnicalAgent{result:validTechnicalContext()},
+  EventAgent:&fakeEventAgent{result:validEventContext()},
+  FundamentalAgent:f,Synthesizer:synth,
+ })
+ if err!=nil{t.Fatal(err)}
+ if _,err=w.RunArtifact(context.Background(),validWorkflowInput());err==nil{t.Fatal("future fundamental announcement must fail")}
+ if synth.calls!=0{t.Fatal("synthesis must not run on future fundamentals")}
 }
