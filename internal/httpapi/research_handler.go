@@ -18,6 +18,7 @@ import (
 
 	"Aegis/internal/application"
 	"Aegis/internal/portfolio"
+	"Aegis/internal/settings"
 )
 
 const maxCreateBytes = 16 << 10
@@ -41,6 +42,7 @@ type Handler struct {
 	lookback time.Duration
 	now      func() time.Time
 	poll     time.Duration
+	credentials *settings.Store
 }
 
 func NewHandler(runs RunController, token string, mode application.ResearchMode, lookback time.Duration) (*Handler, error) {
@@ -70,6 +72,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/research/runs")
 	if path == r.URL.Path {
 		http.NotFound(w, r)
