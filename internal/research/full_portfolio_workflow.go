@@ -154,7 +154,9 @@ func (w *FullPortfolioWorkflow) Run(
 			}
 		}
 	}
+	finishGate := startProgress(ctx,"FinalRiskGate")
 	gate, err := evaluateFinalRiskGate(result.PortfolioDecision, limitsReview)
+	finishGate(&err)
 	if err != nil { return nil, fmt.Errorf("final risk gate: %w",err) }
 	fullResult := &FullPortfolioResult{
 		ResearchArtifact: artifact,
