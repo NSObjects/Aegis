@@ -2,6 +2,7 @@ package synthesis
 
 import (
 	"Aegis/internal/agent/event"
+	"Aegis/internal/agent/fundamental"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 )
@@ -42,6 +43,7 @@ type Artifact struct {
 	Market    *market.Context    `json:"market"`
 	Technical *technical.Context `json:"technical"`
 	Event     *event.Context     `json:"event"`
+	Fundamental *fundamental.Context `json:"fundamental,omitempty"`
 	Synthesis Synthesis          `json:"synthesis"`
 }
 
@@ -50,4 +52,5 @@ type Input struct {
 	Market    *market.Context
 	Technical *technical.Context
 	Event     *event.Context
+	Fundamental *fundamental.Context
 }
