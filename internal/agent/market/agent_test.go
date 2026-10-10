@@ -11,6 +11,8 @@ import (
 
 type fakeModel struct {
 	output string
+	outputs []string
+	calls int
 	err    error
 }
 
@@ -23,12 +25,15 @@ func (m *fakeModel) Generate(
 		return nil, m.err
 	}
 
+	m.calls++
+	output := m.output
+	if len(m.outputs)>0 { if m.calls>len(m.outputs) { return nil,errors.New("unexpected extra market model call") }; output=m.outputs[m.calls-1] }
 	return &schema.AgenticMessage{
 		Role: schema.AgenticRoleTypeAssistant,
 		ContentBlocks: []*schema.ContentBlock{
 			schema.NewContentBlock(
 				&schema.AssistantGenText{
-					Text: m.output,
+					Text: output,
 				},
 			),
 		},
@@ -321,4 +326,28 @@ func TestAssistantTextIgnoresToolCallMessage(t *testing.T) {
 			got,
 		)
 	}
+}
+
+func TestAgentAnalyzeCorrectsMultipleJSONObjectsOnce(t *testing.T){
+ valid:=`{"as_of":"20260922","regime":"MIXED","evidence":["index breadth improved"],"confidence":0.72}`
+ invalid:=`{"as_of":"20260921"}
+
+Let me correct and output the final JSON.
+
+`+valid
+ m:=&fakeModel{outputs:[]string{invalid,valid}}
+ a,err:=New(context.Background(),Config{Model:m})
+ if err!=nil { t.Fatal(err) }
+ got,err:=a.Analyze(context.Background(),"analyze market")
+ if err!=nil||got==nil||got.AsOf!="20260922"||m.calls!=2 {
+  t.Fatalf("correction failed: result=%+v calls=%d err=%v",got,m.calls,err)
+ }
+}
+
+func TestAgentAnalyzeRejectsRepeatedMalformedCorrection(t *testing.T){
+ m:=&fakeModel{outputs:[]string{"not json","still not json"}}
+ a,err:=New(context.Background(),Config{Model:m})
+ if err!=nil{t.Fatal(err)}
+ got,err:=a.Analyze(context.Background(),"analyze market")
+ if err==nil||got!=nil||m.calls!=2 {t.Fatalf("must reject malformed correction: result=%+v calls=%d err=%v",got,m.calls,err)}
 }
