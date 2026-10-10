@@ -2,7 +2,7 @@ package synthesis
 
 import (
 	"Aegis/internal/agent/event"
-	"Aegis/internal/agent/market"
+		"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 	"errors"
 	"fmt"
@@ -46,6 +46,11 @@ func ValidateInput(
 		)
 	}
 
+	if input.Fundamental != nil {
+		if input.Fundamental.Symbol != symbol || input.Fundamental.Income == nil || input.Fundamental.Income.Symbol != symbol || strings.TrimSpace(input.Fundamental.Interpretation)=="" {return fmt.Errorf("invalid fundamental context for %s",symbol)}
+		if input.Fundamental.RequestedAsOf != input.Technical.RequestedAsOf {return fmt.Errorf("fundamental cutoff differs from technical requested date")}
+		if input.Fundamental.Income.AnnouncementDate > input.Fundamental.RequestedAsOf {return fmt.Errorf("fundamental report announced after cutoff")}
+	}
 	if strings.TrimSpace(
 		input.Technical.Symbol,
 	) != symbol {
@@ -99,6 +104,7 @@ func Validate(
 			Market:    artifact.Market,
 			Technical: artifact.Technical,
 			Event:     artifact.Event,
+			Fundamental: artifact.Fundamental,
 		},
 	); err != nil {
 		return err
