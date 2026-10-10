@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"Aegis/internal/research"
 )
 
 // RunState is the durable lifecycle of one research invocation. None of these
@@ -31,9 +33,18 @@ const (
 	FailurePersistence   = "PERSISTENCE_FAILED"
 )
 
-// RunRecord stores metadata and the exact typed workflow output JSON, not the
-// input portfolio snapshot. Artifact must only exist for COMPLETED runs.
-// Caller ownership/authorization must be enforced by the future API layer.
+// RunEvent is a persisted, replayable, non-sensitive execution event.
+// Seq increases strictly within a run; clients resume with Last-Event-ID.
+type RunEvent struct {
+	Seq        uint64    `json:"seq"`
+	Stage      string    `json:"stage"`
+	Status     string    `json:"status"`
+	At         time.Time `json:"at"`
+	DurationMS int64     `json:"duration_ms,omitempty"`
+}
+
+// RunRecord stores metadata and exact typed workflow JSON, never a raw input
+// portfolio snapshot. Artifact exists only for completed runs.
 type RunRecord struct {
 	ID            string          `json:"run_id"`
 	Mode          ResearchMode    `json:"mode"`
@@ -45,6 +56,7 @@ type RunRecord struct {
 	FinishedAt    *time.Time      `json:"finished_at,omitempty"`
 	FailureCode   string          `json:"failure_code,omitempty"`
 	Artifact      json.RawMessage `json:"artifact,omitempty"`
+	Events        []RunEvent      `json:"events,omitempty"`
 }
 
 // RunStore is a single-writer durable run repository. Implementations must
@@ -109,6 +121,7 @@ func NewRunManager(executor ResearchExecutor, store RunStore, maxParallel, maxAc
 		record.FinishedAt = &now
 		record.FailureCode = FailureInterrupted
 		record.Artifact = nil
+		record.Events = append(record.Events, RunEvent{Seq: uint64(len(record.Events) + 1), Stage: "Run", Status: string(RunFailed), At: now})
 		if err := store.Save(context.Background(), record); err != nil {
 			return nil, fmt.Errorf("reconcile interrupted run %s: %w", record.ID, err)
 		}
@@ -147,7 +160,7 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 		return RunRecord{}, err
 	}
 	now := m.now()
-	record := RunRecord{ID: id, Mode: request.Mode, Symbol: strings.TrimSpace(request.Input.Symbol), RequestedAsOf: request.Input.RequestedAsOf, State: RunPending, CreatedAt: now}
+	record := RunRecord{ID: id, Mode: request.Mode, Symbol: strings.TrimSpace(request.Input.Symbol), RequestedAsOf: request.Input.RequestedAsOf, State: RunPending, CreatedAt: now, Events: []RunEvent{{Seq: 1, Stage: "Run", Status: string(RunPending), At: now}}}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -200,62 +213,88 @@ func secureRunID() (string, error) {
 func (m *RunManager) execute(ctx context.Context, request ResearchRequest, record RunRecord) {
 	defer m.wg.Done()
 	defer func() { m.mu.Lock(); delete(m.active, record.ID); m.mu.Unlock() }()
+
+	// Workflow stage callbacks may arrive from parallel agents. Protect the
+	// authoritative snapshot while persisting each event atomically.
+	var mu sync.Mutex
+	var eventPersistError bool
+	appendEvent := func(stage, status string, at time.Time, durationMS int64) error {
+		record.Events = append(record.Events, RunEvent{Seq: uint64(len(record.Events) + 1), Stage: stage, Status: status, At: at, DurationMS: durationMS})
+		return m.store.Save(context.Background(), record)
+	}
+	terminal := func(state RunState, code string, output json.RawMessage) {
+		mu.Lock()
+		defer mu.Unlock()
+		if record.State == RunCompleted || record.State == RunFailed || record.State == RunCancelled {
+			return
+		}
+		done := m.now()
+		record.State = state
+		record.FinishedAt = &done
+		record.Artifact = output
+		record.FailureCode = code
+		// The store is authoritative. A failed disk write leaves prior state
+		// for process-interrupted recovery and cannot claim completion.
+		_ = appendEvent("Run", string(state), done, 0)
+	}
 	select {
 	case m.slots <- struct{}{}:
 		defer func() { <-m.slots }()
 	case <-ctx.Done():
-		m.finish(ctx, record, RunCancelled, "")
+		terminal(RunCancelled, "", nil)
 		return
 	}
 	if ctx.Err() != nil {
-		m.finish(ctx, record, RunCancelled, "")
+		terminal(RunCancelled, "", nil)
 		return
 	}
+	mu.Lock()
 	started := m.now()
 	record.StartedAt = &started
 	record.State = RunRunning
-	if err := m.store.Save(context.Background(), record); err != nil {
-		// No paid research if the RUNNING transition cannot be recorded.
-		m.finish(ctx, record, RunFailed, FailurePersistence)
+	err := appendEvent("Run", string(RunRunning), started, 0)
+	mu.Unlock()
+	if err != nil {
+		terminal(RunFailed, FailurePersistence, nil)
 		return
 	}
+
+	ctx = research.WithProgressEvents(ctx, func(ev research.ProgressEvent) {
+		mu.Lock()
+		defer mu.Unlock()
+		if record.State != RunRunning || eventPersistError {
+			return
+		}
+		if err := appendEvent(ev.Stage, ev.Status, ev.At, ev.DurationMS); err != nil {
+			eventPersistError = true
+		}
+	})
 	response, err := m.executor.Run(ctx, request)
+	mu.Lock()
+	persistFailed := eventPersistError
+	mu.Unlock()
+	if persistFailed {
+		terminal(RunFailed, FailurePersistence, nil)
+		return
+	}
 	if ctx.Err() != nil {
-		m.finish(ctx, record, RunCancelled, "")
+		terminal(RunCancelled, "", nil)
 		return
 	}
 	if err != nil {
-		m.finish(ctx, record, RunFailed, FailureResearch)
+		terminal(RunFailed, FailureResearch, nil)
 		return
 	}
 	if response == nil || response.Mode != request.Mode || response.Output() == nil {
-		m.finish(ctx, record, RunFailed, FailureInvalidResult)
+		terminal(RunFailed, FailureInvalidResult, nil)
 		return
 	}
-	artifact, err := json.Marshal(response.Output())
-	if err != nil || len(artifact) == 0 || string(artifact) == "null" {
-		m.finish(ctx, record, RunFailed, FailureInvalidResult)
+	artifact, e := json.Marshal(response.Output())
+	if e != nil || len(artifact) == 0 || string(artifact) == "null" {
+		terminal(RunFailed, FailureInvalidResult, nil)
 		return
 	}
-	finished := m.now()
-	record.State = RunCompleted
-	record.FinishedAt = &finished
-	record.Artifact = artifact
-	record.FailureCode = ""
-	// Failed completion persistence leaves RUNNING on disk; startup recovery
-	// converts that into FAILED. Never signal success from an in-memory cache.
-	_ = m.store.Save(context.Background(), record)
-}
-
-func (m *RunManager) finish(ctx context.Context, record RunRecord, state RunState, code string) {
-	finished := m.now()
-	record.State = state
-	record.FinishedAt = &finished
-	record.Artifact = nil
-	record.FailureCode = code
-	// Even after cancellation, try to persist the terminal state. The store
-	// is authoritative; the next startup reconciles any missed transition.
-	_ = m.store.Save(context.Background(), record)
+	terminal(RunCompleted, "", artifact)
 }
 
 func (m *RunManager) Get(ctx context.Context, id string) (RunRecord, error) {
