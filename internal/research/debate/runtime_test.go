@@ -46,7 +46,13 @@ func (s *mutatingResearcherStub) GenerateTurn(_ context.Context, _ *synthesis.Ar
 		state.Turns[0].Arguments[0].References[0].Domain = synthesis.DomainTechnical
 	}
 	id := fmt.Sprintf("%s-r%d-a1", strings.ToLower(string(s.side)), round)
+	var rebuttals []Rebuttal
+	if len(state.Turns)>0 {
+		previous := state.Turns[len(state.Turns)-1]
+		rebuttals = []Rebuttal{{Claim:"opposing argument challenged",TargetArgumentID:previous.Arguments[0].ID,References:[]synthesis.Reference{{Domain:synthesis.DomainMarket}}}}
+	}
 	return Turn{
+		Rebuttals: rebuttals,
 		Round: round,
 		Side:  s.side,
 		Thesis: string(s.side) + " thesis",
