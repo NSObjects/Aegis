@@ -172,7 +172,8 @@ func NewArtifact(
 		func(
 			ctx context.Context,
 			input Input,
-		) (*marketResult, error) {
+		) (out *marketResult, runErr error) {
+            defer startProgress(ctx, "Market")(&runErr)
 			query := strings.TrimSpace(
 				input.MarketQuery,
 			)
@@ -225,7 +226,8 @@ func NewArtifact(
 		func(
 			ctx context.Context,
 			input Input,
-		) (*eventResult, error) {
+		) (out *eventResult, runErr error) {
+            defer startProgress(ctx, "Event")(&runErr)
 			eventContext, err :=
 				cfg.EventAgent.Analyze(
 					ctx,
@@ -268,7 +270,8 @@ func NewArtifact(
 		func(
 			ctx context.Context,
 			input *marketResult,
-		) (*technicalResult, error) {
+		) (out *technicalResult, runErr error) {
+            defer startProgress(ctx, "Technical")(&runErr)
 			if input == nil {
 				return nil, errors.New(
 					"market research result is nil",
@@ -345,7 +348,8 @@ func NewArtifact(
 		func(
 			ctx context.Context,
 			input *synthesisInput,
-		) (*synthesis.Artifact, error) {
+		) (out *synthesis.Artifact, runErr error) {
+            defer startProgress(ctx, "Synthesis")(&runErr)
 			if input == nil {
 				return nil, errors.New(
 					"research synthesis input is nil",
@@ -383,7 +387,8 @@ func NewArtifact(
 
 
 	if cfg.FundamentalAgent != nil {
-		fundamentalNode := compose.InvokableLambda(func(ctx context.Context,in Input)(*fundamentalResult,error){
+		fundamentalNode := compose.InvokableLambda(func(ctx context.Context,in Input)(out *fundamentalResult,runErr error){
+            defer startProgress(ctx,"Fundamental")(&runErr)
 			date:=in.RequestedAsOf.In(time.FixedZone("A-share",8*60*60)).Format("20060102")
 			result,err:=cfg.FundamentalAgent.Analyze(ctx,fundamental.Input{Symbol:in.Symbol,RequestedAsOf:date})
 			if err!=nil{return nil,fmt.Errorf("fundamental research: %w",err)}
