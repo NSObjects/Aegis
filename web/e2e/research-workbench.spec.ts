@@ -90,7 +90,7 @@ test("settings lets a signed-in operator save provider credentials without echoi
   const response = page.waitForResponse(r => r.url().endsWith("/api/workbench/credentials") && r.request().method() === "PUT");
   await page.getByRole("button", { name: "保存凭证" }).click();
   expect((await response).status()).toBe(200);
-  await expect(page.getByRole("status")).toContainText("已保存至 Go 服务端");
+  await expect(page.locator(".provider-settings-form .live-info")).toContainText("已保存至 Go 服务端");
   await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
   expect(await page.locator("body").innerText()).not.toContain(key);
   await page.reload();
