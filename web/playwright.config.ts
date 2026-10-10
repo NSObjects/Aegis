@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 // Contract-level browser E2E using a synthetic Go-API fixture; this does not
 // call paid LLM providers or establish real-market evidence correctness.
-const baseURL = "http://127.0.0.1:3100";
+const baseURL = "http://localhost:3100";
 const apiURL = "http://127.0.0.1:18686";
 const token = "ci-go-api-fixture-only-secret-32-characters";
 const password = "ci-browser-access-password";
@@ -19,7 +19,7 @@ export default defineConfig({
   webServer: [
     { command: "node e2e/fake-go-server.mjs", url: `${apiURL}/healthz`, reuseExistingServer: !process.env.CI, timeout: 20_000 },
     {
-      command: "npm run start -- -p 3100 -H 127.0.0.1",
+      command: "npm run start -- -p 3100 -H localhost",
       url: baseURL,
       reuseExistingServer: !process.env.CI,
       timeout: 90_000,

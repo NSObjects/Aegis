@@ -6,7 +6,10 @@ async function signIn(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
   await page.getByLabel("工作台访问口令").fill(password);
+  const loginResponsePromise = page.waitForResponse(r => r.url().endsWith("/api/workbench/session") && r.request().method() === "POST");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const loginResponse = await loginResponsePromise;
+  expect(loginResponse.status(), "login POST must succeed before showing the Live workspace").toBe(200);
   await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
 }
 
@@ -27,7 +30,7 @@ test("anonymous browser cannot read ResearchRun or bypass Web login", async ({ p
   expect(response.status()).toBe(401);
   await page.getByLabel("工作台访问口令").fill("incorrect-unauthorized-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
-  await expect(page.getByText("请求失败（HTTP 401）")).toBeVisible();
+  await expect(page.getByText("访问口令不正确")).toBeVisible();
 });
 
 test("real browser submits a run, receives stage SSE, reads artifact, and restores history", async ({ page }) => {
