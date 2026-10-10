@@ -85,6 +85,17 @@ func (s *AgenticSynthesizer) Synthesize(
 			if validationErr := Validate(artifact); validationErr == nil {
 				return artifact, nil
 			} else {
+				// An LLM can continue inventing "cross-domain" conflicts backed
+				// by a single domain even after a corrective prompt. Only after
+				// the retry is exhausted may we omit those unsupported *relations*.
+				// Every retained claim, reference and the whole artifact must
+				// still pass unchanged deterministic validation.
+				if attempt == 1 {
+					filtered, count := omitSingleDomainConflictCandidates(artifact)
+					if count > 0 && Validate(filtered) == nil {
+						return filtered, nil
+					}
+				}
 				err = fmt.Errorf("invalid research synthesis artifact: %w", validationErr)
 			}
 		}
@@ -93,13 +104,61 @@ func (s *AgenticSynthesizer) Synthesize(
 			messages = append(messages,
 				response,
 				schema.UserAgenticMessage(fmt.Sprintf(
-					"Your previous JSON failed deterministic validation: %v. Return the complete corrected JSON object only. Preserve upstream facts and obey the original schema; in particular, every conflict must reference at least two distinct domains.",
+					"Your previous JSON failed deterministic validation: %v. Return the complete corrected JSON object only. Preserve upstream facts and obey the original schema; in particular, every conflict must reference at least two genuinely supported distinct domains. If a claimed conflict is supported within only one domain, REMOVE that conflict and, if necessary, describe its uncertainty under risks. Do not attach an unrelated domain citation to satisfy validation. Preserve upstream facts unchanged.",
 					err,
 				)),
 			)
 		}
 	}
 	return nil, lastErr
+}
+
+
+const omittedConflictRisk = "Generated cross-domain conflict candidate(s) omitted for insufficient independent domain references; omitted claims were not verified or resolved."
+
+// omitSingleDomainConflictCandidates is a conservative last-resort fallback:
+// it removes only *purported cross-domain relations* whose references are
+// individually valid but all belong to the same domain. This does not infer
+// new references, change upstream facts or normalize any other malformed data.
+// The caller must validate the entire result again before accepting it.
+func omitSingleDomainConflictCandidates(artifact *Artifact) (*Artifact, int) {
+	if artifact == nil || artifact.Event == nil {
+		return artifact, 0
+	}
+	eventIDs := make(map[string]struct{}, len(artifact.Event.Events))
+	for _, e := range artifact.Event.Events {
+		eventIDs[e.ID] = struct{}{}
+	}
+	kept := make([]Conflict, 0, len(artifact.Synthesis.Conflicts))
+	removed := 0
+	for _, conflict := range artifact.Synthesis.Conflicts {
+		if strings.TrimSpace(conflict.Description) == "" || len(conflict.References) < 2 {
+			kept = append(kept, conflict)
+			continue
+		}
+		domains := make(map[Domain]struct{})
+		valid := true
+		for _, ref := range conflict.References {
+			if err := validateReference(ref, eventIDs, artifact.Fundamental != nil); err != nil {
+				valid = false
+				break
+			}
+			domains[ref.Domain] = struct{}{}
+		}
+		if valid && len(domains) == 1 {
+			removed++
+			continue
+		}
+		kept = append(kept, conflict)
+	}
+	if removed == 0 {
+		return artifact, 0
+	}
+	copy := *artifact
+	copy.Synthesis = artifact.Synthesis
+	copy.Synthesis.Conflicts = kept
+	copy.Synthesis.Risks = append(append([]string(nil), artifact.Synthesis.Risks...), omittedConflictRisk)
+	return &copy, removed
 }
 
 func decodeSynthesis(raw string) (Synthesis, error) {
