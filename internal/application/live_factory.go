@@ -438,10 +438,9 @@ func NewLiveResearchService(ctx context.Context, options LiveServiceOptions) (*R
 
 	var decisionRunner DecisionRunner
 	var portfolioRunner PortfolioRunner
-	mode := ModeDecision
 	if portfolioReview {
 		// Reuse the existing validated research and portfolio workflow; the
-		// CLI only assembles dependencies and formats the transport output.
+		// callers share the same production graph and typed contracts.
 		upstream, err := research.NewArtifact(ctx, researchConfig)
 		if err != nil {
 			return nil, fmt.Errorf("create research artifact workflow: %w", err)
@@ -467,7 +466,6 @@ func NewLiveResearchService(ctx context.Context, options LiveServiceOptions) (*R
 			Limits: limits,
 			Scenario: scenario,
 		}
-		mode = ModePortfolio
 	} else {
 		workflow, err := research.New(ctx, researchConfig)
 		if err != nil {
