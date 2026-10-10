@@ -38,3 +38,35 @@ jobs:
         run: npm run test
       - name: Production build
         run: npm run build
+
+  browser-e2e:
+    name: Live Web browser contract E2E (fixture Go API)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Production build
+        run: npm run build
+      - name: Browser protocol E2E
+        run: npm run e2e
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-web-browser-e2e-diagnostics
+          path: |
+            web/test-results
+            web/playwright-report
+          retention-days: 7

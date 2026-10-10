@@ -24,7 +24,7 @@ const formatDate = (value: string | undefined) => value ? new Date(value).toLoca
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { cache: "no-store", credentials: "same-origin", ...init });
   if (!r.ok) {
-    if (r.status === 401) throw Error("登录已过期，请重新登录");
+    if (r.status === 401) throw Error(url.endsWith("/session") && init?.method === "POST" ? "访问口令不正确" : "登录已过期，请重新登录");
     if (r.status === 409) throw Error("当前研究状态不支持此操作");
     if (r.status === 429) throw Error("研究队列已满，请稍后再试");
     throw Error(`请求失败（HTTP ${r.status}）`);
