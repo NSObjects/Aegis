@@ -113,6 +113,9 @@ func validateReference(ref synthesis.Reference, artifact *synthesis.Artifact) er
 		if strings.TrimSpace(ref.EventID) != "" {
 			return fmt.Errorf("domain %q cannot carry event_id", ref.Domain)
 		}
+	case synthesis.DomainFundamental:
+		if artifact.Fundamental==nil{return errors.New("fundamental reference requires FundamentalContext")}
+		if ref.EventID!=""{return errors.New("fundamental reference cannot carry event_id")}
 	case synthesis.DomainEvent:
 		eventID := strings.TrimSpace(ref.EventID)
 		if eventID == "" {
