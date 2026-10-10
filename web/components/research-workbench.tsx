@@ -357,10 +357,11 @@ export default function ResearchWorkbench() {
     setView("research");
   };
 
-  const focusEvidence = (id: string) => {
+  const focusEvidence = (id: string, preferredClaimId?: string) => {
     if (!trace || !stock.evidence.some(item => item.id === id)) return;
     setSelectedEvidence(id);
-    const matchingClaim = claimsForEvidence(trace, id)[0];
+    const relatedClaims = claimsForEvidence(trace, id);
+    const matchingClaim = relatedClaims.find(claim => claim.id === preferredClaimId) ?? relatedClaims[0];
     if (matchingClaim) {
       setSelectedClaimId(matchingClaim.id);
       setSelectedStage(matchingClaim.stageId);

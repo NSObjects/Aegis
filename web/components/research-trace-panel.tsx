@@ -12,7 +12,7 @@ const assessmentLabel = { SUPPORTS: "支持假设的样例", CONTESTS: "反方�
 
 function ClaimCard({ claim, stock, selected, onSelectClaim, onSelectEvidence }: {
   claim: DemoClaim; stock: StockFixture; selected: boolean;
-  onSelectClaim: (id: string) => void; onSelectEvidence: (id: string) => void;
+  onSelectClaim: (id: string) => void; onSelectEvidence: (id: string, claimId?: string) => void;
 }) {
   return <article className={cn("claim-card", selected && "selected", `claim-${claim.side.toLowerCase()}`)}>
     <button type="button" className="claim-top" aria-pressed={selected} onClick={() => onSelectClaim(claim.id)}>
@@ -25,7 +25,7 @@ function ClaimCard({ claim, stock, selected, onSelectClaim, onSelectEvidence }: 
     <div className="claim-links">
       <span><Link2 size={12}/> 样例引用</span>
       {claim.evidenceIds.filter(id => stock.evidence.some(e => e.id === id)).map(id =>
-        <button key={id} className="reference-chip" type="button" onClick={() => onSelectEvidence(id)} aria-label={`查看证据 ${id}`}>
+        <button key={id} className="reference-chip" type="button" onClick={() => onSelectEvidence(id, claim.id)} aria-label={`查看证据 ${id}`}>
           {id} <ArrowRight size={11}/>
         </button>
       )}
@@ -35,7 +35,7 @@ function ClaimCard({ claim, stock, selected, onSelectClaim, onSelectEvidence }: 
 
 export default function ResearchTracePanel({ trace, stock, selectedClaimId, onSelectClaim, onSelectEvidence }: {
   trace: DemoResearchTrace; stock: StockFixture; selectedClaimId: string;
-  onSelectClaim: (id: string) => void; onSelectEvidence: (id: string) => void;
+  onSelectClaim: (id: string) => void; onSelectEvidence: (id: string, claimId?: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("claims");
   const tabs: Array<{ id: Tab; title: string }> = [
