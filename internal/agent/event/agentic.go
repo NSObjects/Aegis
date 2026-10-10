@@ -203,12 +203,12 @@ func (a *AgenticEventFactExtractor) Extract(
 			factExtractionInstruction +
 				"\n\nThe previous extraction failed deterministic grounding validation: " +
 				groundingErr.Error() +
-				". Return the full corrected JSON. Use previous_extraction only as a candidate, not as evidence. Recheck every quote against documents[].content; omit unsupported facts, do not invent or paraphrase quotations. Every retained quote must occur exactly once verbatim in its identified canonical document."
+				". Return the full corrected JSON. Use previous_extraction only as a candidate, not as evidence. Recheck every quote against documents[].content; omit unsupported facts, do not invent or paraphrase quotations. Every retained quote must occur exactly once verbatim in its identified canonical document. The grounding_quote_candidates are exact snippets copied from the indicated documents around repeated quotes, not additional evidence; select a candidate only if its whole context supports the fact, or omit the unsupported fact. Never invent offsets."
 		if err := generateStrictAgenticJSON(
 			ctx,
 			a.Model,
 			repairInstruction,
-			struct { factExtractionPrompt; PreviousExtraction FactExtractionResult `json:"previous_extraction"` }{factExtractionPrompt:prompt,PreviousExtraction:output},
+			struct { factExtractionPrompt; PreviousExtraction FactExtractionResult `json:"previous_extraction"`; GroundingQuoteCandidates []groundingRepairHint `json:"grounding_quote_candidates,omitempty"` }{factExtractionPrompt:prompt,PreviousExtraction:output,GroundingQuoteCandidates:groundingRepairHints(output,documents)},
 			&repaired,
 		); err != nil {
 			return FactExtractionResult{}, fmt.Errorf(
@@ -227,6 +227,67 @@ func (a *AgenticEventFactExtractor) Extract(
 		}
 		return repaired, nil
 	}
+}
+
+// groundingRepairHint is a verbatim, unambiguous source excerpt around a
+// repeated model quote. It is guidance for another LLM attempt, never a
+// validated grounding or a replacement for ResolveEvidenceGroundings.
+type groundingRepairHint struct {
+ DocumentID string `json:"document_id"`
+ AmbiguousQuote string `json:"ambiguous_quote"`
+ VerbatimCandidate string `json:"verbatim_candidate"`
+}
+
+func groundingRepairHints(result FactExtractionResult, documents []capevent.CanonicalDocument) []groundingRepairHint {
+ byID:=make(map[string]string,len(documents))
+ for _,doc:=range documents {byID[doc.ID]=doc.Content}
+ var hints []groundingRepairHint
+ seen:=make(map[string]struct{})
+ for _,fact:=range result.Facts {
+  for _,q:=range fact.EvidenceQuotes {
+   content,exists:=byID[strings.TrimSpace(q.DocumentID)]
+   quote:=strings.TrimSpace(q.Quote)
+   if !exists||quote==""||strings.Index(content,quote)<0 {continue}
+   positions:=make([]int,0,4)
+   for offset:=0;offset<len(content); {
+    ix:=strings.Index(content[offset:],quote)
+    if ix<0 {break}
+    start:=offset+ix
+    positions=append(positions,start)
+    if len(positions)>4 {break}
+    offset=start+1
+   }
+   if len(positions)<2 || len(positions)>4 {continue}
+   runes:=[]rune(content)
+   quoteRunes:=len([]rune(quote))
+   for _,pos:=range positions {
+    runeStart:=len([]rune(content[:pos]))
+    var candidate string
+    for _,radius:=range []int{24,48,96,192,384} {
+     lo:=runeStart-radius
+     if lo<0 {lo=0}
+     hi:=runeStart+quoteRunes+radius
+     if hi>len(runes){hi=len(runes)}
+     excerpt:=string(runes[lo:hi])
+     first:=strings.Index(content,excerpt)
+     if first>=0 && strings.Index(content[first+1:],excerpt)<0 {
+      candidate=excerpt
+      break
+     }
+    }
+    if candidate=="" {continue}
+    key:=q.DocumentID+"\x00"+quote+"\x00"+candidate
+    if _,ok:=seen[key];ok {continue}
+    seen[key]=struct{}{}
+    hints=append(hints,groundingRepairHint{
+     DocumentID:q.DocumentID,
+     AmbiguousQuote:quote,
+     VerbatimCandidate:candidate,
+    })
+   }
+  }
+ }
+ return hints
 }
 
 func validateFactExtractionGroundings(
