@@ -234,7 +234,7 @@ func validateSynthesis(
 func validateReference(
 	reference Reference,
 	eventIDs map[string]struct{},
-	fundamentalPresent bool,
+	fundamentalPresent ...bool,
 ) error {
 	if reference.EventID != strings.TrimSpace(reference.EventID) {
 		return errors.New("event_id must not contain surrounding whitespace")
@@ -251,7 +251,7 @@ func validateReference(
 			)
 		}
 	case DomainFundamental:
-		if !fundamentalPresent {return errors.New("fundamental reference requires FundamentalContext")}
+		if len(fundamentalPresent)==0 || !fundamentalPresent[0] {return errors.New("fundamental reference requires FundamentalContext")}
 		if reference.EventID!=""{return errors.New("fundamental reference cannot carry event_id")}
 	case DomainEvent:
 		eventID := strings.TrimSpace(
