@@ -363,3 +363,28 @@ svg { flex-shrink: 0; }
 .live-footer { margin-top:25px; color:#637f96; font-size:10px; text-align:right; }
 @media(max-width:1100px){ .live-grid{ grid-template-columns:1fr; } .live-history-row{ grid-template-columns:1fr 1fr 120px; } .live-history-row code,.live-history-row svg{ display:none; } }
 @media(max-width:760px){ .live-create form{ grid-template-columns:1fr; } .live-create-foot{ grid-column:1; } .live-history-row{ grid-template-columns:1fr 85px; } .live-history-row small{display:none;} .live-gate{margin:35px 14px; padding:25px;} }
+
+
+/* Authenticated provider credentials: never render stored key values. */
+.provider-settings { display:grid; gap:18px; max-width:1050px; }
+.provider-settings-intro,.provider-settings-help { padding:25px; }
+.provider-settings-intro h2,.provider-settings-help h3 { display:flex;align-items:center;gap:10px;margin:5px 0 13px;font-size:19px; }
+.provider-settings-intro p,.provider-settings-help p { font-size:12px;color:#a9bed4;line-height:1.85;max-width:780px; }
+.provider-settings-overview {display:flex;gap:9px;align-items:center;color:#77e4bd;margin-top:16px;font-size:12px;}
+.provider-settings-form {padding:0 0 23px;}
+.provider-settings-fields {padding:10px 23px 0;}
+.provider-settings-row {display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,1fr);gap:28px;padding:21px 0;border-bottom:1px solid var(--stroke);}
+.provider-settings-row:last-child {border-bottom:0;}
+.provider-settings-meta {display:flex;flex-direction:column;gap:7px;align-items:flex-start;}
+.provider-settings-meta strong {font-size:16px;}
+.provider-settings-meta small {font-size:12px;color:var(--muted);line-height:1.7;}
+.provider-settings-meta code {font-size:10px;color:#789bb6;}
+.provider-settings-entry {display:flex;align-items:flex-start;flex-direction:column;gap:8px;}
+.provider-settings-entry label {font-size:11px;color:#94adc4;}
+.provider-settings-entry input {width:100%;padding:11px 13px;border:1px solid #35465f;border-radius:9px;background:#0b1729;color:#ebf6ff;}
+.provider-settings-entry input::placeholder {color:#53657e;}
+.provider-clear {background:none;border:none;color:#ecb1a7;font-size:11px;padding:2px 0;}
+.provider-clear:hover {color:#ffdfda;text-decoration:underline;}
+.provider-settings-actions {display:flex;gap:12px;padding:18px 23px 0;}
+.provider-settings-form .live-alert,.provider-settings-form .live-info {margin:16px 23px 0;}
+@media(max-width:720px){.provider-settings-row{grid-template-columns:1fr;gap:12px;}.provider-settings-fields{padding-left:17px;padding-right:17px;}.provider-settings-intro,.provider-settings-help{padding:18px;}}
