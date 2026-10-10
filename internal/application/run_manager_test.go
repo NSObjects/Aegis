@@ -364,3 +364,42 @@ func TestCorruptStageEventSequenceFailsClosed(t *testing.T) {
 		t.Fatal("out of sequence event was accepted")
 	}
 }
+
+type failingEventStore struct{ RunStore }
+
+func (s failingEventStore) Save(ctx context.Context, rec RunRecord) error {
+	if len(rec.Events) > 0 {
+		last := rec.Events[len(rec.Events)-1]
+		if last.Stage == "Market" && last.Status == "START" {
+			return errors.New("simulated disk error")
+		}
+	}
+	return s.RunStore.Save(ctx, rec)
+}
+
+type waitingStageExecutor struct{ stopped chan struct{} }
+
+func (x *waitingStageExecutor) Run(ctx context.Context, _ ResearchRequest) (*ResearchResponse, error) {
+	research.ReportProgress(ctx, research.ProgressEvent{Stage: "Market", Status: "START"})
+	<-ctx.Done()
+	close(x.stopped)
+	return nil, ctx.Err()
+}
+func TestRunManagerStopsPaidWorkWhenStagePersistenceFails(t *testing.T) {
+	store := failingEventStore{newStore(t)}
+	ex := &waitingStageExecutor{stopped: make(chan struct{})}
+	m := newMgr(t, ex, store, 1, 2)
+	rec, e := m.Submit(context.Background(), runFixture("600519.SH"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	done := awaitRun(t, m, rec.ID, RunFailed)
+	if done.FailureCode != FailurePersistence || len(done.Artifact) != 0 {
+		t.Fatalf("persistence failure not safe: %+v", done)
+	}
+	select {
+	case <-ex.stopped:
+	case <-time.After(time.Second):
+		t.Fatal("research worker did not receive cancellation after stage persistence failure")
+	}
+}

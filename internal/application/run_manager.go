@@ -179,7 +179,7 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 	runCtx, cancel := context.WithCancel(m.ctx)
 	m.active[id] = cancel
 	m.wg.Add(1)
-	go m.execute(runCtx, request, record)
+	go m.execute(runCtx, request, record, cancel)
 	return record, nil
 }
 
@@ -210,7 +210,8 @@ func secureRunID() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-func (m *RunManager) execute(ctx context.Context, request ResearchRequest, record RunRecord) {
+func (m *RunManager) execute(ctx context.Context, request ResearchRequest, record RunRecord, cancel context.CancelFunc) {
+	defer cancel()
 	defer m.wg.Done()
 	defer func() { m.mu.Lock(); delete(m.active, record.ID); m.mu.Unlock() }()
 
@@ -267,6 +268,8 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		}
 		if err := appendEvent(ev.Stage, ev.Status, ev.At, ev.DurationMS); err != nil {
 			eventPersistError = true
+			// Avoid paying for further model work after event persistence fails.
+			cancel()
 		}
 	})
 	response, err := m.executor.Run(ctx, request)
