@@ -1,0 +1,54 @@
+# Aegis Web · Research Workspace (mock-first)
+
+Standalone Next.js App Router UI living in `web/`, intentionally isolated from the Go/Eino core.
+
+## Run locally
+
+Requires Node.js >= 20.9 and npm. From the repository root:
+
+```bash
+cd web
+npm install
+npm run dev
+# http://localhost:3000
+```
+
+Static checks after installing dependencies:
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
+
+**This PR ships a mock frontend only**. All price paths, stock information, research opinions, research stages, evidence and history are **synthetic demo data** — not market quotes, not an LLM output and not financial advice. The app prominently labels the mode in its UI. Clicking "开始演示研究" simulates progress locally and does not start Go agents, query APIs or persist any research. The data resets on refresh.
+
+## Visual & component foundation
+
+- Next.js App Router, React, TypeScript, Tailwind CSS v4.
+- Accessible, high-contrast CSS tokens designed as a financial research terminal; Lucide icons and Recharts charts.
+- `components.json` is prepared for importing official `shadcn/ui` components (`npx shadcn@latest add ...`) as real interaction needs emerge; this first slice does not require a component registry download.
+- Responsive shell, usable research view, interactive demo run, stock switching, research stage inspection, evidence panel, history table, provider settings status, chart range switch and JSON export.
+
+## Go integration hand-off (not implemented yet)
+
+`lib/research-contract.ts` describes the frontend-facing boundary. When the Go API is ready, introduce an HTTP/SSE adapter behind `ResearchGateway` without replacing UI components. Server-side Go/Eino remains the only source of validated financial artifacts.
+
+Recommended minimal operations:
+
+- `startResearch(input) → {run_id, status}` (idempotent async request)
+- `getResearchRun(run_id) → ResearchRun`
+- `listResearchRuns(filters) → ResearchRun[]`
+- `getResearchReport(run_id) → ResearchReport`
+- `subscribeRunEvents(run_id, cursor)` using SSE, resumable by event cursor
+
+`research_artifact`, `portfolio_review` and `final_risk_gate` are existing Go JSON fields; they are **not** reinterpreted as trade instructions. Account state `NOT_PROVIDED` must render as unknown, never an empty portfolio. Event and task DTOs in this UI are proposed frontend contracts, not representations of currently implemented Go endpoints.
+
+## Follow-up implementation PRs
+
+1. Review/freeze minimal HTTP DTOs against current Go typed artifacts.
+2. Expose a shared Go application service and task/event persistence.
+3. Replace the mock gateway and simulated timers with HTTP + SSE events.
+4. Add real identity/authorization and browser E2E coverage.
+
+No changes in this PR to the Go agent graph, CLI, CI secrets, execution permissions or broker integration.
