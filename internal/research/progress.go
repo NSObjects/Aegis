@@ -19,16 +19,16 @@ func WithProgress(ctx context.Context, out io.Writer) context.Context {
  return context.WithValue(ctx,progressKey{},&progressWriter{out:out})
 }
 
-func startProgress(ctx context.Context,stage string) func(error) {
+func startProgress(ctx context.Context,stage string) func(*error) {
  p,_:=ctx.Value(progressKey{}).(*progressWriter)
- if p==nil {return func(error){}}
+ if p==nil {return func(*error){}}
  started:=time.Now()
  p.mu.Lock()
  fmt.Fprintf(p.out,"[Aegis] stage=%s status=START\n",stage)
  p.mu.Unlock()
- return func(err error){
+ return func(err *error){
   status:="DONE"
-  if err!=nil {status="FAIL"}
+  if err!=nil && *err!=nil {status="FAIL"}
   p.mu.Lock()
   fmt.Fprintf(p.out,"[Aegis] stage=%s status=%s duration=%s\n",stage,status,time.Since(started).Round(time.Millisecond))
   p.mu.Unlock()
