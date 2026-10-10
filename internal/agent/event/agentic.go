@@ -203,12 +203,12 @@ func (a *AgenticEventFactExtractor) Extract(
 			factExtractionInstruction +
 				"\n\nThe previous extraction failed deterministic grounding validation: " +
 				groundingErr.Error() +
-				". Return the full corrected JSON. Preserve only supported facts and repair evidence_quotes so every quote is verbatim and unique within its identified document."
+				". Return the full corrected JSON. Use previous_extraction only as a candidate, not as evidence. Recheck every quote against documents[].content; omit unsupported facts, do not invent or paraphrase quotations. Every retained quote must occur exactly once verbatim in its identified canonical document."
 		if err := generateStrictAgenticJSON(
 			ctx,
 			a.Model,
 			repairInstruction,
-			prompt,
+			struct { factExtractionPrompt; PreviousExtraction FactExtractionResult `json:"previous_extraction"` }{factExtractionPrompt:prompt,PreviousExtraction:output},
 			&repaired,
 		); err != nil {
 			return FactExtractionResult{}, fmt.Errorf(
