@@ -109,7 +109,7 @@ R1 不包含 Watchlist 智能扫描（R3）、自动监控（R4）、研究 Memo
 ### 按顺序执行的开发任务
 
 - [ ] **R1-01 共用 Application Service（V1 后第一项）**
-  - 复核 \`cmd/aegis/main.go\` 与现有 Research/Portfolio Workflow，把通用配置、依赖装配和研究执行抽离为单一应用入口；CLI 只负责解析命令与输出。不得复制 Eino Graph。
+  - 复核 `cmd/aegis/main.go` 与现有 Research/Portfolio Workflow，把通用配置、依赖装配和研究执行抽离为单一应用入口；CLI 只负责解析命令与输出。不得复制 Eino Graph。
   - **验收**：Go 测试直接调用 Application Service 与 CLI 获得相同的 typed Artifact/风险审查结果；原 CLI 测试保持通过。
 - [ ] **R1-02 ResearchRun 任务生命周期**
   - run_id、symbol、requested_as_of、配置/模型版本、状态 PENDING/RUNNING/COMPLETED/FAILED/CANCELLED、阶段失败代码、超时/取消、有限重试/幂等。
