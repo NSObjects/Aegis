@@ -180,7 +180,7 @@ func TestValidateSynthesisReferenceInvariants(
 					{
 						Claim: "claim",
 						References: []Reference{
-							{Domain: Domain("FUNDAMENTAL")},
+							{Domain: Domain("UNKNOWN")},
 						},
 					},
 				},
