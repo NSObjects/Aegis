@@ -121,7 +121,7 @@ func TestBuildRejectsBadArgumentMappings(t *testing.T) {
 			s.Turns[0].Arguments[0].References=[]synthesis.Reference{{Domain:synthesis.DomainEvent,EventID:"fake-event"}}
 		},"does not exist"},
 		{"wrong reference domain",func(_ *synthesis.Artifact,_ *debate.State,p *manager.ResearchPlan){
-			p.Risks[0].References=[]synthesis.Reference{{Domain:synthesis.Domain("FUNDAMENTAL")}}
+			p.Risks[0].References=[]synthesis.Reference{{Domain:synthesis.Domain("UNKNOWN")}}
 		},"invalid reference domain"},
 		{"event id on market ref",func(_ *synthesis.Artifact,s *debate.State,_ *manager.ResearchPlan){
 			s.Turns[0].Arguments[0].References[0].EventID="fake-event"
