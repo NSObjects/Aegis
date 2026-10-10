@@ -21,7 +21,7 @@ export interface LiveStageEvent {
   at: string;
   duration_ms?: number;
 }
-export interface LiveSession { authenticated: boolean; configured: boolean; mode: LiveMode; }
+export interface LiveSession { authenticated: boolean; configured: boolean; mode: LiveMode; local_dev?: boolean; }
 export type LiveArtifact = Record<string, unknown>;
 
 const states = new Set<string>(["PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"]);

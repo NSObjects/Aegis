@@ -46,8 +46,23 @@ export function matchesPassword(candidate: unknown, config: Config): boolean {
 }
 export function sameOriginMutation(req: Request): boolean {
   const site = req.headers.get("sec-fetch-site");
-  if (site && site !== "same-origin" && site !== "none") return false;
+  const dev = process.env.AEGIS_WEB_DEV_MODE === "1" && process.env.NODE_ENV === "development";
+  if (site && site !== "same-origin" && site !== "none" && !(dev && site === "same-site")) return false;
   const origin = req.headers.get("origin");
-  return origin !== null && origin === new URL(req.url).origin;
+  if (!origin) return false;
+  const target = new URL(req.url);
+  if (origin === target.origin) return true;
+  // Some Next.js dev versions build req.url with localhost even when the
+  // actual browser and Host header use 127.0.0.1. Only permit the exact
+  // browser Host/Origin pair when both sides are literal loopback hosts.
+  if (!dev) return false;
+  try {
+    const submitted = new URL(origin);
+    const host = req.headers.get("host");
+    return target.protocol === "http:" && submitted.protocol === "http:" &&
+      ["localhost", "127.0.0.1"].includes(target.hostname) &&
+      ["localhost", "127.0.0.1"].includes(submitted.hostname) &&
+      target.port === submitted.port && submitted.host === host;
+  } catch { return false; }
 }
 export const SESSION_MAX_AGE = SESSION_AGE_MS / 1000;

@@ -58,7 +58,7 @@ async function readBody(req) {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${host}:${port}`);
   if (url.pathname === "/healthz") return json(res, 200, { fixture: true });
-  if (req.headers.authorization !== `Bearer ${secret}`) return json(res, 401, { error: "unauthorized" });
+  if (process.env.AEGIS_TEST_FIXTURE_LOCAL_DEV !== "1" && req.headers.authorization !== `Bearer ${secret}`) return json(res, 401, { error: "unauthorized" });
   if (url.pathname === "/api/v1/settings/credentials") {
     if (req.method === "GET") return json(res, 200, providerStatus());
     if (req.method === "PUT") {

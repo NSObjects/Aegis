@@ -70,3 +70,33 @@ jobs:
             web/test-results
             web/playwright-report
           retention-days: 7
+
+  browser-local-dev:
+    name: Zero-secret loopback Live Web Chromium E2E
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser local dev no-auth E2E
+        run: npm run e2e:local
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-dev-browser-e2e-diagnostics
+          path: |
+            web/test-results
+            web/playwright-report
+          retention-days: 7

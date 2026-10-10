@@ -11,7 +11,7 @@ const providers: { id: CredentialName; title: string; description: string }[] = 
   { id: "TAVILY_API_KEY", title: "Tavily Search", description: "事件研究的可选 Web Search 数据源" },
 ];
 
-export default function ProviderSettings() {
+export default function ProviderSettings({ localDev = false }: { localDev?: boolean }) {
   const [status, setStatus] = useState<CredentialStatus | null>(null);
   const [inputs, setInputs] = useState<Record<CredentialName, string>>({ DEEPSEEK_API_KEY: "", TUSHARE_TOKEN: "", TAVILY_API_KEY: "" });
   const [saving, setSaving] = useState(false);
@@ -93,7 +93,7 @@ export default function ProviderSettings() {
     <section className="surface provider-settings-help">
       <h3><Database size={17}/> 部署与安全边界</h3>
       <p>Go API Token、Web 访问口令、会话签名密钥和加密主密钥属于部署凭证，仍在服务端环境变量中设置。它们不会通过此页面修改。</p>
-      <p>服务端加密文件依赖 <code>AEGIS_CREDENTIAL_MASTER_KEY</code>。如果不提供，该页只展示环境变量是否已配置。此页面仅面向单操作者的可信本地/内网部署。</p>
+      <p>{localDev ? "当前为本地调试：Go 已自动生成并保存本地加密主密钥，无需设置环境变量。请勿把此模式暴露到网络。" : <>服务端加密文件依赖 <code>AEGIS_CREDENTIAL_MASTER_KEY</code>。如果不提供，该页只展示环境变量是否已配置。此页面仅面向单操作者的可信本地/内网部署。</>}</p>
     </section>
   </div>;
 }
