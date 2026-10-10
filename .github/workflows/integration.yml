@@ -28,6 +28,11 @@ on:
         required: true
         default: false
         type: boolean
+      run_fundamental:
+        description: "Run production CLI with real Fundamental Analyst and PIT-safe Tushare income data"
+        required: true
+        default: false
+        type: boolean
       run_production_cli:
         description: "Run actual cmd/aegis Portfolio Review CLI end-to-end"
         required: true
@@ -311,6 +316,106 @@ jobs:
           set -euo pipefail
           jq -e '
             .research_artifact.symbol == "600519.SH" and
+            .portfolio_review.trade_intent.symbol == "600519.SH" and
+            .portfolio_review.risk_context.symbol == "600519.SH" and
+            .portfolio_review.portfolio_decision.symbol == "600519.SH" and
+            .portfolio_review.risk_context.assessment == "INSUFFICIENT_CONTEXT" and
+            .portfolio_review.portfolio_decision.portfolio_state == "NOT_PROVIDED" and
+            (.portfolio_review.debate_state.turns | map(.side) | index("BULL")) != null and
+            (.portfolio_review.debate_state.turns | map(.side) | index("BEAR")) != null and
+            (
+              if .portfolio_review.trade_intent.status == "CANDIDATE" then
+                .portfolio_review.portfolio_decision.disposition == "REVIEW_REQUIRED"
+              elif (.portfolio_review.trade_intent.status == "MONITOR" or
+                    .portfolio_review.trade_intent.status == "REJECTED") then
+                .portfolio_review.portfolio_decision.disposition == "NO_ACTION"
+              else false end
+            ) and
+            (.portfolio_review.portfolio_decision | has("order") | not)
+          ' "$OUTPUT_JSON" >/dev/null
+          echo "Production CLI returned a validated non-executable PortfolioDecision"
+          echo "Final statuses (no research contents or account data printed):"
+          jq -c '{
+            symbol: .portfolio_review.portfolio_decision.symbol,
+            intent: .portfolio_review.trade_intent.status,
+            risk: .portfolio_review.risk_context.assessment,
+            disposition: .portfolio_review.portfolio_decision.disposition,
+            portfolio_state: .portfolio_review.portfolio_decision.portfolio_state
+          }' "$OUTPUT_JSON"
+
+  fundamental_cli:
+    name: Fundamental Production CLI E2E
+    if: ${{ inputs.run_fundamental }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify production dependencies
+        shell: bash
+        run: |
+          for key in DEEPSEEK_API_KEY TUSHARE_TOKEN TAVILY_API_KEY; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Repository secret $key is required"
+              exit 1
+            fi
+          done
+          test -f configs/config.yaml || { echo "::error::Missing production config"; exit 1; }
+          test -s skills/tushare-data/SKILL.md || {
+            echo "::error::Production Tushare Skill is missing from this checked-out branch; merge main's skills/ files"
+            exit 1
+          }
+          command -v jq || { echo "::error::jq required"; exit 1; }
+
+      - name: Build actual application
+        run: go build -o "${{ runner.temp }}/aegis" ./cmd/aegis
+
+      - name: Run CLI with explicit unknown account
+        shell: bash
+        env:
+          OUTPUT_JSON: ${{ runner.temp }}/portfolio-decision.json
+          ACCOUNT_JSON: ${{ runner.temp }}/portfolio-context.json
+        run: |
+          set -euo pipefail
+          printf '{"state":"NOT_PROVIDED"}\n' > "$ACCOUNT_JSON"
+          chmod 600 "$ACCOUNT_JSON"
+          # Do not use fabricated positions, cash, NAV, exposure or budgets.
+          # This invokes the *same production entrypoint* users run.
+          "${{ runner.temp }}/aegis" \
+            -config configs/config.yaml \
+            -skills skills \
+            -symbol 600519.SH \
+            -portfolio-review \
+            -fundamental \
+            -portfolio-file "$ACCOUNT_JSON" \
+            -evidence-store "${{ runner.temp }}/evidence" \
+            > "$OUTPUT_JSON"
+
+      - name: Validate production JSON contract
+        shell: bash
+        env:
+          OUTPUT_JSON: ${{ runner.temp }}/portfolio-decision.json
+        run: |
+          set -euo pipefail
+          jq -e '
+            .research_artifact.symbol == "600519.SH" and
+            .research_artifact.fundamental.symbol == "600519.SH" and
+            .research_artifact.fundamental.income.symbol == "600519.SH" and
+            .research_artifact.fundamental.income.source == "TUSHARE_INCOME" and
+            (.research_artifact.fundamental.interpretation | length > 0) and
             .portfolio_review.trade_intent.symbol == "600519.SH" and
             .portfolio_review.risk_context.symbol == "600519.SH" and
             .portfolio_review.portfolio_decision.symbol == "600519.SH" and

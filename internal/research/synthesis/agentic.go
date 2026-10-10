@@ -2,6 +2,7 @@ package synthesis
 
 import (
 	"Aegis/internal/agent/event"
+	"Aegis/internal/agent/fundamental"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 	"context"
@@ -24,6 +25,7 @@ type modelInput struct {
 	Market    *market.Context    `json:"market"`
 	Technical *technical.Context `json:"technical"`
 	Event     *event.Context     `json:"event"`
+	Fundamental *fundamental.Context `json:"fundamental,omitempty"`
 }
 
 func (s *AgenticSynthesizer) Synthesize(
@@ -46,6 +48,7 @@ func (s *AgenticSynthesizer) Synthesize(
 			Market:    input.Market,
 			Technical: input.Technical,
 			Event:     input.Event,
+			Fundamental: input.Fundamental,
 		},
 	)
 	if err != nil {
@@ -76,6 +79,7 @@ func (s *AgenticSynthesizer) Synthesize(
 				Market: input.Market,
 				Technical: input.Technical,
 				Event: input.Event,
+				Fundamental: input.Fundamental,
 				Synthesis: synthesized,
 			}
 			if validationErr := Validate(artifact); validationErr == nil {
@@ -152,10 +156,11 @@ func assistantText(
 
 const researchSynthesisInstruction = `You are the cross-domain research synthesis layer for Aegis.
 
-You receive three already-validated typed research contexts:
+You receive three required already-validated research contexts and an optional fourth:
 - market
 - technical
 - event
+- fundamental (optional, source-owned announced financial metrics plus interpretation)
 
 Your role is to identify cross-domain agreement, disagreement, uncertainty, and research risk.
 
@@ -169,7 +174,7 @@ Rules:
 - Preserve uncertainty from NO_DATA, SUSPENDED, NO_EVENT, or INSUFFICIENT_EVIDENCE states.
 - Every agreement must cite at least one supplied domain.
 - Every conflict must cite at least two different supplied domains.
-- Reference domain must be MARKET, TECHNICAL, or EVENT.
+- Reference domain must be MARKET, TECHNICAL, or EVENT. When fundamental data exists, incorporate it in summary/risks, but do not invent a FUNDAMENTAL reference domain.
 - event_id may be supplied only for EVENT references and must come from the provided EventContext.
 - confidence must be between 0 and 1.
 
