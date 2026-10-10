@@ -342,3 +342,16 @@ func agenticTestText(
 	}
 	return builder.String()
 }
+
+func TestAgenticSynthesizerRepairOmitsUnsupportedSingleDomainConflict(t *testing.T) {
+ m:=&synthesisModel{responses:[]*schema.AgenticMessage{
+  synthesisAssistantMessage(`{"summary":"uncertainty","conflicts":[{"description":"single-domain claim","references":[{"domain":"MARKET"},{"domain":"MARKET"}]}],"confidence":0.5}`),
+  synthesisAssistantMessage(`{"summary":"uncertainty","conflicts":[],"risks":["The market-only assertion is not a cross-domain conflict"],"confidence":0.5}`),
+ }}
+ artifact,err:=(&AgenticSynthesizer{Model:m}).Synthesize(context.Background(),validSynthesisInput())
+ if err!=nil{t.Fatal(err)}
+ if m.calls!=2 || len(artifact.Synthesis.Conflicts)!=0 {t.Fatalf("must remove unsupported conflict without inventing evidence: calls=%d artifact=%+v",m.calls,artifact.Synthesis)}
+ if !strings.Contains(agenticTestText(m.input[len(m.input)-1]),"Do not attach an unrelated domain citation") {
+  t.Fatal("repair prompt must forbid fabricated cross-domain support")
+ }
+}
