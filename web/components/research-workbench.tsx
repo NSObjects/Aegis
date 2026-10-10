@@ -63,7 +63,7 @@ function StockChart({ stock, timeframe, onChange }: { stock: StockFixture; timef
             <CartesianGrid stroke="#2c3c50" strokeDasharray="3 5" vertical={false} opacity={0.42} />
             <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "#7087a2", fontSize: 10 }} tickMargin={12} interval="preserveStartEnd" />
             <YAxis orientation="right" domain={[min, max]} axisLine={false} tickLine={false} width={55} tick={{ fill: "#7087a2", fontSize: 10 }} tickFormatter={(v: number) => Number(v).toFixed(stock.price < 100 ? 2 : 0)} />
-            <Tooltip contentStyle={{ background: "#20334a", border: "1px solid #496379", borderRadius: 9, fontSize: 12, color: "#e4f1fb" }} formatter={(v: number | undefined) => [Number(v ?? 0).toFixed(2), "演示价格"]} labelStyle={{ color: "#9eb2c7" }} />
+            <Tooltip contentStyle={{ background: "#20334a", border: "1px solid #496379", borderRadius: 9, fontSize: 12, color: "#e4f1fb" }} formatter={(value) => [Number(value ?? 0).toFixed(2), "演示价格"]} labelStyle={{ color: "#9eb2c7" }} />
             <Area isAnimationActive={false} type="monotone" dataKey="close" stroke="#69e2c0" strokeWidth={2.6} fill="url(#priceGradient)" dot={false} activeDot={{ r: 5, stroke: "#071525", strokeWidth: 2 }} />
           </AreaChart>
         </ResponsiveContainer>
