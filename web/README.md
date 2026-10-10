@@ -77,3 +77,27 @@ No changes in this PR to the Go agent graph, CLI, CI secrets, execution permissi
   artifacts will replace this fixture mapping when real APIs are available.
 - `npm test` includes fail-closed trace tests, missing-reference checks and
   claim/evidence/stage referential-integrity assertions.
+
+## Live Go adapter (first integrated slice)
+
+The Web now supports two **mutually exclusive** modes. Default **demo** remains
+synthetic, clearly labelled and never contacts Go. With `AEGIS_WEB_MODE=live`
+the home page switches to a separate, real-data-only research console, not a
+mixture of demo stock prices and live research results.
+
+1. Start the Go service with `go run ./cmd/aegis-web -listen 127.0.0.1:8686 -portfolio-review=true` and `AEGIS_WEB_API_TOKEN` (24+ random bytes), as documented in `docs/WEB_RESEARCH_API.md`.
+2. Set these variables **in the Next.js server environment only**, not in client-side code: `AEGIS_WEB_MODE=live`, `AEGIS_WEB_API_URL=http://127.0.0.1:8686`, `AEGIS_WEB_API_TOKEN` (matching Go), `AEGIS_WEB_ACCESS_PASSWORD` (independent 16+ char password), `AEGIS_WEB_SESSION_SECRET` (32+ random characters), `AEGIS_WEB_RESEARCH_MODE=PORTFOLIO_REVIEW` (must match Go; `DECISION` is supported when Go starts in decision mode).
+3. `cd web && npm install && npm run dev`; open `http://localhost:3000`, enter the Web access password. Only a short-lived HttpOnly, SameSite=Strict signed session cookie is placed in the browser. The Go API token stays exclusively in the server runtime and is injected only by the Next.js BFF.
+4. Enter an A-share symbol (e.g. `600519.SH`), start a real Run, inspect persisted stages via SSE and status polling, cancel work, open past runs, then read/download the **exact typed** completed JSON artifact. In portfolio review mode, the frontend explicitly passes `{ "state": "NOT_PROVIDED" }` meaning account state **unknown** — not zero holdings.
+
+The BFF is an **allowlisted, same-origin** `/api/workbench/runs/...` adapter.
+It never redirects to an arbitrary URL or forwards user-supplied auth headers.
+It supports Last-Event-ID forwarding and uses a streaming `Response` instead of
+buffering SSE. Backend is deliberately limited to one process and one operator;
+all runs are visible to anyone with the Web session. **Do not expose the Next.js
+or Go service publicly without additional TLS/reverse-proxy access controls,
+rate limits and a full user authentication/authorization design.** The simple
+login endpoint is not a complete Internet-facing identity provider. The Go
+backend has no live market chart endpoint yet; live mode therefore **does not
+show synthetic prices, scores or evidence citations**. Do not mistake the
+absence of those views for unavailable or negative market data.
