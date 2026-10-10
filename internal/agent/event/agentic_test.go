@@ -359,6 +359,10 @@ func TestAgenticFactExtractorRepairsAmbiguousGroundingOnce(
 		)
 	}
 	repairPayload := eventAgenticTestText(model.inputs[1][1])
+	if !strings.Contains(repairPayload, `"grounding_quote_candidates"`) ||
+		!strings.Contains(repairPayload, `"ambiguous_quote":"合同"`) {
+		t.Fatalf("ambiguous quote repair must receive exact-context candidate hints: %s", repairPayload)
+	}
 	if !strings.Contains(repairPayload, `"previous_extraction"`) ||
 		!strings.Contains(repairPayload, `"quote":"合同"`) ||
 		!strings.Contains(repairPayload, `"content":"合同公告：公司签署合同，合同开始履行。"`) {
@@ -611,4 +615,31 @@ func TestStrictEventJSONModelErrorDoesNotRetry(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "provider failed") || len(m.inputs) != 1 {
 		t.Fatalf("error=%v, calls=%d", err, len(m.inputs))
 	}
+}
+
+func TestGroundingRepairHintsAreVerbatimAndUnique(t *testing.T) {
+ content := "第一份公告说明：公司完成回购，回购规模待确认。\\n第二份摘要转述：公司完成回购，实际结果尚未披露。"
+ quotes:=FactExtractionResult{Facts:[]ExtractedFact{
+  {EvidenceQuotes:[]EvidenceQuote{{DocumentID:"doc-1",Quote:"公司完成回购"}}},
+ }}
+ hints:=groundingRepairHints(quotes,[]capevent.CanonicalDocument{{ID:"doc-1",Content:content}})
+ if len(hints)!=2 {t.Fatalf("expected two distinct source contexts; got %#v",hints)}
+ for _,hint:=range hints{
+  if hint.DocumentID!="doc-1" || hint.AmbiguousQuote!="公司完成回购" ||
+   !strings.Contains(hint.VerbatimCandidate,"公司完成回购") ||
+   strings.Count(content,hint.VerbatimCandidate)!=1 {
+   t.Fatalf("hint not exact and unambiguous: %+v",hint)
+  }
+  if _,err:=ResolveEvidenceGroundings([]EvidenceQuote{{DocumentID:hint.DocumentID,Quote:hint.VerbatimCandidate}},map[string]capevent.CanonicalDocument{"doc-1":{ID:"doc-1",Content:content}});err!=nil{
+   t.Fatalf("candidate should pass unchanged grounding validator: %v",err)
+  }
+ }
+}
+
+func TestGroundingRepairHintsNeverRepairUnmatchedQuote(t *testing.T){
+ extraction:=FactExtractionResult{Facts:[]ExtractedFact{
+  {EvidenceQuotes:[]EvidenceQuote{{DocumentID:"doc-1",Quote:"虚构的陈述"}}},
+ }}
+ hints:=groundingRepairHints(extraction,[]capevent.CanonicalDocument{{ID:"doc-1",Content:"真实材料不包含该引用"}})
+ if len(hints)!=0{t.Fatalf("no hints may be invented: %+v",hints)}
 }
