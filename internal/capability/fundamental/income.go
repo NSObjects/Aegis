@@ -30,39 +30,8 @@ type IncomeSource struct {
  Endpoint string
  Client *http.Client
 }
-var symbolPattern=regexp.MustCompile(`^[0-9]{6}\.(SH|SZ|BJ)package fundamental
+var symbolPattern = regexp.MustCompile(`^[0-9]{6}\.(SH|SZ|BJ)$`)
 
-import (
- "bytes"
- "context"
- "encoding/json"
- "errors"
- "fmt"
- "io"
- "net/http"
- "regexp"
- "sort"
- "strings"
- "time"
-)
-
-// FinancialStatement is an observed income report, not an LLM estimate.
-// All currency values retain the upstream (CNY yuan) units.
-type FinancialStatement struct {
- Symbol string `json:"symbol"`
- AnnouncementDate string `json:"announcement_date"`
- PeriodEnd string `json:"period_end"`
- Revenue *float64 `json:"revenue,omitempty"`
- NetIncome *float64 `json:"net_income,omitempty"`
- Source string `json:"source"`
-}
-
-type IncomeSource struct {
- Token string
- Endpoint string
- Client *http.Client
-}
-)
 func dateOK(s string) bool { t,e:=time.Parse("20060102",s);return e==nil && t.Format("20060102")==s }
 
 // LatestIncome returns the latest report actually announced by cutoff; it does
