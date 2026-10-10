@@ -33,6 +33,11 @@ on:
         required: true
         default: false
         type: boolean
+      run_live_web_api:
+        description: "Paid real Go HTTP ResearchRun and Eino provider E2E"
+        required: true
+        default: false
+        type: boolean
       run_production_cli:
         description: "Run actual cmd/aegis Portfolio Review CLI end-to-end"
         required: true
@@ -565,3 +570,70 @@ jobs:
             exit 1
           }
           echo "Malformed account rejected before provider setup"
+
+  live_web_api:
+    name: Real Go HTTP ResearchRun with Eino providers
+    if: ${{ inputs.run_live_web_api }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      DEEPSEEK_STRONG_MODEL: ${{ vars.DEEPSEEK_STRONG_MODEL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify repository credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEEPSEEK_API_KEY" || { echo "::error::DEEPSEEK_API_KEY missing"; exit 1; }
+          test -n "$TUSHARE_TOKEN" || { echo "::error::TUSHARE_TOKEN missing"; exit 1; }
+          test -n "$TAVILY_API_KEY" || { echo "::error::TAVILY_API_KEY missing"; exit 1; }
+      - name: Prepare research dependencies and binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          go build -o "$RUNNER_TEMP/aegis-web" ./cmd/aegis-web
+          go build -o "$RUNNER_TEMP/aegis-live-check" ./cmd/aegis-live-check
+      - name: Run one paid ResearchRun through Go HTTP and SSE
+        shell: bash
+        run: |
+          set -euo pipefail
+          data_dir="$RUNNER_TEMP/aegis-live-http"
+          mkdir -p "$data_dir"
+          chmod 700 "$data_dir"
+          unset AEGIS_WEB_API_TOKEN AEGIS_CREDENTIAL_MASTER_KEY || true
+          "$RUNNER_TEMP/aegis-web" \
+            -dev -listen 127.0.0.1:18686 \
+            -store "$data_dir/runs" \
+            -credential-store "$data_dir/credentials.enc" \
+            -evidence-store "$data_dir/evidence" \
+            >"$data_dir/server.log" 2>&1 &
+          server_pid="$!"
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for i in $(seq 1 120); do
+            if curl -fsS --max-time 1 http://127.0.0.1:18686/api/v1/research/runs >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "::error::Go HTTP service exited before readiness"
+              exit 1
+            fi
+            sleep 0.25
+          done
+          if [ "$ready" != true ]; then echo "::error::Go API not ready"; exit 1; fi
+          # Do not automatically retry potentially paid requests.
+          "$RUNNER_TEMP/aegis-live-check" \
+            -url http://127.0.0.1:18686 \
+            -symbol 600519.SH -mode PORTFOLIO_REVIEW -timeout 25m
