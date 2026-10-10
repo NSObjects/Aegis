@@ -2,6 +2,7 @@ package research
 
 import (
 	eventagent "Aegis/internal/agent/event"
+	"Aegis/internal/agent/fundamental"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
 	"Aegis/internal/decision"
@@ -21,6 +22,7 @@ const (
 	marketNodeKey    = "market"
 	technicalNodeKey = "technical"
 	eventNodeKey     = "event"
+	fundamentalNodeKey = "fundamental"
 	synthesisNodeKey = "synthesis"
 	tradingNodeKey   = "trading"
 
@@ -58,6 +60,8 @@ type eventAnalyzer interface {
 	) (*eventagent.Context, error)
 }
 
+type fundamentalAnalyzer interface { Analyze(context.Context, fundamental.Input, ...adk.AgentRunOption)(*fundamental.Context,error) }
+
 type researchSynthesizer interface {
 	Synthesize(
 		ctx context.Context,
@@ -78,6 +82,7 @@ type Config struct {
 	MarketAgent    marketAnalyzer
 	TechnicalAgent technicalAnalyzer
 	EventAgent     eventAnalyzer
+	FundamentalAgent fundamentalAnalyzer
 	Synthesizer    researchSynthesizer
 	TradingAgent   artifactTradingAnalyzer
 }
@@ -106,11 +111,14 @@ type eventResult struct {
 	EventContext *eventagent.Context
 }
 
+type fundamentalResult struct { FundamentalContext *fundamental.Context }
+
 type synthesisInput struct {
 	Symbol           string
 	MarketContext    *market.Context
 	TechnicalContext *technical.Context
 	EventContext     *eventagent.Context
+	FundamentalContext *fundamental.Context
 }
 
 func New(
@@ -352,6 +360,7 @@ func NewArtifact(
 						Market:    input.MarketContext,
 						Technical: input.TechnicalContext,
 						Event:     input.EventContext,
+						Fundamental: input.FundamentalContext,
 					},
 				)
 			if err != nil {
@@ -373,6 +382,16 @@ func NewArtifact(
 	)
 
 
+	if cfg.FundamentalAgent != nil {
+		fundamentalNode := compose.InvokableLambda(func(ctx context.Context,in Input)(*fundamentalResult,error){
+			date:=in.RequestedAsOf.In(time.FixedZone("A-share",8*60*60)).Format("20060102")
+			result,err:=cfg.FundamentalAgent.Analyze(ctx,fundamental.Input{Symbol:in.Symbol,RequestedAsOf:date})
+			if err!=nil{return nil,fmt.Errorf("fundamental research: %w",err)}
+			if result==nil||result.Income==nil||result.Symbol!=in.Symbol||result.RequestedAsOf!=date||result.Income.Symbol!=in.Symbol||result.Income.AnnouncementDate>date{return nil,errors.New("invalid fundamental context")}
+			return &fundamentalResult{FundamentalContext:result},nil
+		})
+		workflow.AddLambdaNode(fundamentalNodeKey,fundamentalNode).AddInput(compose.START)
+	}
 	workflow.AddLambdaNode(
 		marketNodeKey,
 		marketNode,
@@ -388,7 +407,7 @@ func NewArtifact(
 		technicalNode,
 	).AddInput(marketNodeKey)
 
-	workflow.AddLambdaNode(
+	synthesisBuilder := workflow.AddLambdaNode(
 		synthesisNodeKey,
 		synthesisNode,
 	).
