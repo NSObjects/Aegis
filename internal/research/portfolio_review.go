@@ -161,7 +161,29 @@ func (w *PortfolioReview) Run(
 		return nil, fmt.Errorf("trade intent symbol %q does not match artifact symbol %q", intent.Symbol, artifact.Symbol)
 	}
 
+	// Risk and Portfolio roles receive shared pointers. They must not modify
+	// previously validated trade intent or caller-observed account state.
+	decisionInputs := struct {
+		Intent *tradeintent.Intent
+		Book   *portfolio.Context
+	}{intent, book}
+	beforeReview, err := json.Marshal(decisionInputs)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot validated decision inputs: %w", err)
+	}
+	assertUnchanged := func(stage string) error {
+		after, err := json.Marshal(decisionInputs)
+		if err != nil {
+			return fmt.Errorf("snapshot decision inputs after %s: %w", stage, err)
+		}
+		if !bytes.Equal(beforeReview, after) {
+			return fmt.Errorf("%s mutated validated trade intent or portfolio context", stage)
+		}
+		return nil
+	}
+
 	riskContext, err := w.cfg.RiskAnalyst.Review(ctx, intent, book)
+	if unchangedErr := assertUnchanged("risk analyst"); unchangedErr != nil { return nil, unchangedErr }
 	if err != nil {
 		return nil, fmt.Errorf("risk analyst: %w", err)
 	}
@@ -170,6 +192,7 @@ func (w *PortfolioReview) Run(
 	}
 
 	final, err := w.cfg.PortfolioManager.Review(ctx, intent, book, riskContext)
+	if unchangedErr := assertUnchanged("portfolio manager"); unchangedErr != nil { return nil, unchangedErr }
 	if err != nil {
 		return nil, fmt.Errorf("portfolio manager: %w", err)
 	}
