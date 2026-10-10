@@ -93,7 +93,7 @@ func (s *AgenticSynthesizer) Synthesize(
 			messages = append(messages,
 				response,
 				schema.UserAgenticMessage(fmt.Sprintf(
-					"Your previous JSON failed deterministic validation: %v. Return the complete corrected JSON object only. Preserve upstream facts and obey the original schema; in particular, every conflict must reference at least two distinct domains.",
+					"Your previous JSON failed deterministic validation: %v. Return the complete corrected JSON object only. Preserve upstream facts and obey the original schema; in particular, every conflict must reference at least two genuinely supported distinct domains. If a claimed conflict is supported within only one domain, REMOVE that conflict and, if necessary, describe its uncertainty under risks. Do not attach an unrelated domain citation to satisfy validation. Preserve upstream facts unchanged.",
 					err,
 				)),
 			)
