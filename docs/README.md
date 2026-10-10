@@ -3,12 +3,14 @@
 > 状态基准：2026-10-08 · `main` 已合并 V2.11.4（PR #86）；该版本的 What-if 组合情景研究能力已进入主线。  
 > **权威架构**：[10-多Agent架构与职责边界.md](10-多Agent架构与职责边界.md)。本文是按仓库代码整理的能力索引，不覆盖该架构约束。
 
-## 产品路线图与当前开发主线
+## 当前开发路线与下一项任务
 
-- [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)：执行版产品路线图，采用 **M0～M6 里程碑**：当前多 Agent 收口、**Web 与对话一体化**、动态仓位研究、历史与机会发现、主动监控、研究 Memory 及独立策略验证；仓库 V2.13 等工程版本号不受影响。
-- [MULTI_AGENT_ROADMAP.md](MULTI_AGENT_ROADMAP.md)：当前多 Agent F0～F4 功能收尾和真实 Hosted E2E 验收清单；完成后进入仓位 V1 与 Web 阶段。
+**开发导航唯一入口：**[DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。先看文档顶部的「当前开发状态与下一步」，按 R0 → R1 → R2… 及任务编号执行。**R0/V1 完成后，第一项任务是 R1-01：抽离 CLI 与 Web 共用的 Application Service**，然后继续 R1-02 任务持久化、R1-03 HTTP/SSE、R1-04 Web、R1-05 基础对话。
 
-> 本页下方「截至 V2.11.4」的表格保留为历史能力索引，最新提交和未完成事项应以实际 main/PR/CI 及上述路线图的核验记录为准。
+- [MULTI_AGENT_ROADMAP.md](MULTI_AGENT_ROADMAP.md)：仅作当前 R0 / F0～F4 收尾和真实 Hosted E2E 的详细验收清单；长期下一阶段顺序以开发路线图为准。
+- [10-多Agent架构与职责边界.md](10-多Agent架构与职责边界.md)：永久架构与研究边界，不作为任务进度表。
+
+> 下方「截至 V2.11.4」的历史能力描述不是当前任务进度；开发前请核对最新 main、PR 和 CI/Hosted 证据。
 
 ## 产品定位
 
