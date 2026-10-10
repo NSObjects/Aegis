@@ -120,9 +120,8 @@ func apiKey(
 		)
 	}
 
-	value := strings.TrimSpace(
-		os.Getenv(cfg.APIKeyEnv),
-	)
+	value := strings.TrimSpace(cfg.APIKey)
+	if value == "" { value = strings.TrimSpace(os.Getenv(cfg.APIKeyEnv)) }
 
 	if value == "" {
 		return "", fmt.Errorf(

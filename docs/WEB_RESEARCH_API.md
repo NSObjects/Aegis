@@ -102,3 +102,43 @@ curl -N http://127.0.0.1:8686/api/v1/research/runs/$RUN_ID/stream \
   next implementation can create a Next.js server adapter that maps the real
   Run/Artifact/Event objects to the existing workbench components. There are
   no trading or live portfolio-management commands here.
+
+
+## Provider credentials from Web settings (single operator)
+
+The Go server supports optional encrypted provider credentials. Generate a
+persistent 32-byte random master key and provide its **64-character hex** value
+as `AEGIS_CREDENTIAL_MASTER_KEY` to `cmd/aegis-web`, for example:
+`openssl rand -hex 32`. Keep this master key in the deployment secret manager,
+NOT in a browser, Web form, Git repository, research artifact, or logfile.
+Start the Go server with its normal API token and this master key before
+opening the Live Web settings page. No DeepSeek/TuShare/Tavily credentials are
+needed to **start** the research server: model and provider dependencies are
+built for each new Run using the most recently saved credential values.
+Credentials changed while another Run is active are used only for new Runs.
+
+The default encrypted file is `.aegis/credentials.enc` (customize with
+`-credential-store`). AES-256-GCM is used with random nonces; the directory
+must be 0700 and the file 0600. Back up the master key securely: if it is
+lost, saved credentials are not recoverable. Keep the file on a trusted local
+filesystem; do not mount the same credential store into multiple Go servers.
+Do not expose these single-operator settings publicly.
+
+Authenticated Go API operations:
+- `GET /api/v1/settings/credentials` returns **only** booleans
+  `editable` and `configured` for `DEEPSEEK_API_KEY`,
+  `TUSHARE_TOKEN`, `TAVILY_API_KEY`; no key values or suffixes.
+- `PUT /api/v1/settings/credentials` accepts a strict object such as
+  `{"changes":{"TUSHARE_TOKEN":"..."}}`. Omitted keys are unchanged.
+  To delete stored overrides use `{"clear":["TUSHARE_TOKEN"]}`.
+  If an environment variable exists it remains the fallback when the
+  encrypted override is deleted. No master key means read-only status.
+  The API requires the same server Bearer token as ResearchRun operations.
+
+Only provider credentials are managed here. Go/Next API tokens, Web access
+password, session signing secret and encryption master key remain deployment
+settings and cannot be edited over the network.
+
+The Live Web settings page uses the existing HttpOnly session, same-origin
+checks and Next.js server-side Bearer proxy. Neither GET nor PUT replies
+include plaintext secrets. Secret entries are never persisted in localStorage.

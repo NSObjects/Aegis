@@ -80,3 +80,21 @@ test("provider failure is terminal and cannot be presented as success", async ({
   expect(artifact.status()).toBe(409);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
 });
+
+test("settings lets a signed-in operator save provider credentials without echoing keys", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("button", { name: "凭证设置" }).click();
+  await expect(page.getByRole("heading", { name: "模型与数据源凭证" })).toBeVisible();
+  const key = "synthetic-browser-credential-no-provider-calls";
+  await page.getByLabel("DeepSeek API Key").fill(key);
+  const response = page.waitForResponse(r => r.url().endsWith("/api/workbench/credentials") && r.request().method() === "PUT");
+  await page.getByRole("button", { name: "保存凭证" }).click();
+  expect((await response).status()).toBe(200);
+  await expect(page.locator(".provider-settings-form .live-info")).toContainText("已保存至 Go 服务端");
+  await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
+  expect(await page.locator("body").innerText()).not.toContain(key);
+  await page.reload();
+  await page.getByRole("button", { name: "凭证设置" }).click();
+  await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
+  await expect(page.locator(".provider-settings-row").filter({ hasText: "DeepSeek" })).toContainText("已配置");
+});

@@ -125,3 +125,27 @@ market-data source**. These tests verify browser↔BFF↔HTTP protocol wiring,
 **not** real Go/Eino research, provider credentials, point-in-time finance
 accuracy or multi-user production deployment. Real integrated Hosted E2E
 remains separately required before claiming the workstation is production ready.
+
+
+## Live settings: provider credentials
+
+With `AEGIS_WEB_MODE=live`, sign in and open **凭证设置** from the sidebar.
+The page supports DeepSeek (`DEEPSEEK_API_KEY`), TuShare (`TUSHARE_TOKEN`)
+and optional Tavily (`TAVILY_API_KEY`) credentials. Inputs are password
+fields and are cleared after saving. The UI receives only availability
+booleans, never stored secret values, partial masks or decrypted responses.
+
+To activate editing, set `AEGIS_CREDENTIAL_MASTER_KEY` (64 hex characters,
+generate with `openssl rand -hex 32`) **on the Go server** before it starts.
+The Go API stores secrets encrypted at `.aegis/credentials.enc` or
+`-credential-store`. The settings API can be read with environment-only
+credentials even when no master key is configured, but cannot write without
+one. If model/provider keys are absent at Go startup, the server starts and
+new runs fail closed until keys are provided; the UI must not claim successful
+research in that case.
+
+The browser never receives AEGIS_WEB_API_TOKEN,
+AEGIS_WEB_ACCESS_PASSWORD, AEGIS_WEB_SESSION_SECRET or the encryption key.
+Those deployment secrets must be installed separately; this page manages
+**provider** keys only. Already-running research jobs retain their existing
+provider configuration; newly started jobs read updated overrides.

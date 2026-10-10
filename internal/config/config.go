@@ -20,6 +20,7 @@ type ModelConfig struct {
 	Model    string   `yaml:"model"`
 
 	APIKeyEnv string `yaml:"api_key_env"`
+	APIKey string `yaml:"-" json:"-"`
 	BaseURL   string `yaml:"base_url,omitempty"`
 	MaxTokens *int   `yaml:"max_tokens,omitempty"`
 }
