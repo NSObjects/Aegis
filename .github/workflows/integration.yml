@@ -522,3 +522,46 @@ jobs:
             disposition: .portfolio_review.portfolio_decision.disposition,
             portfolio_state: .portfolio_review.portfolio_decision.portfolio_state
           }' "$OUTPUT_JSON"
+
+  invalid_account_cli:
+    name: Production CLI Invalid Account Fail-Closed
+    if: ${{ inputs.run_production_cli }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # No provider credentials: rejection must happen before model/source setup.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build actual CLI
+        run: go build -o "${{ runner.temp }}/aegis" ./cmd/aegis
+      - name: Reject malformed account before external research
+        shell: bash
+        env:
+          CLI: ${{ runner.temp }}/aegis
+          ACCOUNT_JSON: ${{ runner.temp }}/bad-account.json
+          OUTPUT_JSON: ${{ runner.temp }}/unexpected-output.json
+          STDERR_LOG: ${{ runner.temp }}/validation-error.log
+        run: |
+          set -euo pipefail
+          printf '{"state":"POSITIONS","positions":[],"unknown_property":true}\n' > "$ACCOUNT_JSON"
+          if "$CLI" -config configs/config.yaml -skills skills \
+              -portfolio-review -portfolio-file "$ACCOUNT_JSON" \
+              >"$OUTPUT_JSON" 2>"$STDERR_LOG"; then
+            echo "::error::CLI accepted malformed account"
+            exit 1
+          fi
+          grep -q 'decode portfolio' "$STDERR_LOG" || {
+            echo "::error::Unexpected error: not input validation"
+            cat "$STDERR_LOG"
+            exit 1
+          }
+          test ! -s "$OUTPUT_JSON" || {
+            echo "::error::Malformed account emitted an apparent research decision"
+            exit 1
+          }
+          echo "Malformed account rejected before provider setup"
