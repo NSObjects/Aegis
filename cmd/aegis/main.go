@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Aegis/internal/application"
 	eventagent "Aegis/internal/agent/event"
 	"Aegis/internal/agent/fundamental"
 	fundamentalcap "Aegis/internal/capability/fundamental"
@@ -657,10 +658,13 @@ func runWithFundamental(
 		researchConfig.FundamentalAgent=analyst
 	}
 
-	var result any
+
+	var decisionRunner application.DecisionRunner
+	var portfolioRunner application.PortfolioRunner
+	mode := application.ModeDecision
 	if portfolioReview {
-		// Production composition of the shared research graph and the
-		// independent Risk/Portfolio review. No test fixture or extra Trader.
+		// Reuse the existing validated research and portfolio workflow; the
+		// CLI only assembles dependencies and formats the transport output.
 		upstream, err := research.NewArtifact(ctx, researchConfig)
 		if err != nil {
 			return fmt.Errorf("create research artifact workflow: %w", err)
@@ -679,27 +683,34 @@ func runWithFundamental(
 		if err != nil {
 			return fmt.Errorf("create portfolio review workflow: %w", err)
 		}
-		result, err = (&research.FullPortfolioWorkflow{
+		portfolioRunner = &research.FullPortfolioWorkflow{
 			Research: upstream,
 			Review: review,
 			MaxPortfolioAge: portfolioMaxAge,
 			Limits: limits,
 			Scenario: scenario,
-		}).Run(ctx, workflowInput, book)
-		if err != nil {
-			return err
 		}
+		mode = application.ModePortfolio
 	} else {
 		workflow, err := research.New(ctx, researchConfig)
 		if err != nil {
 			return err
 		}
-		result, err = workflow.Run(ctx, workflowInput)
-		if err != nil {
-			return err
-		}
+		decisionRunner = workflow
 	}
-	data, err := json.MarshalIndent(result, "", "  ")
+	service, err := application.NewResearchService(decisionRunner, portfolioRunner)
+	if err != nil {
+		return err
+	}
+	response, err := service.Run(ctx, application.ResearchRequest{
+		Mode: mode,
+		Input: workflowInput,
+		Portfolio: book,
+	})
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(response.Output(), "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal research result: %w", err)
 	}
