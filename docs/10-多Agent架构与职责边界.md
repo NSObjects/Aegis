@@ -6,6 +6,8 @@
 > 本文定义 Aegis 长期的组织级 Multi-Agent 模型，以及当前增量实现必须遵守的边界。
 > 目标不是堆很多 Agent，而是让系统能够像一个真实投资研究组织一样，由不同 Team / Role 分工协作，同时保持结构化、可测试、可替换。
 
+> **长期目标的职责演进说明（2026-10-10）**：本文件中的 Team / Role / Graph 属于**当前官方 Multi-Agent 研究方案**的权威职责约束；它**不表示未来每一个独立策略都必须采用相同组织流程**。未来平台级目标参见 [architecture/README.md](architecture/README.md)：稳定 Aegis Host + 官方 Capabilities（包括内置 Data）+ 不同策略独立 Workflow，TradingAgents 式研究成为一种官方内置研究策略。目标**尚未实施**，其协议/隔离等仍需测试；不得因目标存在而破坏当前代码、研究辅助/不接交易的永久边界，或更改 [DEVELOPMENT_ROADMAP](DEVELOPMENT_ROADMAP.md) 中 R0→R1 的优先级。
+
 ## 0. 永久产品边界：研究与决策辅助，不接交易执行
 
 Aegis 的产品范围固定为：**市场信息采集、投资研究、多角色论证、研究性投资判断、风险解释、组合情景分析、策略历史验证、研究报告**。
