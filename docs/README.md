@@ -3,6 +3,12 @@
 > 状态基准：2026-10-08 · `main` 已合并 V2.11.4（PR #86）；该版本的 What-if 组合情景研究能力已进入主线。  
 > **权威架构**：[10-多Agent架构与职责边界.md](10-多Agent架构与职责边界.md)。本文是按仓库代码整理的能力索引，不覆盖该架构约束。
 
+## 长期架构方向：官方能力 + 独立策略 + 社区
+
+新增 [**Aegis 长期架构设计基线**](architecture/README.md)，分六个专题文件，记录：稳定 Strategy Host、官方 Data（全市场定时采集 + 本地查询 + 实时 MCP/Skill）、Eino Agent Loop、策略独立 Workflow、Strategy Builder/第三方社区，以及风险与增量验收门槛。
+
+**这是长期目标，不是已实现功能或新的开发路线。** 现有多 Agent 组织结构继续作为当前官方研究链路执行；[DEVELOPMENT_ROADMAP](DEVELOPMENT_ROADMAP.md) 仍为唯一的开发导航，R0/V1 验收后优先完成 R1 Web 工作台。Aegis 永久不执行真实下单或自动调仓。
+
 ## 当前开发路线与下一项任务
 
 **开发唯一导航入口：** [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。查看其顶部「当前任务/下一项」并按任务编号执行。**V1 内核验收后首先开发完整研究工作台**，而不是仓位管理。
