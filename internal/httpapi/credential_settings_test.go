@@ -13,7 +13,7 @@ import (
 )
 
 func TestCredentialEndpointRequiresBearerAndNeverEchoes(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "secrets.enc")
+	path := filepath.Join(t.TempDir(), "private", "secrets.enc")
 	key := hex.EncodeToString([]byte("12345678901234567890123456789012"))
 	store, err := settings.NewStore(path, key)
 	if err != nil {
