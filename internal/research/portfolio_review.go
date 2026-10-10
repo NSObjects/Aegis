@@ -191,8 +191,15 @@ func (w *PortfolioReview) Run(
 		return nil, fmt.Errorf("invalid risk context: %w", err)
 	}
 
+	// Portfolio Manager must not rewrite a validated upstream risk assessment,
+	// even when its edits would make the final deterministic check self-consistent.
+	validatedRisk, err := json.Marshal(riskContext)
+	if err != nil { return nil, fmt.Errorf("snapshot validated risk context: %w", err) }
 	final, err := w.cfg.PortfolioManager.Review(ctx, intent, book, riskContext)
 	if unchangedErr := assertUnchanged("portfolio manager"); unchangedErr != nil { return nil, unchangedErr }
+	currentRisk, snapshotErr := json.Marshal(riskContext)
+	if snapshotErr != nil { return nil, fmt.Errorf("snapshot risk context after portfolio manager: %w", snapshotErr) }
+	if !bytes.Equal(validatedRisk, currentRisk) { return nil, errors.New("portfolio manager mutated validated risk context") }
 	if err != nil {
 		return nil, fmt.Errorf("portfolio manager: %w", err)
 	}
