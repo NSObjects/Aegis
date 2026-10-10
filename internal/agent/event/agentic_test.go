@@ -358,6 +358,12 @@ func TestAgenticFactExtractorRepairsAmbiguousGroundingOnce(
 			len(model.inputs),
 		)
 	}
+	repairPayload := eventAgenticTestText(model.inputs[1][1])
+	if !strings.Contains(repairPayload, `"previous_extraction"`) ||
+		!strings.Contains(repairPayload, `"quote":"合同"`) ||
+		!strings.Contains(repairPayload, `"content":"合同公告：公司签署合同，合同开始履行。"`) {
+		t.Fatalf("repair must see previous candidate and canonical source: %s", repairPayload)
+	}
 	if len(result.Facts) != 1 ||
 		len(result.Facts[0].EvidenceQuotes) != 1 ||
 		result.Facts[0].EvidenceQuotes[0].Quote !=
