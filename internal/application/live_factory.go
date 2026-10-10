@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	eventagent "Aegis/internal/agent/event"
@@ -46,6 +47,7 @@ type LiveServiceOptions struct {
 	PortfolioMaxAge time.Duration
 	Limits *portfolio.Limits
 	Scenario *portfolio.TradeScenario
+	Credentials map[string]string // resolved only on server; no browser payloads
 }
 
 // NewLiveResearchService constructs the existing production graph for either
@@ -77,6 +79,12 @@ func NewLiveResearchService(ctx context.Context, options LiveServiceOptions) (*R
 		return nil, err
 	}
 
+	for profile, modelCfg := range appCfg.Models {
+		if value := strings.TrimSpace(options.Credentials[modelCfg.APIKeyEnv]); value != "" {
+			modelCfg.APIKey = value
+			appCfg.Models[profile] = modelCfg
+		}
+	}
 	models := llm.NewManager(
 		appCfg.Models,
 	)
@@ -217,7 +225,7 @@ func NewLiveResearchService(ctx context.Context, options LiveServiceOptions) (*R
 	}
 
 	researcher, err := technicalcap.NewHTTPResearcher(
-		os.Getenv("TUSHARE_TOKEN"),
+		credentialValue(options.Credentials, "TUSHARE_TOKEN"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -399,9 +407,7 @@ func NewLiveResearchService(ctx context.Context, options LiveServiceOptions) (*R
 							MaxDays: maxCLSDays,
 						},
 						&eventcap.TavilyWebSearchRetriever{
-							APIKey: os.Getenv(
-								"TAVILY_API_KEY",
-							),
+							APIKey: credentialValue(options.Credentials, "TAVILY_API_KEY"),
 							TargetResolver:
 								targetResolver,
 						},
@@ -429,7 +435,7 @@ func NewLiveResearchService(ctx context.Context, options LiveServiceOptions) (*R
 	}
 
 	if withFundamental {
-		source := &fundamentalcap.IncomeSource{Token:os.Getenv("TUSHARE_TOKEN")}
+		source := &fundamentalcap.IncomeSource{Token:credentialValue(options.Credentials, "TUSHARE_TOKEN")}
 		analyst, err := fundamental.New(ctx,source,tradingModel)
 		if err != nil {return nil, fmt.Errorf("create fundamental agent: %w",err)}
 		researchConfig.FundamentalAgent=analyst
@@ -479,4 +485,10 @@ func NewLiveResearchService(ctx context.Context, options LiveServiceOptions) (*R
 	}
 
 	return service, nil
+}
+
+// credentialValue prefers encrypted per-run settings over startup env values.
+func credentialValue(overrides map[string]string, name string) string {
+	if value := strings.TrimSpace(overrides[name]); value != "" { return value }
+	return strings.TrimSpace(os.Getenv(name))
 }
