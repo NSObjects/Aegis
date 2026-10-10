@@ -434,6 +434,7 @@ func NewArtifact(
 			),
 		)
 
+	if cfg.FundamentalAgent != nil { synthesisBuilder.AddInput(fundamentalNodeKey,compose.MapFields("FundamentalContext","FundamentalContext")) }
 	workflow.End().AddInput(synthesisNodeKey)
 
 	runnable, err := workflow.Compile(
