@@ -22,6 +22,7 @@ type Config struct {
 
 type Agent struct {
 	runner *adk.TypedRunner[*schema.AgenticMessage]
+	model model.BaseModel[*schema.AgenticMessage]
 }
 
 func New(
@@ -71,6 +72,7 @@ func New(
 
 	return &Agent{
 		runner: runner,
+		model: cfg.Model,
 	}, nil
 }
 
@@ -146,11 +148,18 @@ func (a *Agent) Analyze(
 	}
 
 	result, err := parseContext(output)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	if err == nil { return result, nil }
+	// A malformed final assistant message gets one formatting-only correction.
+	// Provider/tool failures are not retried and the resulting JSON is validated.
+	if ctx.Err() != nil { return nil, ctx.Err() }
+	repaired, repairErr := a.model.Generate(ctx, []*schema.AgenticMessage{
+		schema.SystemAgenticMessage("You are a strict JSON formatting repairer. Return exactly one valid Aegis MarketContext JSON object using only the provided output. Remove commentary, incomplete duplicate objects and markdown. Never invent facts or alter source values. If facts are insufficient, return an empty response."),
+		schema.UserAgenticMessage("Correct the following Market Agent output into one complete JSON object only:\n"+output),
+	})
+	if repairErr != nil { return nil, fmt.Errorf("market context correction failed: %w", repairErr) }
+	corrected, correctedErr := parseContext(assistantText(repaired))
+	if correctedErr != nil { return nil, fmt.Errorf("invalid market context after one correction: %w", correctedErr) }
+	return corrected, nil
 }
 
 func parseContext(

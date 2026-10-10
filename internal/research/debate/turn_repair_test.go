@@ -116,3 +116,34 @@ func TestDebateRepairDoesNotInventForAbsentOutput(t *testing.T) {
 		t.Fatalf("an empty turn is not a legitimate research conclusion: calls=%d err=%v",m.calls,err)
 	}
 }
+
+func TestBullRoundTwoRepairsMissingBearEngagement(t *testing.T) {
+ state:=&State{Symbol:"600519.SH",Turns:[]Turn{
+  {Round:1,Side:SideBull,Thesis:"positive",Arguments:[]Argument{{ID:"bull-r1-1",Claim:"technical support",References:[]synthesis.Reference{{Domain:synthesis.DomainTechnical}}}},Confidence:.7},
+  {Round:1,Side:SideBear,Thesis:"risk",Arguments:[]Argument{{ID:"bear-r1-1",Claim:"market uncertainty",References:[]synthesis.Reference{{Domain:synthesis.DomainMarket}}}},Rebuttals:[]Rebuttal{{Claim:"countercase",TargetArgumentID:"bull-r1-1",References:[]synthesis.Reference{{Domain:synthesis.DomainMarket}}}},Confidence:.6},
+ }}
+ noEngagement:=`{"round":2,"side":"BULL","thesis":"bull argument","arguments":[{"id":"bull-r2-1","claim":"technical support","references":[{"domain":"TECHNICAL"}]}],"confidence":0.7}`
+ withEngagement:=`{"round":2,"side":"BULL","thesis":"bull argument","arguments":[{"id":"bull-r2-1","claim":"technical support","references":[{"domain":"TECHNICAL"}]}],"rebuttals":[{"claim":"market uncertainty can be weighed against observed technical facts","target_argument_id":"bear-r1-1","references":[{"domain":"MARKET"}]}],"confidence":0.7}`
+ m:=&scriptedTurnModel{outputs:[]string{noEngagement,withEngagement}}
+ turn,err:=(&BullResearcher{Model:m}).GenerateTurn(context.Background(),validArtifact(),state,2)
+ if err!=nil || m.calls!=2 || len(turn.Rebuttals)!=1 || turn.Rebuttals[0].TargetArgumentID!="bear-r1-1" {
+  t.Fatalf("expected model-grounded retry to engage prior BEAR: turn=%+v calls=%d err=%v",turn,m.calls,err)
+ }
+ if !strings.Contains(m.inputs[1][2].ContentBlocks[0].UserInputText.Text,"must rebut at least one prior BEAR argument"){
+  t.Fatal("retry must explain opposing engagement requirement")
+ }
+ if len(state.Turns)!=2{t.Fatal("repair must not mutate debate history")}
+}
+
+func TestBullRoundTwoFailsClosedWithoutEngagement(t *testing.T){
+ state:=&State{Symbol:"600519.SH",Turns:[]Turn{
+  {Round:1,Side:SideBull,Thesis:"positive",Arguments:[]Argument{{ID:"bull-r1-1",Claim:"technical support",References:[]synthesis.Reference{{Domain:synthesis.DomainTechnical}}}},Confidence:.7},
+  {Round:1,Side:SideBear,Thesis:"risk",Arguments:[]Argument{{ID:"bear-r1-1",Claim:"market uncertainty",References:[]synthesis.Reference{{Domain:synthesis.DomainMarket}}}},Rebuttals:[]Rebuttal{{Claim:"countercase",TargetArgumentID:"bull-r1-1",References:[]synthesis.Reference{{Domain:synthesis.DomainMarket}}}},Confidence:.6},
+ }}
+ noEngagement:=`{"round":2,"side":"BULL","thesis":"bull argument","arguments":[{"id":"bull-r2-1","claim":"technical support","references":[{"domain":"TECHNICAL"}]}],"confidence":0.7}`
+ m:=&scriptedTurnModel{outputs:[]string{noEngagement,noEngagement}}
+ turn,err:=(&BullResearcher{Model:m}).GenerateTurn(context.Background(),validArtifact(),state,2)
+ if err==nil || m.calls!=2 || !strings.Contains(err.Error(),"must rebut at least one prior BEAR argument")||len(turn.Arguments)>0{
+  t.Fatalf("must fail closed without model-grounded engagement: turn=%+v calls=%d err=%v",turn,m.calls,err)
+ }
+}

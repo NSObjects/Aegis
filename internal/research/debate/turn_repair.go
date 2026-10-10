@@ -61,7 +61,8 @@ func generateValidatedTurn(
 				"Generate a complete NEW JSON turn for side %s, round %d, "+
 				"using only the research_artifact and debate_state already supplied. "+
 				"Every argument MUST have an explicit, unique, nonempty id and a grounded claim and references; "+
-				"rebuttals may refer only to argument IDs already in the supplied debate_state. "+
+				"when an opposing argument exists in debate_state, rebuttals MUST target at least one real prior opposing argument ID. "+
+				"Other rebuttals may refer only to argument IDs already in the supplied debate_state. "+
 				"Do not invent facts, references, events or prior argument IDs. "+
 				"Return only the complete corrected JSON object.",
 			validationErr, expectedSide, round,
@@ -100,8 +101,12 @@ func parseValidatedTurn(
 		Turns: append(append([]Turn(nil), state.Turns...), turn),
 	}
 	if err := ValidateState(candidate, artifact); err != nil {
-		return Turn{}, fmt.Errorf("invalid %s researcher turn: %w",
-			strings.ToLower(string(expectedSide)), err)
-	}
-	return turn, nil
+        return Turn{}, fmt.Errorf("invalid %s researcher turn: %w", strings.ToLower(string(expectedSide)), err)
+    }
+    opposing := SideBull
+    if expectedSide == SideBull { opposing = SideBear }
+    if err := requireOpposingEngagement(turn, state, opposing); err != nil {
+        return Turn{}, fmt.Errorf("invalid %s researcher turn: %w", strings.ToLower(string(expectedSide)), err)
+    }
+    return turn, nil
 }
