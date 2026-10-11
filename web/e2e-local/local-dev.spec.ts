@@ -16,7 +16,11 @@ test("zero-secret loopback Live Web opens without login and can run a task", asy
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 20_000 });
-  await expect(page.getByText("PROTOCOL_FIXTURE_ONLY", { exact: false }).first()).toBeVisible({ timeout: 20_000 });
+  // The readable brief is visible; raw synthesis details are intentionally collapsed.
+  await expect(page.locator(".reader-conclusion")).toContainText("FIXTURE_ONLY_MANAGER_NO_RESEARCH", { timeout: 20_000 });
+  await expect(page.locator("#report-synthesis")).not.toHaveAttribute("open", "");
+  await page.locator("#report-synthesis summary").click();
+  await expect(page.locator("#report-synthesis")).toContainText("PROTOCOL_FIXTURE_ONLY");
 });
 
 test("zero-secret dev Web can save provider configuration without login", async ({ page }) => {
