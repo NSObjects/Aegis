@@ -171,6 +171,14 @@ func (a *Agent) Analyze(
 	if result.Status == StatusNormal && result.Synthesis == nil {
 		return nil, errors.New("event analyst NORMAL context requires final synthesis")
 	}
+	// Source metadata is captured from the exact canonical document set
+	// consumed in this research round, never looked up from today's store.
+	sources, err := indexCitedDocumentSources(result,latest.Canonicalization.Documents)
+	if err != nil { return nil, fmt.Errorf("index cited event sources: %w",err) }
+	result.CitedDocumentSources = sources
+	if err := Validate(result); err != nil {
+		return nil, fmt.Errorf("validate cited event sources: %w",err)
+	}
 	return result, nil
 }
 
