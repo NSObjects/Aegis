@@ -85,18 +85,34 @@ test("settings lets a signed-in operator save provider credentials without echoi
   await signIn(page);
   await page.getByRole("button", { name: "凭证设置" }).click();
   await expect(page.getByRole("heading", { name: "模型与数据源凭证" })).toBeVisible();
-  const key = "synthetic-browser-credential-no-provider-calls";
-  await page.getByLabel("DeepSeek API Key").fill(key);
+  const groups = page.locator(".provider-settings-group");
+  await expect(groups).toHaveCount(3);
+  await expect(groups.nth(0).getByRole("heading", { name: "AI 模型" })).toBeVisible();
+  await expect(groups.nth(1).getByRole("heading", { name: "金融数据" })).toBeVisible();
+  await expect(groups.nth(2).getByRole("heading", { name: "资讯搜索" })).toBeVisible();
+  await expect(groups.nth(0).getByLabel("DeepSeek API Key")).toBeVisible();
+  await expect(groups.nth(1).getByLabel("TuShare Token")).toBeVisible();
+  await expect(groups.nth(2).getByLabel("Tavily API Key")).toBeVisible();
+
+  const modelKey = "synthetic-browser-model-key-no-provider-calls";
+  const marketKey = "synthetic-browser-market-token-no-provider-calls";
+  await page.getByLabel("DeepSeek API Key").fill(modelKey);
+  await page.getByLabel("TuShare Token").fill(marketKey);
   const response = page.waitForResponse(r => r.url().endsWith("/api/workbench/credentials") && r.request().method() === "PUT");
   await page.getByRole("button", { name: "保存凭证" }).click();
   expect((await response).status()).toBe(200);
   await expect(page.locator(".provider-settings-form .live-info")).toContainText("已保存至 Go 服务端");
   await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
-  expect(await page.locator("body").innerText()).not.toContain(key);
+  await expect(page.getByLabel("TuShare Token")).toHaveValue("");
+  expect(await page.locator("body").innerText()).not.toContain(modelKey);
+  expect(await page.locator("body").innerText()).not.toContain(marketKey);
+
   await page.reload();
   await page.getByRole("button", { name: "凭证设置" }).click();
   await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
+  await expect(page.getByLabel("TuShare Token")).toHaveValue("");
   await expect(page.locator(".provider-settings-row").filter({ hasText: "DeepSeek" })).toContainText("已配置");
+  await expect(page.locator(".provider-settings-row").filter({ hasText: "TuShare" })).toContainText("已配置");
 });
 
 

@@ -130,10 +130,18 @@ remains separately required before claiming the workstation is production ready.
 ## Live settings: provider credentials
 
 With `AEGIS_WEB_MODE=live`, sign in and open **凭证设置** from the sidebar.
-The page supports DeepSeek (`DEEPSEEK_API_KEY`), TuShare (`TUSHARE_TOKEN`)
-and optional Tavily (`TAVILY_API_KEY`) credentials. Inputs are password
-fields and are cleared after saving. The UI receives only availability
-booleans, never stored secret values, partial masks or decrypted responses.
+The page groups third-party credentials by purpose: **AI models**
+(DeepSeek, `DEEPSEEK_API_KEY`), **financial data** (TuShare,
+`TUSHARE_TOKEN`) and **information search** (optional Tavily,
+`TAVILY_API_KEY`). Each group displays configured/total counts and
+each provider displays its configured state. One Save operation supports
+updates across groups; blank fields preserve their prior values. Clearing
+one provider override also preserves unsaved edits in other groups.
+Inputs are password fields and only submitted/cleared inputs are reset
+after a successful request. The UI receives only availability booleans,
+never stored secret values, partial masks or decrypted responses.
+Additional vendors must be wired into the Go provider runtime and
+server allowlist before they can be offered as functional settings.
 
 To activate editing, set `AEGIS_CREDENTIAL_MASTER_KEY` (64 hex characters,
 generate with `openssl rand -hex 32`) **on the Go server** before it starts.

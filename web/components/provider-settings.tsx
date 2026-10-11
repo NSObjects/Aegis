@@ -1,19 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Database, KeyRound, LockKeyhole, ShieldCheck, TriangleAlert } from "lucide-react";
+import { BrainCircuit, ChartNoAxesCombined, CheckCircle2, Database, Globe2, KeyRound, LockKeyhole, ShieldCheck, TriangleAlert } from "lucide-react";
 
 type CredentialName = "DEEPSEEK_API_KEY" | "TUSHARE_TOKEN" | "TAVILY_API_KEY";
 interface CredentialStatus { editable: boolean; configured: Record<CredentialName, boolean> }
-const providers: { id: CredentialName; title: string; description: string }[] = [
-  { id: "DEEPSEEK_API_KEY", title: "DeepSeek", description: "多 Agent 研究、论证和最终研究结论的模型密钥" },
-  { id: "TUSHARE_TOKEN", title: "TuShare", description: "股票市场与技术指标、基本面研究数据源" },
-  { id: "TAVILY_API_KEY", title: "Tavily Search", description: "事件研究的可选 Web Search 数据源" },
+interface ProviderDefinition { id: CredentialName; title: string; description: string; inputLabel: string; optional?: boolean }
+const providerGroups: { id: string; title: string; subtitle: string; icon: typeof KeyRound; providers: ProviderDefinition[] }[] = [
+  {
+    id: "model", title: "AI 模型", subtitle: "研究推理、Agent 分析与结论生成", icon: BrainCircuit,
+    providers: [{ id: "DEEPSEEK_API_KEY", title: "DeepSeek", description: "多 Agent 研究、辩论与最终结论所使用的模型服务", inputLabel: "DeepSeek API Key" }],
+  },
+  {
+    id: "market", title: "金融数据", subtitle: "股票行情、技术指标和财务数据", icon: ChartNoAxesCombined,
+    providers: [{ id: "TUSHARE_TOKEN", title: "TuShare", description: "A 股行情、技术指标及基本面研究数据", inputLabel: "TuShare Token" }],
+  },
+  {
+    id: "search", title: "资讯搜索", subtitle: "事件研究与外部信息检索", icon: Globe2,
+    providers: [{ id: "TAVILY_API_KEY", title: "Tavily Search", description: "新闻及事件研究的可选 Web Search 服务", inputLabel: "Tavily API Key", optional: true }],
+  },
 ];
+const blankInputs: Record<CredentialName, string> = { DEEPSEEK_API_KEY: "", TUSHARE_TOKEN: "", TAVILY_API_KEY: "" };
 
 export default function ProviderSettings({ localDev = false }: { localDev?: boolean }) {
   const [status, setStatus] = useState<CredentialStatus | null>(null);
-  const [inputs, setInputs] = useState<Record<CredentialName, string>>({ DEEPSEEK_API_KEY: "", TUSHARE_TOKEN: "", TAVILY_API_KEY: "" });
+  const [inputs, setInputs] = useState<Record<CredentialName, string>>(blankInputs);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -43,7 +54,7 @@ export default function ProviderSettings({ localDev = false }: { localDev?: bool
         headers: { "Content-Type": "application/json" }, body: JSON.stringify({ changes, clear }),
       });
       if (!response.ok) throw Error(response.status === 409 ? "服务端未启用加密存储，请先配置 AEGIS_CREDENTIAL_MASTER_KEY" : `保存失败（HTTP ${response.status}）`);
-      setInputs({ DEEPSEEK_API_KEY: "", TUSHARE_TOKEN: "", TAVILY_API_KEY: "" });
+      setInputs(current => Object.fromEntries(Object.entries(current).map(([name, value]) => [name, name in changes || clear.includes(name as CredentialName) ? "" : value])) as Record<CredentialName, string>);
       setStatus(await response.json() as CredentialStatus);
       setMessage("已保存至 Go 服务端，新建研究任务将使用最新凭证。正在运行的任务保持原配置。");
     } catch (cause) { setError((cause as Error).message); } finally { setSaving(false); }
@@ -58,34 +69,57 @@ export default function ProviderSettings({ localDev = false }: { localDev?: bool
     if (!window.confirm(`清除 ${name} 的加密覆盖值？若服务器环境变量仍存在，将继续使用环境变量。`)) return;
     await update({}, [name]);
   }
+  const count = status ? providerGroups.reduce((sum, group) => sum + group.providers.filter(provider => status.configured[provider.id]).length, 0) : 0;
+  const total = providerGroups.reduce((sum, group) => sum + group.providers.length, 0);
   return <div className="provider-settings">
     <section className="surface provider-settings-intro">
-      <div className="eyebrow">Provider connections / Secure settings</div>
+      <div className="eyebrow">Integrations / Provider credentials</div>
       <h2><KeyRound size={20}/> 模型与数据源凭证</h2>
-      <p>凭证仅发送给当前登录的 Aegis Go 服务，由服务器加密保存。页面不会读取或回显密钥，浏览器刷新后输入框保持空白。</p>
-      {status && <div className="provider-settings-overview"><ShieldCheck size={16}/>{status.editable ? "加密凭证存储已启用" : "只读状态：尚未配置 Go 服务端加密主密钥"}</div>}
+      <p>第三方服务按用途分组管理。新密钥只发送给 Aegis Go 服务端加密保存；浏览器仅显示配置状态，不读取或回显已保存的密钥。</p>
+      {status && <div className="provider-settings-overview"><ShieldCheck size={16}/><span>{status.editable ? "服务端加密存储已启用" : "只读状态：尚未配置 Go 服务端加密主密钥"}</span><strong>{count} / {total} 已配置</strong></div>}
     </section>
     <form className="surface provider-settings-form" onSubmit={e => void save(e)}>
-      <div className="panel-head"><h2>连接凭证</h2><span className="badge blue">Server-side only</span></div>
-      <div className="provider-settings-fields">
-        {providers.map(provider => <div className="provider-settings-row" key={provider.id}>
-          <div className="provider-settings-meta"><strong>{provider.title}</strong><small>{provider.description}</small><code>{provider.id}</code></div>
-          <div className="provider-settings-entry">
-            <span className={`badge ${status?.configured[provider.id] ? "green" : "gray"}`}>
-              {status?.configured[provider.id] ? <CheckCircle2 size={12}/> : <LockKeyhole size={12}/>}
-              {status ? (status.configured[provider.id] ? "已配置" : "未配置") : "检测中"}
-            </span>
-            <label htmlFor={`credential-${provider.id}`}>填写新密钥（留空不修改）</label>
-            <input id={`credential-${provider.id}`} aria-label={`${provider.title} API Key`} type="password" autoComplete="off" spellCheck={false}
-              disabled={saving || !status?.editable} value={inputs[provider.id]} maxLength={4096} minLength={8}
-              onChange={e => setInputs(current => ({ ...current, [provider.id]: e.target.value }))} placeholder="••••••••••••••••" />
-            {status?.editable && status.configured[provider.id] && <button className="provider-clear" type="button" disabled={saving} onClick={() => void clearCredential(provider.id)}>清除保存的覆盖值</button>}
-          </div>
-        </div>)}
+      <div className="panel-head"><h2>第三方服务配置</h2><span className="badge blue">Server-side only</span></div>
+      <div className="provider-settings-groups">
+        {providerGroups.map(group => {
+          const GroupIcon = group.icon;
+          const configured = status ? group.providers.filter(provider => status.configured[provider.id]).length : 0;
+          return <section className="provider-settings-group" aria-labelledby={"provider-group-" + group.id} key={group.id}>
+            <header className="provider-settings-group-header">
+              <span className="provider-settings-group-icon"><GroupIcon size={19}/></span>
+              <div className="provider-settings-group-title">
+                <h3 id={"provider-group-" + group.id}>{group.title}</h3>
+                <p>{group.subtitle}</p>
+              </div>
+              <span className="provider-settings-group-count">{status ? configured + " / " + group.providers.length + " 已配置" : "检测中"}</span>
+            </header>
+            <div className="provider-settings-fields">
+              {group.providers.map(provider => <div className="provider-settings-row" key={provider.id}>
+                <div className="provider-settings-meta">
+                  <div className="provider-settings-name"><strong>{provider.title}</strong>{provider.optional && <span>可选</span>}</div>
+                  <small>{provider.description}</small>
+                  <code>{provider.id}</code>
+                </div>
+                <div className="provider-settings-entry">
+                  <span className={"badge " + (status?.configured[provider.id] ? "green" : "gray")}>
+                    {status?.configured[provider.id] ? <CheckCircle2 size={12}/> : <LockKeyhole size={12}/>}
+                    {status ? (status.configured[provider.id] ? "已配置" : "未配置") : "检测中"}
+                  </span>
+                  <label htmlFor={"credential-" + provider.id}>填写新密钥（留空不修改）</label>
+                  <input id={"credential-" + provider.id} aria-label={provider.inputLabel} type="password" autoComplete="off" spellCheck={false}
+                    disabled={saving || !status?.editable} value={inputs[provider.id]} maxLength={4096} minLength={8}
+                    onChange={e => setInputs(current => ({ ...current, [provider.id]: e.target.value }))} placeholder="••••••••••••••••" />
+                  {status?.editable && status.configured[provider.id] && <button className="provider-clear" type="button" disabled={saving} onClick={() => void clearCredential(provider.id)}>清除保存的覆盖值</button>}
+                </div>
+              </div>)}
+            </div>
+          </section>;
+        })}
       </div>
       <div className="provider-settings-actions">
         <button type="submit" className="btn primary" disabled={!status?.editable || saving}><LockKeyhole size={15}/>{saving ? "安全保存中…" : "保存凭证"}</button>
-        <button type="button" className="btn" disabled={saving} onClick={() => void load().catch(err => setError((err as Error).message))}>刷新状态</button>
+        <button type="button" className="btn" disabled={saving} onClick={() => void load().then(() => setError("")).catch(err => setError((err as Error).message))}>刷新状态</button>
+        <span className="provider-settings-action-note">仅修改已填写的密钥，其他分组保持不变</span>
       </div>
       {error && <p role="alert" className="live-alert"><TriangleAlert size={16}/>{error}</p>}
       {message && <p role="status" className="live-info">{message}</p>}
