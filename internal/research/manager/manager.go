@@ -41,25 +41,86 @@ func (m *ResearchManager) BuildPlan(ctx context.Context, artifact *synthesis.Art
 	if err != nil {
 		return nil, fmt.Errorf("encode research manager input: %w", err)
 	}
-	response, err := m.Model.Generate(ctx, []*schema.AgenticMessage{
+	messages := []*schema.AgenticMessage{
 		schema.SystemAgenticMessage(researchManagerInstruction),
 		schema.UserAgenticMessage(string(payload)),
-	}, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("generate research plan: %w", err)
 	}
-	raw := strings.TrimSpace(managerAssistantText(response))
-	if raw == "" {
-		return nil, errors.New("research manager returned empty output")
+	known := debateArgumentIDs(state)
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := ctx.Err(); err != nil { return nil, err }
+		response, err := m.Model.Generate(ctx, messages, opts...)
+		if err != nil { return nil, fmt.Errorf("generate research plan: %w", err) }
+		raw := strings.TrimSpace(managerAssistantText(response))
+		if raw == "" { lastErr = errors.New("research manager returned empty output") } else {
+			plan, decodeErr := decodeResearchPlan(raw)
+			if decodeErr != nil { lastErr = decodeErr } else if validationErr := Validate(&plan, artifact, state); validationErr == nil {
+				return &plan, nil
+			} else {
+				lastErr = fmt.Errorf("invalid research plan: %w", validationErr)
+				// Model correction was exhausted. Unknown IDs are unsupported
+				// provenance links, not evidence. Remove just those links, retain
+				// artifact-bound claims, and disclose the loss of provenance.
+				// Other schema and reference failures must remain fatal.
+				if attempt == 1 && ValidateForTrading(&plan, artifact) == nil {
+					corrected, removed := omitUnknownManagerLinks(plan, known)
+					if removed > 0 && Validate(&corrected, artifact, state) == nil {
+						return &corrected, nil
+					}
+				}
+			}
+		}
+		if attempt == 0 {
+			allowed, _ := json.Marshal(known)
+			messages = append(messages, response, schema.UserAgenticMessage(
+				fmt.Sprintf("Your previous result failed validation: %v. Return the FULL corrected ResearchPlan JSON. These are the ONLY permitted debate argument IDs: %s. Preserve the input facts. For any unknown or uncertain link, OMIT its ID rather than inventing a replacement. Do not add IDs unsupported by the debate.", lastErr, allowed),
+			))
+		}
 	}
-	plan, err := decodeResearchPlan(raw)
-	if err != nil {
-		return nil, err
+	return nil, lastErr
+}
+
+// debateArgumentIDs enumerates the only IDs that can be attributed to the
+// validated debate. The model never supplies this allow-list.
+func debateArgumentIDs(state *debate.State) []string {
+	ids := make([]string, 0)
+	for _, turn := range state.Turns {
+		for _, argument := range turn.Arguments { ids = append(ids, argument.ID) }
 	}
-	if err := Validate(&plan, artifact, state); err != nil {
-		return nil, fmt.Errorf("invalid research plan: %w", err)
+	return ids
+}
+
+const missingManagerArgumentProvenance = "Research Manager omitted invalid debate argument ID references; the removed links are unverified and must not be relied upon."
+
+// This is a last-resort provenance reduction, not a substitute for validation.
+// It never creates debate arguments, new references or substantive claims.
+func omitUnknownManagerLinks(plan ResearchPlan, known []string) (ResearchPlan, int) {
+	allowed := make(map[string]struct{},len(known))
+	for _, id := range known { allowed[id] = struct{}{} }
+	filter := func(ids []string) ([]string,int) {
+		out := make([]string,0,len(ids))
+		removed := 0
+		for _,id := range ids { if _,ok:=allowed[id];ok {out=append(out,id)} else {removed++} }
+		return out,removed
 	}
-	return &plan, nil
+	count := 0
+	var n int
+	plan.AcceptedArgumentIDs,n = filter(plan.AcceptedArgumentIDs);count+=n
+	plan.UnresolvedArgumentIDs,n = filter(plan.UnresolvedArgumentIDs);count+=n
+	plan.Opportunities = append([]Insight(nil),plan.Opportunities...)
+	plan.Risks = append([]Insight(nil),plan.Risks...)
+	for i:=range plan.Opportunities {
+		plan.Opportunities[i].ArgumentIDs,n = filter(plan.Opportunities[i].ArgumentIDs)
+		count+=n
+	}
+	for i:=range plan.Risks {
+		plan.Risks[i].ArgumentIDs,n = filter(plan.Risks[i].ArgumentIDs)
+		count+=n
+	}
+	if count>0 {
+		plan.TradingConstraints=append(append([]string(nil),plan.TradingConstraints...),missingManagerArgumentProvenance)
+	}
+	return plan,count
 }
 
 func decodeResearchPlan(raw string) (ResearchPlan, error) {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"reflect"
 	"strings"
 
@@ -203,12 +204,12 @@ func (a *AgenticEventFactExtractor) Extract(
 			factExtractionInstruction +
 				"\n\nThe previous extraction failed deterministic grounding validation: " +
 				groundingErr.Error() +
-				". Return the full corrected JSON. Use previous_extraction only as a candidate, not as evidence. Recheck every quote against documents[].content; omit unsupported facts, do not invent or paraphrase quotations. Every retained quote must occur exactly once verbatim in its identified canonical document."
+				". Return the full corrected JSON. Use previous_extraction only as a candidate, not as evidence. Recheck every quote against documents[].content; omit unsupported facts, do not invent or paraphrase quotations. Every retained quote must occur exactly once verbatim in its identified canonical document. The grounding_quote_candidates are exact snippets copied from the indicated documents around repeated quotes, not additional evidence; select a candidate only if its whole context supports the fact, or omit the unsupported fact. Never invent offsets."
 		if err := generateStrictAgenticJSON(
 			ctx,
 			a.Model,
 			repairInstruction,
-			struct { factExtractionPrompt; PreviousExtraction FactExtractionResult `json:"previous_extraction"` }{factExtractionPrompt:prompt,PreviousExtraction:output},
+			struct { factExtractionPrompt; PreviousExtraction FactExtractionResult `json:"previous_extraction"`; GroundingQuoteCandidates []groundingRepairHint `json:"grounding_quote_candidates,omitempty"` }{factExtractionPrompt:prompt,PreviousExtraction:output,GroundingQuoteCandidates:groundingRepairHints(output,documents)},
 			&repaired,
 		); err != nil {
 			return FactExtractionResult{}, fmt.Errorf(
@@ -220,13 +221,142 @@ func (a *AgenticEventFactExtractor) Extract(
 			repaired,
 			documents,
 		); err != nil {
-			return FactExtractionResult{}, fmt.Errorf(
-				"event fact extraction grounding repair: %w",
-				err,
-			)
+			// After one LLM repair, only repeated verbatim quotations may
+			// be removed. Never choose a matching source offset arbitrarily.
+			// Preserve validated quotes and facts; all other failures remain
+			// hard errors. If no grounded facts remain, fail rather than
+			// returning a misleading NO_EVENT result.
+			filtered, removedQuotes, removedFacts, pruneErr :=
+				omitAmbiguousEventQuotes(repaired, documents)
+			if pruneErr != nil {
+				return FactExtractionResult{}, fmt.Errorf(
+					"event fact extraction grounding repair: %w",
+					err,
+				)
+			}
+			if err := validateFactExtractionGroundings(filtered, documents); err != nil {
+				return FactExtractionResult{}, fmt.Errorf(
+					"event fact extraction filtered groundings: %w", err,
+				)
+			}
+			log.Printf("event fact grounding: omitted %d ambiguous quote(s), %d fact(s) without verified evidence", removedQuotes, removedFacts)
+			return filtered, nil
 		}
 		return repaired, nil
 	}
+}
+
+
+// omitAmbiguousEventQuotes is a conservative fallback after the single model
+// correction. It drops only quotations which occur in multiple locations of
+// their claimed canonical document. Missing, mismatched, malformed or unknown
+// document citations remain fatal. No offsets or source claims are invented.
+func omitAmbiguousEventQuotes(
+	extraction FactExtractionResult,
+	documents []capevent.CanonicalDocument,
+) (FactExtractionResult, int, int, error) {
+	byID := make(map[string]capevent.CanonicalDocument, len(documents))
+	for _, document := range documents {
+		byID[document.ID] = document
+	}
+	filtered := FactExtractionResult{
+		Facts: make([]ExtractedFact, 0, len(extraction.Facts)),
+		Confidence: extraction.Confidence,
+	}
+	droppedQuotes, droppedFacts := 0, 0
+	for _, fact := range extraction.Facts {
+		kept := make([]EvidenceQuote, 0, len(fact.EvidenceQuotes))
+		for _, quote := range fact.EvidenceQuotes {
+			_, err := ResolveEvidenceGroundings([]EvidenceQuote{quote}, byID)
+			if err == nil {
+				kept = append(kept, quote)
+				continue
+			}
+			if !strings.Contains(err.Error(), "is ambiguous in canonical document") {
+				return FactExtractionResult{}, 0, 0, err
+			}
+			droppedQuotes++
+		}
+		if len(kept) == 0 {
+			droppedFacts++
+			continue
+		}
+		// Preserve the full original fact but only proven source quotes.
+		fact.EvidenceQuotes = kept
+		filtered.Facts = append(filtered.Facts, fact)
+	}
+	if droppedQuotes == 0 {
+		return FactExtractionResult{}, 0, 0, errors.New("no ambiguous citations to omit")
+	}
+	if len(filtered.Facts) == 0 {
+		return FactExtractionResult{}, 0, 0, errors.New("all extracted facts lost their groundings")
+	}
+	// Do not portray an incomplete extraction as high confidence.
+	if filtered.Confidence > 0.5 {
+		filtered.Confidence = 0.5
+	}
+	return filtered, droppedQuotes, droppedFacts, nil
+}
+
+// groundingRepairHint is a verbatim, unambiguous source excerpt around a
+// repeated model quote. It is guidance for another LLM attempt, never a
+// validated grounding or a replacement for ResolveEvidenceGroundings.
+type groundingRepairHint struct {
+ DocumentID string `json:"document_id"`
+ AmbiguousQuote string `json:"ambiguous_quote"`
+ VerbatimCandidate string `json:"verbatim_candidate"`
+}
+
+func groundingRepairHints(result FactExtractionResult, documents []capevent.CanonicalDocument) []groundingRepairHint {
+ byID:=make(map[string]string,len(documents))
+ for _,doc:=range documents {byID[doc.ID]=doc.Content}
+ var hints []groundingRepairHint
+ seen:=make(map[string]struct{})
+ for _,fact:=range result.Facts {
+  for _,q:=range fact.EvidenceQuotes {
+   content,exists:=byID[strings.TrimSpace(q.DocumentID)]
+   quote:=strings.TrimSpace(q.Quote)
+   if !exists||quote==""||strings.Index(content,quote)<0 {continue}
+   positions:=make([]int,0,4)
+   for offset:=0;offset<len(content); {
+    ix:=strings.Index(content[offset:],quote)
+    if ix<0 {break}
+    start:=offset+ix
+    positions=append(positions,start)
+    if len(positions)>4 {break}
+    offset=start+1
+   }
+   if len(positions)<2 || len(positions)>4 {continue}
+   runes:=[]rune(content)
+   quoteRunes:=len([]rune(quote))
+   for _,pos:=range positions {
+    runeStart:=len([]rune(content[:pos]))
+    var candidate string
+    for _,radius:=range []int{24,48,96,192,384} {
+     lo:=runeStart-radius
+     if lo<0 {lo=0}
+     hi:=runeStart+quoteRunes+radius
+     if hi>len(runes){hi=len(runes)}
+     excerpt:=string(runes[lo:hi])
+     first:=strings.Index(content,excerpt)
+     if first>=0 && strings.Index(content[first+1:],excerpt)<0 {
+      candidate=excerpt
+      break
+     }
+    }
+    if candidate=="" {continue}
+    key:=q.DocumentID+"\x00"+quote+"\x00"+candidate
+    if _,ok:=seen[key];ok {continue}
+    seen[key]=struct{}{}
+    hints=append(hints,groundingRepairHint{
+     DocumentID:q.DocumentID,
+     AmbiguousQuote:quote,
+     VerbatimCandidate:candidate,
+    })
+   }
+  }
+ }
+ return hints
 }
 
 func validateFactExtractionGroundings(

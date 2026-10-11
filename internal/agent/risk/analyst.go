@@ -101,6 +101,23 @@ func (a *Analyst) Review(
 }
 
 func decodeContext(raw string) (riskctx.Context, error) {
+	// Some JSON-mode providers add a top-level type=json_object wrapper
+	// field. This is transport metadata, not part of the risk contract.
+	// Only this exact field/value is tolerated; the decoder below remains
+	// strict for all other unknown fields and trailing JSON.
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &envelope); err == nil {
+		if kind, exists := envelope["type"]; exists {
+			var value string
+			if err := json.Unmarshal(kind, &value); err != nil || value != "json_object" {
+				return riskctx.Context{}, errors.New("decode risk context JSON: invalid type metadata")
+			}
+			delete(envelope, "type")
+			data, err := json.Marshal(envelope)
+			if err != nil { return riskctx.Context{}, fmt.Errorf("normalize risk JSON metadata: %w",err) }
+			raw = string(data)
+		}
+	}
 	var result riskctx.Context
 	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.DisallowUnknownFields()
