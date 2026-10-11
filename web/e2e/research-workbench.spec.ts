@@ -144,8 +144,11 @@ test("real browser submits a run, receives stage SSE, reads artifact, and restor
   await signIn(page);
   const id = await submit(page);
   await expect(page.locator(".live-event-item").filter({ hasText: "Market" }).first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("PROTOCOL_FIXTURE_ONLY", { exact: false }).first()).toBeVisible({ timeout: 25_000 });
-  await expect(page.getByText("FIXTURE_NO_REAL_ACCOUNT").first()).toBeVisible();
+  await expect(page.locator(".live-brief-lead")).toContainText("FIXTURE_ONLY_MANAGER_NO_RESEARCH", { timeout: 25_000 });
+  await page.locator("#chapter-synthesis summary").click();
+  await expect(page.locator("#report-synthesis")).toContainText("PROTOCOL_FIXTURE_ONLY");
+  await page.locator("#chapter-portfolio summary").click();
+  await expect(page.locator("#report-portfolio")).toContainText("FIXTURE_NO_REAL_ACCOUNT");
   await expect(page.locator(".live-run-fields")).toContainText(id);
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(200);
@@ -166,7 +169,7 @@ test("real browser submits a run, receives stage SSE, reads artifact, and restor
   await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0,12) }).first()).toBeVisible();
   await page.locator(".live-history-row").filter({ hasText: id.slice(0,12) }).click();
   await expect(page.locator(".live-run-fields")).toContainText(id);
-  await expect(page.getByText("PROTOCOL_FIXTURE_ONLY", { exact: false }).first()).toBeVisible();
+  await expect(page.locator(".live-brief-lead")).toContainText("FIXTURE_ONLY_MANAGER_NO_RESEARCH");
 });
 
 test("cancelled research never exposes an artifact", async ({ page }) => {
@@ -418,6 +421,7 @@ test("completed Run presents one source-owned OHLC candle and technical values w
   await signIn(page);
   const id = await submit(page, "technical snapshot fixture");
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.locator("#chapter-technical summary").click();
   const chart = page.getByRole("region", { name: "技术行情快照可视化" });
   await expect(chart).toBeVisible();
   await expect(chart.getByText("2026-10-09")).toBeVisible();
@@ -443,6 +447,7 @@ test("completed Run presents one source-owned OHLC candle and technical values w
   expect(technical.moving_averages.ma5).toBe(1507.2);
   await page.reload();
   await expect(page.locator(".live-run-fields")).toContainText(id);
+  await page.locator("#chapter-technical summary").click();
   await expect(page.getByRole("region", { name: "技术行情快照可视化" }).locator("rect.technical-candle-body")).toHaveCount(1);
 });
 
@@ -450,6 +455,7 @@ test("NO_DATA never draws a synthetic OHLC candle", async ({ page }) => {
   await signIn(page);
   const id = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.locator("#chapter-technical summary").click();
   const chart = page.getByRole("region", { name: "技术行情快照可视化" });
   await expect(chart).toContainText("不可绘制单日行情");
   await expect(chart).toContainText("NO_DATA");
