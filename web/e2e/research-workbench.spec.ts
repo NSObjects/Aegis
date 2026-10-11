@@ -76,6 +76,54 @@ test("run's configured model identity stays attached to the same run after brows
   await expect(page.locator(".live-model-provenance")).not.toContainText("API_KEY");
 });
 
+test("completed portfolio source IDs stay attached to the original historical Run", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page, "historical comparison fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const response = await page.request.get(`/api/workbench/runs/${id}`);
+  expect(response.status()).toBe(200);
+  const meta = await response.json();
+  expect(meta.evidence_index).toMatchObject({
+    schema_version: 1,
+    status: "NORMAL",
+    events: [{ event_id: "fixture-comparison-event-1", document_ids: ["fixture-doc-1"], source_count: 1 }],
+    document_ids: ["fixture-doc-1"],
+  });
+  const panel = page.locator(".live-evidence-source-index");
+  await expect(panel.locator("summary")).toContainText("已记录");
+  await panel.locator("summary").click();
+  await expect(panel).toContainText("fixture-comparison-event-1");
+  await expect(panel).toContainText("fixture-doc-1");
+  await expect(panel).toContainText("文档 ID");
+  await expect(panel.locator("a")).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(panel.locator("summary")).toContainText("已记录");
+  await panel.locator("summary").click();
+  await expect(panel).toContainText("fixture-doc-1");
+});
+
+test("source index differentiates explicit NO_EVENT from failed research", async ({ page }) => {
+  await signIn(page);
+  const noEventId = await submit(page);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const noEvent = await (await page.request.get(`/api/workbench/runs/${noEventId}`)).json();
+  expect(noEvent.evidence_index).toMatchObject({ schema_version: 1, status: "NO_EVENT", events: [], document_ids: [] });
+  const panel = page.locator(".live-evidence-source-index");
+  await panel.locator("summary").click();
+  await expect(panel).toContainText("不是自动证明市场没有相关新闻");
+
+  await page.getByLabel("研究关注点（可选）").fill("fail synthetic source");
+  await page.getByRole("button", { name: "启动真实研究" }).click();
+  await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
+  const failingId = await page.locator(".live-run-fields code").innerText();
+  expect(failingId).not.toBe(noEventId);
+  await expect(page.locator(".live-run-fields")).toContainText("失败", { timeout: 25_000 });
+  const failed = await (await page.request.get(`/api/workbench/runs/${failingId}`)).json();
+  expect(failed.evidence_index).toBeUndefined();
+  await expect(page.locator(".live-evidence-source-index")).toHaveCount(0);
+});
+
 test("anonymous browser cannot read ResearchRun or bypass Web login", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
