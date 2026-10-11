@@ -43,7 +43,7 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
     <section className="surface live-report-overview" aria-label="研究报告概览">
       <div className="eyebrow">Verified Run · read-only research artifact</div>
       <div className="live-report-overview-top">
-        <div><h2>研究简报</h2><p>标的 {run.symbol} · 研究截止 {new Date(run.requested_as_of).toLocaleString("zh-CN", { hour12: false })}</p></div>
+        <div><h2>结构化研究报告</h2><p>标的 {run.symbol} · 研究截止 {new Date(run.requested_as_of).toLocaleString("zh-CN", { hour12: false })}</p></div>
         <span className="badge blue">{report.mode}</span>
       </div>
       <div className="live-brief-lead">
