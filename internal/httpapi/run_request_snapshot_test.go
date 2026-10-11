@@ -29,6 +29,12 @@ func TestPublicRunKeepsSafeInputProvenanceWithoutPrivatePayloads(t *testing.T) {
 			SchemaVersion: 1, ConfigFingerprint: strings.Repeat("a", 64),
 			Bindings: []application.ModelRoleBinding{{Role: "market", Profile: "default", Provider: "deepseek", Model: "deepseek-chat"}},
 		},
+		EvidenceIndex: &application.RunEvidenceIndex{
+			SchemaVersion: 1, Status: "NORMAL", RequestedAsOf: cutoff.Format(time.RFC3339),
+			Events: []application.RunEvidenceEvent{{
+				ID: "event-abc", SourceCount: 2, DocumentIDs: []string{"doc-1"},
+			}}, DocumentIDs: []string{"doc-1"},
+		},
 		Events: []application.RunEvent{{Seq: 1, Stage: "Run", Status: "PENDING", At: cutoff}},
 	}
 	safe := publicRun(rec)
@@ -47,5 +53,9 @@ func TestPublicRunKeepsSafeInputProvenanceWithoutPrivatePayloads(t *testing.T) {
 		safe.ModelProvenance.Bindings[0].Model != "deepseek-chat" ||
 		!strings.Contains(string(b), "config_fingerprint") {
 		t.Fatalf("public Run lost nonsecret actual model identity: %s", b)
+	}
+	if safe.EvidenceIndex == nil || safe.EvidenceIndex.Events[0].ID != "event-abc" ||
+		!strings.Contains(string(b), "\"evidence_index\"") || strings.Contains(string(b), "https://") {
+		t.Fatalf("public Run lost safe source identities or invented links: %s", b)
 	}
 }
