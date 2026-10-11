@@ -8,10 +8,11 @@ import {
 } from "lucide-react";
 import {
   isAshareSymbol, isLiveEvent, isLiveRun, isTerminal, mergeStageEvents,
-  readReportSummary, type LiveArtifact, type LiveRun, type LiveSession, type LiveStageEvent,
+  type LiveArtifact, type LiveRun, type LiveSession, type LiveStageEvent,
 } from "@/lib/live-contract";
 import { cn } from "@/lib/utils";
 import ProviderSettings from "@/components/provider-settings";
+import LiveResearchReport from "@/components/live-research-report";
 import { readWorkbenchLocation, workbenchHref, type WorkbenchView } from "@/lib/workbench-location";
 
 const base = "/api/workbench";
@@ -39,29 +40,6 @@ function classifyState(status: string) {
   if (normalized === "DONE" || normalized === "COMPLETED") return "green";
   if (normalized === "FAIL" || normalized === "FAILED") return "red";
   return "blue";
-}
-
-function JsonEvidence({ value, label }: { value: unknown; label: string }) {
-  if (value === undefined || value === null) return null;
-  const json = JSON.stringify(value, null, 2);
-  return <details className="live-raw-panel"><summary>{label} · 原始后端工件</summary><pre>{json.length > 28000 ? `${json.slice(0, 28000)}\n… 已截断预览，完整内容请使用导出功能。` : json}</pre></details>;
-}
-
-function ResearchArtifactPanel({ artifact }: { artifact: LiveArtifact }) {
-  const report = readReportSummary(artifact);
-  const synthesis = artifact.research_artifact && typeof artifact.research_artifact === "object"
-    ? (artifact.research_artifact as Record<string, unknown>).synthesis : null;
-  const evidence = Array.isArray(artifact.evidence) ? artifact.evidence.filter(v => typeof v === "string") : [];
-  return <div className="live-report-stack">
-    {report.headline && <section className="surface live-summary"><div className="eyebrow">Research synthesis · 后端真实输出</div><h2>研究摘要</h2><p>{report.headline}</p></section>}
-    {report.sections.length > 0 && <section className="surface live-report-section"><h2>决策与风控字段</h2><div className="live-facts">{report.sections.map((item, i) => <div key={`${item.label}-${i}`}><small>{item.label}</small><p>{item.value}</p></div>)}</div></section>}
-    {evidence.length > 0 && <section className="surface live-report-section"><h2>Decision 引用证据</h2>{evidence.map((item, i) => <p className="live-evidence-text" key={i}>{item}</p>)}</section>}
-    {!!synthesis && <JsonEvidence value={synthesis} label="Synthesis / 论证与分歧" />}
-    {artifact.portfolio_review !== undefined && <JsonEvidence value={artifact.portfolio_review} label="Portfolio Review / 辩论与证据索引" />}
-    {artifact.final_risk_gate !== undefined && <JsonEvidence value={artifact.final_risk_gate} label="Final Risk Gate / 风险门禁" />}
-    <JsonEvidence value={artifact} label="完整 Typed Artifact（只读预览）" />
-    <p className="live-boundary">报告来自后端已完成任务的原始 JSON。缺少的数据不会通过前端推测或补全；任何结论都不等于交易委托或投资授权。</p>
-  </div>;
 }
 
 export default function LiveResearchWorkbench() {
@@ -245,7 +223,7 @@ export default function LiveResearchWorkbench() {
     {view==="settings"?<ProviderSettings localDev={session.local_dev === true}/>:view==="history"?<section className="surface live-history"><div className="panel-head"><h2>服务端持久化记录</h2><span className="badge blue">{runs.length} 条（接口返回上限 100）</span></div>{runs.length===0?<p className="live-empty">尚无研究记录。</p>:<div className="live-history-table">{runs.map(r=><button key={r.run_id} className="live-history-row" onClick={()=>{navigate("workspace",r.run_id);setError("");}} type="button"><strong>{r.symbol}</strong><code>{r.run_id.slice(0,12)}…</code><small>{formatDate(r.created_at)}</small><span className={`badge ${statusColors[r.state]}`}>{states[r.state]}</span><ArrowRight size={15}/></button>)}</div>}</section>:<div className="main-grid live-grid"><div className="left-stack">
       <section className="surface live-create"><div className="eyebrow">New research run</div><h2>发起股票研究</h2><p>研究时点由后端创建任务时确定。正式执行可能触发数据源请求和模型费用。</p><form onSubmit={startRun}><label>股票代码<input value={symbol} onChange={e=>setSymbol(e.target.value.toUpperCase())} placeholder="600519.SH" required/></label><label>研究关注点（可选）<input maxLength={1024} value={marketQuery} onChange={e=>setMarketQuery(e.target.value)} placeholder="例如：近期市场环境与标的事件"/></label><div className="live-create-foot"><span className="badge blue">{session.mode}</span>{session.mode==="PORTFOLIO_REVIEW"&&<span className="badge gray">账户：NOT_PROVIDED · 未知</span>}<button className="btn primary" type="submit" disabled={busy}><Search size={15}/>{busy?"处理中…":"启动真实研究"}</button></div></form></section>
       <section className="surface live-run-detail"><div className="panel-head"><div><h2>任务运行详情</h2><p>异步任务进程不依赖浏览器标签页</p></div>{selected&&<span className={`badge ${statusColors[selected.state]}`}>{states[selected.state]}</span>}</div>{selected?<div className="live-run-fields"><div><small>标的</small><strong>{selected.symbol}</strong></div><div><small>研究时点 (PIT)</small><strong>{formatDate(selected.requested_as_of)}</strong></div><div><small>任务 ID</small><code>{selected.run_id}</code><a className="live-permalink" href={workbenchHref("/", "workspace", selected.run_id)}>任务固定链接 ↗</a></div><div><small>状态</small><strong>{states[selected.state]}</strong></div><div><small>开始</small><strong>{formatDate(selected.started_at)}</strong></div><div><small>结束</small><strong>{formatDate(selected.finished_at)}</strong></div>{selected.failure_code&&<div className="live-full"><small>错误代码</small><strong className="down">{selected.failure_code}</strong></div>}</div>:<p className="live-empty">{selectedId ? `找不到任务 ${selectedId}，或当前会话无权访问。不会显示其他任务的报告。` : "尚未选择任务。发起一次研究或从历史中打开。"}</p>}{selected&&!isTerminal(selected.state)&&<div className="live-cancel"><button type="button" className="btn danger" disabled={busy} onClick={()=>void cancelRun()}><Ban size={14}/>请求取消</button></div>}</section>
-      {selected?.state==="COMPLETED"&&artifact?<ResearchArtifactPanel artifact={artifact}/>:<section className="surface live-report-empty"><BookOpenText size={21}/><div><h2>研究结果</h2><p>{selected?.state==="COMPLETED"?"正在加载后端已完成工件…":selected?.state==="FAILED"||selected?.state==="CANCELLED"?"任务没有完成，研究报告不可用；不会显示上一次任务的结果。":"只有后端状态为 COMPLETED 才会展示真实报告。"}</p></div></section>}
+      {selected?.state==="COMPLETED"&&artifact?<LiveResearchReport artifact={artifact} run={selected}/>:<section className="surface live-report-empty"><BookOpenText size={21}/><div><h2>研究结果</h2><p>{selected?.state==="COMPLETED"?"正在加载后端已完成工件…":selected?.state==="FAILED"||selected?.state==="CANCELLED"?"任务没有完成，研究报告不可用；不会显示上一次任务的结果。":"只有后端状态为 COMPLETED 才会展示真实报告。"}</p></div></section>}
     </div><aside className="right-stack"><section className="surface live-events"><div className="panel-head"><div><h2>Agent 执行轨迹</h2><p>来源：Go 结构化事件与持久化记录</p></div><span title="SSE 状态">{streamState==="connected"?<Wifi size={17} color="#65e1c4"/>:streamState==="disconnected"?<WifiOff size={17} color="#e9b16c"/>:<Clock3 size={17} color="#71849b"/>}</span></div>{!selected?<p className="live-empty">选择任务后查看阶段事件</p>:events.length===0?<p className="live-empty">尚无执行事件。状态会自动刷新。</p>:<div className="live-event-list">{events.map(ev=><div key={ev.seq} className="live-event-item"><span className={`live-event-dot ${classifyState(ev.status)}`}/><div><strong>{ev.stage}</strong><small>{ev.status} · {formatDate(ev.at)}{typeof ev.duration_ms==="number"?` · ${ev.duration_ms}ms`:""}</small></div><code>#{ev.seq}</code></div>)}</div>}<div className="live-stream-foot"><Activity size={13}/>SSE 实时订阅 · 接口事件历史可重放{streamState==="disconnected"?" · 断开后尝试重连":""}</div></section><section className="surface live-help"><div className="panel-head"><h2>研究安全边界</h2></div><p><Database size={14}/>结果仅来自 Go Typed Artifact</p><p><ShieldCheck size={14}/>账户未知不等于空仓或零现金</p><p><TerminalSquare size={14}/>无委托、资金划拨与自动交易</p></section></aside></div>}
     <footer className="live-footer">AEGIS RESEARCH · SINGLE-OPERATOR LIVE MODE · 不包含交易执行</footer></div></main></div>;
 }
