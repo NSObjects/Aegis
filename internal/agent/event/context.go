@@ -96,6 +96,8 @@ type Context struct {
 	EvidenceAsOf  string   `json:"evidence_as_of,omitempty"`
 	Status        Status   `json:"status"`
 	Events        []Event  `json:"events,omitempty"`
+	// Canonical documents actually cited by this run; absent on old runs.
+	CitedDocumentSources []CitedDocumentSource `json:"cited_document_sources,omitempty"`
 	Evidence      []string `json:"evidence,omitempty"`
 	Risk          []string `json:"risk,omitempty"`
 	Confidence    float64  `json:"confidence"`
