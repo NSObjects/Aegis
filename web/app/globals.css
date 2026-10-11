@@ -656,3 +656,12 @@ svg { flex-shrink: 0; }
  .live-compare-row>span { padding:10px 7px; font-size:10px; }
  .live-history-actions { flex-wrap:wrap; }
 }
+
+
+/* Execution-owned, non-secret model role/configuration provenance. */
+.live-model-provenance-rows { display:grid; gap:6px; padding:0 0 8px; }
+.live-model-provenance-rows>div { display:grid; grid-template-columns:minmax(90px,.6fr) minmax(80px,.7fr) minmax(0,1.6fr); gap:8px; align-items:center; padding:9px 11px; background:#14263a; border:1px solid #2d485b; border-radius:7px; }
+.live-model-provenance-rows strong { color:#d2ede7; font-size:11px; }
+.live-model-provenance-rows span { color:#a4bcd0; font-size:11px; overflow-wrap:anywhere; }
+.live-model-provenance-rows code,.live-model-provenance p code { color:#c6dcef; font-size:10px; overflow-wrap:anywhere; }
+@media(max-width:720px){ .live-model-provenance-rows>div {grid-template-columns:1fr; gap:4px;} }
