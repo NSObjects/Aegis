@@ -77,6 +77,29 @@ func checkRunRecord(record RunRecord) error {
 	if record.RerunOf != "" && (!validRunID(record.RerunOf) || record.RerunOf == record.ID) {
 		return errors.New("invalid rerun provenance")
 	}
+	if snapshot := record.RequestSnapshot; snapshot != nil {
+		if snapshot.SchemaVersion != 1 {
+			return errors.New("unsupported request snapshot version")
+		}
+		if (snapshot.EventWindowStart == nil) != (snapshot.EventWindowEnd == nil) {
+			return errors.New("incomplete event research window")
+		}
+		if snapshot.EventWindowStart != nil && (!snapshot.EventWindowStart.Before(*snapshot.EventWindowEnd) ||
+			(snapshot.EventPITSafe && snapshot.EventWindowEnd.After(record.RequestedAsOf))) {
+			return errors.New("invalid event research cutoff")
+		}
+		if snapshot.MinDocuments < 0 || snapshot.MinIndependentSources < 0 || len(snapshot.PreferredSourceTypes) > 16 {
+			return errors.New("invalid event requirements metadata")
+		}
+		for _, source := range snapshot.PreferredSourceTypes {
+			if source == "" || len(source) > 64 {
+				return errors.New("invalid preferred source metadata")
+			}
+		}
+		if record.Mode == ModeDecision && snapshot.PortfolioState != "" {
+			return errors.New("decision run cannot claim portfolio state")
+		}
+	}
 	if record.Mode != ModeDecision && record.Mode != ModePortfolio {
 		return errors.New("invalid research run mode")
 	}
