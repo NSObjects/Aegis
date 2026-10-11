@@ -103,6 +103,9 @@ func Validate(v *Context) error {
 		seenEventIDs[item.ID] = struct{}{}
 	}
 
+	if err := validateCitedDocumentSources(v); err != nil {
+		return fmt.Errorf("cited document source metadata: %w", err)
+	}
 	if v.Synthesis != nil {
 		if v.Status != StatusNormal { return errors.New("synthesis is only valid for NORMAL status") }
 		if err := validateAnalystSynthesis(*v.Synthesis, v.Events); err != nil { return fmt.Errorf("synthesis: %w",err) }
