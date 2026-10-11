@@ -300,3 +300,21 @@ the event/document evidence sources shown in individual research artifacts.
 - **采样口径必须正确：** Go 列表最多返回最近 100 条。所有计数只针对本次已返回、经 DTO 校验并去重的记录；当已达到 100 条明确提示历史实际数量可能更高。只有成功获取过列表才渲染计数，不会把首次未加载错误渲染成 0；刷新失败时标记已有列表可能过期。
 - 页面的“最近一次浏览器同步”时间仅表示浏览器成功收到列表时刻，不是服务端最后更新时刻，也不保证每个后端 Agent 在页面渲染的瞬间仍处于同一状态。Go 列表轮询约每 3 秒，用户可手动刷新。
 - E2E 使用明确标记的 `PROTOCOL_FIXTURE_ONLY` Go 协议模拟服务检查空列表、登录隔离、导航、状态筛选及刷新恢复，不声称已验证真实证券行情或 Hosted 研究模型。
+
+
+## R1-03: event/document identity index in Run detail
+
+Completed Portfolio Review details include **本次事件与文档引用索引**
+when `evidence_index.schema_version === 1`. It shows the exact saved
+EventContext status and research/observation cutoff, event IDs, reported
+source counts, and event-to-document references. The read-only list is
+available from Run metadata, without executing a new query or re-reading
+today's snapshot store. Saved records survive Go RunStore restart.
+Legacy/missing and Decision runs are marked as unrecorded; explicit
+`NO_EVENT` never means that news does not exist.
+
+This is an **identity index**, not a browser of authenticated original
+source URLs or document bodies. It does not assert original source
+availability, exact publication time for individual documents, or
+semantic proof of Bull/Bear claims. Sources and original content require
+separately archived, verified evidence. The page does not invent hyperlinks.
