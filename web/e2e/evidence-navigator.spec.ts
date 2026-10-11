@@ -61,7 +61,7 @@ test("EvidenceLedger links only explicit event IDs and lets a reader inspect doc
   await expect(nav).toBeVisible();
   await expect(nav.getByText("后端声明的多头示例").first()).toBeVisible();
   await expect(nav.getByText("UNRESOLVED").first()).toBeVisible();
-  await expect(nav.getByText("事件 ID 未在本次工件中找到")).toBeVisible();
+  await expect(nav.getByText("事件 ID 未在本次工件中唯一匹配")).toBeVisible();
   await expect(nav.getByText("仅有领域引用，没有具体事件 ID")).toBeVisible();
   await expect(nav.getByText("doc-not-a-structured-link")).toHaveCount(0);
   await nav.getByRole("button", { name: "查看事件 evt-fixture-1" }).click();

@@ -73,14 +73,29 @@ describe("EvidenceLedger navigator projection", () => {
       portfolio_review: { trade_intent: fixture.portfolio_review.trade_intent } }))
       .toEqual({ events: [], arguments: [], insights: [] });
   });
-  it("ignores malformed, duplicate event and claim identifiers rather than inventing links", () => {
+  it("rejects every duplicate event/argument identity instead of linking to the first one", () => {
     const p = projectEvidenceNavigator({
-      research_artifact: { event: { events: [{ id: "e", headline: "A" }, { id: "e", headline: "B" }, { id: "" }] } },
-      portfolio_review: { evidence_ledger: { arguments: [{ id: "a", claim: "X", references: [{ domain: "EVENT", event_id: "e" }] },
-        { id: "a", claim: "Y" }, { id: "", claim: "Z" }] } },
+      research_artifact: { event: { events: [
+        { id: "e", headline: "A" }, { id: "e", headline: "B" },
+        { id: "unique", headline: "Unambiguous event" }, { id: "" },
+      ] } },
+      portfolio_review: { evidence_ledger: { arguments: [
+        { id: "a", claim: "X", references: [{ domain: "EVENT", event_id: "e" }] },
+        { id: "a", claim: "Y" }, { id: "", claim: "Z" },
+        { id: "only", claim: "Valid argument", references: [
+          { domain: "EVENT", event_id: "e" },
+          { domain: "EVENT", event_id: "unique" },
+        ] },
+      ], insights: [{ kind: "RISK", claim: "Manager", argument_ids: ["a", "only"], references: [] }] } },
     });
-    expect(p.events).toHaveLength(1);
-    expect(p.events[0].headline).toBe("A");
-    expect(p.arguments.map(a => a.claim)).toEqual(["X"]);
+    expect(p.events.map(item => item.id)).toEqual(["unique"]);
+    expect(p.arguments.map(item => item.id)).toEqual(["only"]);
+    expect(p.arguments[0].references).toEqual([
+      { domain: "EVENT", eventId: "e", status: "EVENT_NOT_FOUND" },
+      { domain: "EVENT", eventId: "unique", status: "MATCHED_EVENT" },
+    ]);
+    // Preserve the upstream ID without silently mapping it to either duplicate claim.
+    expect(p.insights[0].argumentIds).toEqual(["a", "only"]);
+    expect(p.arguments.some(item => item.id === "a")).toBe(false);
   });
 });
