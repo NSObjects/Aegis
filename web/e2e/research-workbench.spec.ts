@@ -448,6 +448,9 @@ test("completed Run presents one source-owned OHLC candle and technical values w
   expect(technical.moving_averages.ma5).toBe(1507.2);
   await page.reload();
   await expect(page.locator(".live-run-fields")).toContainText(id);
+  // A browser reload restores the task, but intentionally resets chapter disclosures.
+  await page.locator("#report-technical > summary").click();
+  await expect(page.locator("#report-technical")).toHaveAttribute("open", "");
   await expect(page.getByRole("region", { name: "技术行情快照可视化" }).locator("rect.technical-candle-body")).toHaveCount(1);
 });
 
