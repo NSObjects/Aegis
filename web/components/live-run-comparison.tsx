@@ -75,14 +75,14 @@ export default function LiveRunComparison({
   const groups = shown ? Array.from(new Set(shown.comparison.rows.map(r => r.section))) : [];
   const options = (items: LiveRun[], selected: string | null) => {
     const values = [...items];
-    if (selected && !values.some(r => r.run_id === selected)) {
-      // Deep link may point to an older Run outside the list. The direct GET
-      // above remains authoritative; never replace it with a newer Run.
-      return <option value={selected}>{selected.slice(0, 12)}… · 历史 ID（直接查询）</option>;
-    }
-    return values.map(r => <option key={r.run_id} value={r.run_id}>
-      {r.symbol} · {time(r.requested_as_of)} · {r.run_id.slice(0, 8)}…
-    </option>);
+    // Keep the exact deep-linked ID selectable, but do not hide the rest
+    // of the list when the server's top-100 response omits an older run.
+    return <>
+      {selected && !values.some(r => r.run_id === selected) && <option value={selected}>{selected.slice(0, 12)}… · 历史 ID（直接查询）</option>}
+      {values.map(r => <option key={r.run_id} value={r.run_id}>
+        {r.symbol} · {time(r.requested_as_of)} · {r.run_id.slice(0, 8)}…
+      </option>)}
+    </>;
   };
   return <section className="surface live-compare" aria-label="历史研究对比">
     <div className="panel-head">
