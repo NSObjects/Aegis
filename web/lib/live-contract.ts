@@ -3,6 +3,19 @@
  */
 export type LiveState = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
 export type LiveMode = "DECISION" | "PORTFOLIO_REVIEW";
+// Optional for pre-R1-03 runs. This describes submitted inputs only;
+// it is NOT proof of provider/model versions or actual retrieved sources.
+export interface RunRequestSnapshot {
+  schema_version: 1;
+  market_query_provided: boolean;
+  event_window_start?: string;
+  event_window_end?: string;
+  event_pit_safe: boolean;
+  preferred_source_types?: string[];
+  min_documents?: number;
+  min_independent_sources?: number;
+  portfolio_state?: string;
+}
 export interface LiveRun {
   run_id: string;
   mode: LiveMode;
@@ -15,6 +28,7 @@ export interface LiveRun {
   failure_code?: string;
   /** Server-validated terminal Run this new study was deliberately started from. */
   rerun_of?: string;
+  request_snapshot?: RunRequestSnapshot;
 }
 export interface LiveStageEvent {
   seq: number;
