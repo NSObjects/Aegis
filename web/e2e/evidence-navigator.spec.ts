@@ -59,7 +59,7 @@ test("EvidenceLedger links only explicit event IDs and lets a reader inspect doc
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
   const nav = page.getByRole("region", { name: "交互式证据与论点导航" });
   await expect(nav).toBeVisible();
-  await expect(nav.getByText("后端声明的多头示例")).toBeVisible();
+  await expect(nav.getByText("后端声明的多头示例").first()).toBeVisible();
   await expect(nav.getByText("UNRESOLVED").first()).toBeVisible();
   await expect(nav.getByText("事件 ID 未在本次工件中找到")).toBeVisible();
   await expect(nav.getByText("仅有领域引用，没有具体事件 ID")).toBeVisible();
@@ -81,7 +81,7 @@ test("EvidenceLedger links only explicit event IDs and lets a reader inspect doc
   await page.reload();
   await expect(page.locator(".live-run-fields")).toContainText(first);
   const restored = page.getByRole("region", { name: "交互式证据与论点导航" });
-  await expect(restored.getByText("后端声明的多头示例")).toBeVisible();
+  await expect(restored.getByText("后端声明的多头示例").first()).toBeVisible();
   await expect(restored.getByRole("region", { name: "已匹配的事件详情" })).toHaveCount(0);
 });
 
