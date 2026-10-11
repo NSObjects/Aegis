@@ -484,6 +484,33 @@ func NewLiveResearchService(ctx context.Context, options LiveServiceOptions) (*R
 		return nil, err
 	}
 
+	// Capture the exact profile bindings used to construct this graph, from
+	// the same in-memory appCfg. Loading the config a second time after Run()
+	// would risk attributing a changed configuration to an older study.
+	roles := []modelRoleSelection{
+		{Role: "market", Profile: marketProfile},
+		{Role: "technical", Profile: technicalProfile},
+		{Role: "event", Profile: eventProfile},
+		{Role: "event_planning", Profile: eventProfile},
+		{Role: "synthesis", Profile: synthesisProfile},
+		{Role: "trading", Profile: tradingProfile},
+	}
+	if withFundamental {
+		roles = append(roles, modelRoleSelection{Role: "fundamental", Profile: tradingProfile})
+	}
+	if portfolioReview {
+		roles = append(roles,
+			modelRoleSelection{Role: "bull", Profile: tradingProfile},
+			modelRoleSelection{Role: "bear", Profile: tradingProfile},
+			modelRoleSelection{Role: "research_manager", Profile: tradingProfile},
+			modelRoleSelection{Role: "risk_analyst", Profile: tradingProfile},
+		)
+	}
+	metadata, err := buildModelProvenance(appCfg, roles)
+	if err != nil { return nil, fmt.Errorf("build model identity: %w", err) }
+	if err := publishModelProvenance(ctx, metadata); err != nil {
+		return nil, fmt.Errorf("persist model identity: %w", err)
+	}
 	return service, nil
 }
 

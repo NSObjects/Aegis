@@ -41,8 +41,8 @@ function evolve(run) {
   }
 }
 function metadata(run) {
-  const { run_id, symbol, mode, requested_as_of, state, created_at, started_at, finished_at, failure_code, rerun_of, request_snapshot } = run;
-  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}), ...(request_snapshot ? { request_snapshot } : {}) };
+  const { run_id, symbol, mode, requested_as_of, state, created_at, started_at, finished_at, failure_code, rerun_of, request_snapshot, model_provenance } = run;
+  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}), ...(request_snapshot ? { request_snapshot } : {}), ...(state !== "PENDING" && model_provenance ? { model_provenance } : {}) };
 }
 function report(run) {
   // Synthetic protocol values only: verify UI maps Go JSON paths without
@@ -157,7 +157,13 @@ const server = createServer(async (req, res) => {
       preferred_source_types: ["OFFICIAL"], min_documents: 1,
       min_independent_sources: 1, portfolio_state: body.portfolio.state,
     };
-    const run = { run_id, symbol: body.symbol, mode: body.mode, requested_as_of: created_at, created_at, createdMs: Date.now(), state: "PENDING", scenario, events: [], request_snapshot, ...(origin ? { rerun_of: origin.run_id } : {}) };
+    // Protocol fixture only: configured model identity is not an actual
+    // provider revision or evidence of a paid LLM request.
+    const model_provenance = {
+      schema_version: 1, config_fingerprint: "a".repeat(64),
+      bindings: [{ role: "market", profile: "fixture-profile", provider: "fixture-only", model: "fixture-model" }],
+    };
+    const run = { run_id, symbol: body.symbol, mode: body.mode, requested_as_of: created_at, created_at, createdMs: Date.now(), state: "PENDING", scenario, events: [], request_snapshot, model_provenance, ...(origin ? { rerun_of: origin.run_id } : {}) };
     append(run, "Run", "PENDING");
     runs.set(run_id, run);
     if (key) requestKeys.set(key, { body: JSON.stringify(body), run_id });
