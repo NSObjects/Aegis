@@ -1,0 +1,67 @@
+import type { LiveReport, ReportCard, ReportField } from "./live-report";
+
+/** Presentation-only projection. All text remains directly traceable to a
+ * field or entry in the same Go Run. No LLM rewriting or inferred advice. */
+export type BriefBlock = { title: string; lines: string[]; source: string };
+export type ResearchBrief = {
+  summary: string | null;
+  conclusion: string | null;
+  posture: string | null;
+  market: ReportField[];
+  technical: ReportField[];
+  evidence: BriefBlock[];
+  risks: BriefBlock[];
+  unknowns: string[];
+};
+
+const card = (report: LiveReport, id: string): ReportCard | undefined => report.cards.find(c => c.id === id);
+const match = (fields: ReportField[], name: string): string | null => fields.find(f => f.label === name)?.value ?? null;
+function gather(c: ReportCard | undefined, names: string[], title: string): BriefBlock | null {
+  if (!c) return null;
+  const lines = c.entries.filter(e => names.some(name => e.label.includes(name)))
+    .map(e => e.body).filter(Boolean).slice(0, 5);
+  return lines.length ? { title, lines, source: c.title } : null;
+}
+export function readResearchBrief(report: LiveReport): ResearchBrief {
+  const overview = report.overview;
+  const manager = card(report, "manager");
+  const synthesis = card(report, "synthesis");
+  const decision = card(report, "decision");
+  const risk = card(report, "risk");
+  const intent = card(report, "intent");
+  const events = card(report, "event");
+  const market = card(report, "market");
+  const technical = card(report, "technical");
+  const portfolio = card(report, "portfolio");
+  const conclusion = match(overview, "研究结论") ?? match(overview, "研究动作（非委托）");
+  const posture = match(overview, "最终风险门禁") ?? match(portfolio?.fields ?? [], "组合决策");
+  const evidence = [
+    gather(manager, ["机会"], "潜在机会（原始研究观点）"),
+    gather(synthesis, ["一致观点"], "已声明的一致观点"),
+    gather(events, ["事件证据"], "事件研究证据"),
+    gather(decision, ["支持信息"], "研究依据"),
+  ].filter((v): v is BriefBlock => v !== null);
+  const risks = [
+    gather(manager, ["风险"], "研究经理风险"),
+    gather(synthesis, ["研究风险", "冲突观点"], "分歧与综合风险"),
+    gather(risk, ["风险发现", "未解决问题"], "独立风险分析"),
+    gather(intent, ["风险"], "研究意向风险"),
+    gather(decision, ["风险"], "研究风险"),
+  ].filter((v): v is BriefBlock => v !== null);
+  const unknowns: string[] = [];
+  if (match(overview, "账户状态")?.startsWith("NOT_PROVIDED"))
+    unknowns.push("账户状态未提供，不能推断现金、持仓或实际风险敞口。");
+  if (!conclusion) unknowns.push("本次工件没有可提取的研究结论。");
+  if (!posture && report.mode === "PORTFOLIO_REVIEW") unknowns.push("未提供最终风险门禁结果。");
+  if (!market) unknowns.push("未提供可阅读的市场背景。");
+  if (!technical || match(technical.fields, "数据状态") === "NO_DATA")
+    unknowns.push("没有可用的技术行情快照，不能由报告推断当前价格走势。");
+  if (!evidence.length) unknowns.push("未在摘要层发现明确的支持论点；请查看下方完整证据和原始数据。");
+  return {
+    summary: report.headline,
+    conclusion, posture,
+    market: market?.fields.filter(f => ["市场数据日","市场状态","上涨家数","下跌家数"].includes(f.label)) ?? [],
+    technical: technical?.fields.filter(f => ["有效交易日","数据状态","收盘价","涨跌幅（%）","RSI14"].includes(f.label)) ?? [],
+    evidence, risks, unknowns,
+  };
+}
