@@ -280,7 +280,7 @@ test("Live structured report reads Go-shaped fixture fields without fabricated f
   await expect(page.locator("#report-portfolio")).toContainText("NOT_PROVIDED · 未知（不能解释为零持仓）");
   await expect(page.locator("#report-portfolio")).toContainText("FIXTURE_NO_REAL_ACCOUNT");
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeEnabled();
-  await page.getByText("高级：查看后端原始 JSON 工件").click();
+  await page.locator(".live-report-source-details > summary").click();
   await expect(page.getByText("完整 Typed Artifact")).toBeVisible();
 });
 
@@ -421,6 +421,8 @@ test("completed Run presents one source-owned OHLC candle and technical values w
   await signIn(page);
   const id = await submit(page, "technical snapshot fixture");
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.locator("#report-technical > summary").click();
+  await expect(page.locator("#report-technical")).toHaveAttribute("open", "");
   const chart = page.getByRole("region", { name: "技术行情快照可视化" });
   await expect(chart).toBeVisible();
   await expect(chart.getByText("2026-10-09")).toBeVisible();
@@ -453,6 +455,8 @@ test("NO_DATA never draws a synthetic OHLC candle", async ({ page }) => {
   await signIn(page);
   const id = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.locator("#report-technical > summary").click();
+  await expect(page.locator("#report-technical")).toHaveAttribute("open", "");
   const chart = page.getByRole("region", { name: "技术行情快照可视化" });
   await expect(chart).toContainText("不可绘制单日行情");
   await expect(chart).toContainText("NO_DATA");
