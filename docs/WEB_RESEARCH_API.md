@@ -251,3 +251,32 @@ the existing live capture contract. Per-document publication/availability
 timestamps and independently verifiable source URLs are not represented
 by this index. Original evidence snapshot archival and one-to-one source
 linkage remain further R1-03 verification work.
+
+
+### R1-03 cited canonical source metadata (same-Run capture)
+
+For a **new successfully completed Portfolio Review** whose Event Agent produced
+grounded events, `evidence_index.documents` can now contain canonical metadata
+for each actually referenced document: `document_id`, `version_id`,
+`content_sha256` (the canonicalizer's processed text, **not** a separately
+verified web byte archive), `publisher`, safely publishable `url` when
+available, `source_type`, `authority`, `is_primary`, `published_at`,
+`available_at`, and `first_seen_at`.
+
+The Event Agent takes these fields directly from the final research round's
+PIT-filtered `CanonicalDocument` set, restricted to document IDs cited in
+that run's grounded events. Metadata is stored as part of
+`research_artifact.event.cited_document_sources` and deterministically
+projected into the completed Run index, so FileRunStore can check it against
+the exact saved Artifact after restart. **No current-day snapshot lookup** or
+second crawler pass is used to fill old metadata. When no source metadata
+exists (legacy or externally assembled Artifact), `documents` is absent.
+
+`available_at` is eligibility at the Event Agent's evidence observation
+cutoff (T1); it must not be presented as proof of availability at the original
+user's submission timestamp T0. Unsafe original URLs (including HTTP,
+userinfo, search/query tokens, fragments) are not exposed. An acceptable
+HTTPS URL is a **recorded source pointer**, not proof that the page remains
+reachable, that its contents are authentic, or that its claims are true.
+This change does not expose raw retrieved document contents or create an
+independent custody-verified original source archive.
