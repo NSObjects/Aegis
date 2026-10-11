@@ -1,4 +1,4 @@
-import type { LiveReport, ReportCard, ReportEntry, ReportField } from "./live-report";
+import type { LiveReport, ReportCard, ReportField } from "./live-report";
 
 /** Presentation-only labels: retain the original server enum for auditing. */
 const meanings: Record<string, string> = {
@@ -21,7 +21,7 @@ const meanings: Record<string, string> = {
   NO_DATA: "未取得数据",
   NO_EVENT: "未发现已入档事件",
 };
-export const readStatus = (raw: string): string => meanings[raw] ? meanings[raw] + " · " + raw : raw;
+export const readStatus = (raw: string): string => Object.prototype.hasOwnProperty.call(meanings, raw) ? meanings[raw] + " · " + raw : raw;
 
 export interface ReadingPoint {
   label: string;
