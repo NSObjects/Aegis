@@ -179,3 +179,17 @@ Live 工作台从 URL 恢复当前页面和服务端 Run：
 - 固定链接只包含不透明 Run ID，不包含密钥或 Artifact；访问时仍必须通过现有会话验证。Demo 模式不适用上述 Live URL 约定。
 
 此改动只解决 URL 导航与恢复；不表示整个 R1-05（完整页面路由）或 R1 验收完成。
+
+
+## Live 结构化研究报告（R1-08 第一批）
+
+在 `AEGIS_WEB_MODE=live` 下，Go 返回的 **COMPLETED** 原始 Typed Artifact 除 JSON 导出外，现按真实 Go 字段分区展示：`research_artifact.synthesis/market/technical/event/fundamental`、`portfolio_review.debate_state/research_plan/trade_intent/risk_context/portfolio_decision/evidence_ledger`、`final_risk_gate`。
+
+- 原始结果仍是唯一真源。Web 不重新运行模型、不编写投资结论、不把 `NO_DATA` 转换成零值，不生成来源链接；仅显示确实存在的源字段。
+- 报告显式展示 `requested_as_of`，以及后端提供的市场数据日、技术有效交易日、事件证据观察截止和财报实际公告日；不把历史价格误称为最新行情。
+- `NOT_PROVIDED` 是账户未知，不是 EMPTY/0 持仓。可选 Fundamental、观察敞口和独立 Limits 未返回时不展示伪数值。
+- Bull/Bear 的回合、论点 ID、反驳关系与 EvidenceLedger 分类、引用域、事件 ID 原样展示。单纯 MARKET/TECHNICAL/EVENT 领域引用不等于存在可核查的具体文档。
+- 保留「高级：查看后端原始 JSON 工件」及完整 JSON 下载，便于与 Go 输出逐字核对。
+- Chromium 协议测试使用 `PROTOCOL_FIXTURE_ONLY` 模拟数据；它只验证 UI 与 HTTP 契约，**不是**真实金融研究 E2E 或供应商数据正确性验收。
+
+后续 R1-10 再实现证据/论点 ID 的交互跳转和原文审计，R1-11 再做跨运行比较。当前阅读器只负责只读报告。

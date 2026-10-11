@@ -136,3 +136,24 @@ test("unknown Live Run permalink never substitutes the latest report", async ({ 
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
 });
+
+
+test("Live structured report reads Go-shaped fixture fields without fabricated financial values", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page);
+  await expect(page.getByRole("heading", { name: "结构化研究报告" })).toBeVisible({ timeout: 25_000 });
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(page.locator("#report-synthesis")).toContainText("PROTOCOL_FIXTURE_ONLY");
+  await expect(page.locator("#report-market")).toContainText("20261009");
+  await expect(page.locator("#report-technical")).toContainText("NO_DATA");
+  await expect(page.locator("#report-event")).toContainText("NO_EVENT");
+  await expect(page.locator("#report-fundamental")).toHaveCount(0);
+  await expect(page.locator("#report-manager")).toContainText("INSUFFICIENT_EVIDENCE");
+  await expect(page.locator("#report-debate")).toContainText("FIXTURE_BULL_ONLY");
+  await expect(page.locator("#report-ledger")).toContainText("领域引用（无具体事件 ID）");
+  await expect(page.locator("#report-portfolio")).toContainText("NOT_PROVIDED · 未知（不能解释为零持仓）");
+  await expect(page.locator("#report-portfolio")).toContainText("FIXTURE_NO_REAL_ACCOUNT");
+  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeEnabled();
+  await page.getByText("高级：查看后端原始 JSON 工件").click();
+  await expect(page.getByText("完整 Typed Artifact")).toBeVisible();
+});
