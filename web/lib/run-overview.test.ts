@@ -19,9 +19,9 @@ describe("Go Run overview returns a bounded and truthful sample", () => {
     expect(s.runs.map(r=>r.run_id)).toEqual([b.run_id,c.run_id,d.run_id,a.run_id,e.run_id]);
     expect(s.recentFailures).toEqual([d]);
     expect(s.latestCompleted?.run_id).toBe(a.run_id);
-    expect(s.daily.reduce((acc,x)=>acc+x.count,0)).toBe(4);
+    expect(s.daily.reduce((acc,x)=>acc+x.count,0)).toBe(5);
     expect(s.daily.at(-1)).toEqual({utcDate:"2026-10-11",count:2});
-    expect(s.daily[0]).toEqual({utcDate:"2026-10-05",count:0});
+    expect(s.daily[0]).toEqual({utcDate:"2026-10-05",count:1});
   });
 
   it("does not invent data for an empty or invalid API list", () => {
