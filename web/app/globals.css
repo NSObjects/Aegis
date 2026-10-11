@@ -388,3 +388,7 @@ svg { flex-shrink: 0; }
 .provider-settings-actions {display:flex;gap:12px;padding:18px 23px 0;}
 .provider-settings-form .live-alert,.provider-settings-form .live-info {margin:16px 23px 0;}
 @media(max-width:720px){.provider-settings-row{grid-template-columns:1fr;gap:12px;}.provider-settings-fields{padding-left:17px;padding-right:17px;}.provider-settings-intro,.provider-settings-help{padding:18px;}}
+
+/* Live research run URLs are navigable and keyboard-accessible. */
+.live-permalink { display: inline-block; margin: 6px 0 0; font-size: 11px; font-weight: 650; color: var(--teal); overflow-wrap: anywhere; }
+.live-permalink:hover { text-decoration: underline; }
