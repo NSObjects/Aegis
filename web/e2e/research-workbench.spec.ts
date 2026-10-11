@@ -390,7 +390,7 @@ test("two completed research runs compare source-owned conclusion, market, techn
   page.on("request", req => {
     if (req.url().includes("/api/workbench/runs") && req.method() === "POST") methods.push("POST");
   });
-  await page.getByRole("button", { name: "研究对比" }).click();
+  await page.getByRole("button", { name: "研究对比", exact: true }).click();
   await expect(page.getByRole("heading", { name: "两次研究记录对比" })).toBeVisible();
   await page.getByLabel("基准研究").selectOption(baseline);
   await page.getByLabel("对比研究").selectOption(followup);
