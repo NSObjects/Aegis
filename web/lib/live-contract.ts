@@ -38,6 +38,19 @@ export interface RunEvidenceIndex {
     document_ids: string[];
   }>;
   document_ids: string[];
+  documents?: Array<{
+    document_id: string;
+    version_id?: string;
+    content_sha256?: string;
+    publisher?: string;
+    url?: string;
+    source_type?: string;
+    authority?: string;
+    is_primary: boolean;
+    published_at?: string;
+    available_at?: string;
+    first_seen_at?: string;
+  }>;
 }
 export interface LiveRun {
   run_id: string;
