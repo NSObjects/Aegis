@@ -1,10 +1,11 @@
 import { createHmac, randomBytes, createHash, timingSafeEqual } from "node:crypto";
+import { isDemoMode } from "@/lib/web-mode";
 
 export const COOKIE_NAME = "aegis_live_session";
 const SESSION_AGE_MS = 6 * 60 * 60 * 1000;
 
 export function liveConfig() {
-  if (process.env.AEGIS_WEB_MODE !== "live") return null;
+  if (isDemoMode(process.env.AEGIS_WEB_MODE)) return null;
   const upstream = process.env.AEGIS_WEB_API_URL ?? "http://127.0.0.1:8686";
   const apiToken = process.env.AEGIS_WEB_API_TOKEN ?? "";
   const password = process.env.AEGIS_WEB_ACCESS_PASSWORD ?? "";
