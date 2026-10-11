@@ -56,6 +56,7 @@ test("persisted request snapshot is readable across navigation without echoing t
 test("run's configured model identity stays attached to the same run after browser reload", async ({ page }) => {
   await signIn(page);
   const id = await submit(page);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
   const res = await page.request.get(`/api/workbench/runs/${id}`);
   expect(res.status()).toBe(200);
   const metadata = await res.json();
