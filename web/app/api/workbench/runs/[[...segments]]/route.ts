@@ -33,6 +33,12 @@ async function proxy(req: NextRequest, ctx: Context, method: "GET" | "POST") {
     if (raw.length > 16384) return NextResponse.json({ error: "payload too large" }, { status: 413, headers: defaultHeaders });
     body = raw;
     headers.set("Content-Type", "application/json");
+    // Forward only this allowlisted request-deduplication header, never arbitrary client headers.
+    const key = req.headers.get("Idempotency-Key");
+    if (key !== null) {
+      if (!/^[a-zA-Z0-9_.:-]{8,128}$/.test(key)) return NextResponse.json({ error: "invalid Idempotency-Key" }, { status: 400, headers: defaultHeaders });
+      headers.set("Idempotency-Key", key);
+    }
   }
   if (path.endsWith("/stream")) {
     const lastID = req.headers.get("last-event-id");
