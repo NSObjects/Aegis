@@ -20,6 +20,7 @@ type fakeRuns struct {
 	mu          sync.Mutex
 	rec         application.RunRecord
 	submitCalls int
+	submitErr error
 	lastRequest application.ResearchRequest
 	cancelCalls int
 }
@@ -29,6 +30,7 @@ func (f *fakeRuns) Submit(_ context.Context, req application.ResearchRequest) (a
 	defer f.mu.Unlock()
 	f.submitCalls++
 	f.lastRequest = req
+	if f.submitErr != nil{return application.RunRecord{}, f.submitErr}
 	return f.rec, nil
 }
 func (f *fakeRuns) Get(_ context.Context, id string) (application.RunRecord, error) {
@@ -166,4 +168,29 @@ func TestLocalDevHandlerAllowsLoopbackDebugRequests(t *testing.T) {
 	if w := apiRequest(t, production, http.MethodGet, "/api/v1/research/runs", "", false, nil); w.Code != http.StatusUnauthorized {
 		t.Fatalf("production handler must still require bearer: %d", w.Code)
 	}
+}
+
+func TestHTTPIdempotencyHeaderAndMetadataArePrivate(t *testing.T) {
+ record:=testRecord()
+ record.IdempotencyDigest=strings.Repeat("a",64)
+ record.RequestFingerprint=strings.Repeat("b",64)
+ f:=&fakeRuns{rec:record}
+ h:=mkHandler(t,f,application.ModeDecision)
+ key:="request-idempotency-000001"
+ created:=apiRequest(t,h,"POST","/api/v1/research/runs",`{"symbol":"600519.SH"}`,true,map[string]string{"Idempotency-Key":key})
+ if created.Code!=http.StatusAccepted || f.lastRequest.IdempotencyKey!=key{
+  t.Fatalf("idempotency header was not forwarded: status %d, request %+v",created.Code,f.lastRequest)
+ }
+ for _,testCase:=range []string{created.Body.String(),apiRequest(t,h,"GET","/api/v1/research/runs/"+record.ID,"",true,nil).Body.String(),apiRequest(t,h,"GET","/api/v1/research/runs","",true,nil).Body.String()}{
+  if strings.Contains(testCase,"idempotency_digest")||strings.Contains(testCase,"request_fingerprint"){
+   t.Fatalf("internal idempotency hashes leaked in public response: %s",testCase)
+  }
+ }
+ invalid:=apiRequest(t,h,"POST","/api/v1/research/runs",`{"symbol":"600519.SH"}`,true,map[string]string{"Idempotency-Key":"bad key with space"})
+ if invalid.Code!=http.StatusBadRequest || f.submitCalls!=1 {
+  t.Fatalf("invalid key must fail before submitting: %d %d",invalid.Code,f.submitCalls)
+ }
+ f.submitErr=application.ErrRunIdempotencyConflict
+ conflict:=apiRequest(t,h,"POST","/api/v1/research/runs",`{"symbol":"600519.SH"}`,true,map[string]string{"Idempotency-Key":key})
+ if conflict.Code!=http.StatusConflict {t.Fatalf("conflicting payload must return HTTP 409, got %d",conflict.Code)}
 }
