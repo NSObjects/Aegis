@@ -194,3 +194,26 @@ func TestHTTPIdempotencyHeaderAndMetadataArePrivate(t *testing.T) {
  conflict:=apiRequest(t,h,"POST","/api/v1/research/runs",`{"symbol":"600519.SH"}`,true,map[string]string{"Idempotency-Key":key})
  if conflict.Code!=http.StatusConflict {t.Fatalf("conflicting payload must return HTTP 409, got %d",conflict.Code)}
 }
+
+func TestHTTPRerunProvenanceValidatedAndExposed(t *testing.T) {
+ f:=&fakeRuns{rec:testRecord()}
+ h:=mkHandler(t,f,application.ModeDecision)
+ parent:=strings.Repeat("b",32)
+ body:=`{"symbol":"600519.SH","rerun_of":"`+parent+`"}`
+ created:=apiRequest(t,h,"POST","/api/v1/research/runs",body,true,nil)
+ if created.Code!=202||f.lastRequest.RerunOf!=parent {
+  t.Fatalf("POST failed to forward source provenance: %d %s %+v",created.Code,created.Body.String(),f.lastRequest)
+ }
+ f.rec.RerunOf=parent
+ for _,endpoint:=range []string{"/api/v1/research/runs","/api/v1/research/runs/"+f.rec.ID}{
+  res:=apiRequest(t,h,"GET",endpoint,"",true,nil)
+  if res.Code!=200||!strings.Contains(res.Body.String(),`"rerun_of":"`+parent+`"`){
+   t.Fatalf("GET did not expose provenance: %d %s",res.Code,res.Body.String())
+  }
+ }
+ f.submitErr=application.ErrInvalidRerunSource
+ invalid:=apiRequest(t,h,"POST","/api/v1/research/runs",body,true,nil)
+ if invalid.Code!=400||strings.Contains(invalid.Body.String(),parent){
+  t.Fatalf("invalid source leaked into response: %d %s",invalid.Code,invalid.Body.String())
+ }
+}
