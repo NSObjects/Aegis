@@ -53,6 +53,28 @@ test("persisted request snapshot is readable across navigation without echoing t
   expect(await page.locator("body").innerText()).not.toContain(secretQuery);
 });
 
+test("run's configured model identity stays attached to the same run after browser reload", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page);
+  const res = await page.request.get(`/api/workbench/runs/${id}`);
+  expect(res.status()).toBe(200);
+  const metadata = await res.json();
+  expect(metadata.model_provenance).toMatchObject({
+    schema_version: 1,
+    config_fingerprint: "a".repeat(64),
+    bindings: [{ role: "market", profile: "fixture-profile", provider: "fixture-only", model: "fixture-model" }],
+  });
+  await page.locator(".live-model-provenance summary").click();
+  await expect(page.locator(".live-model-provenance")).toContainText("fixture-model");
+  await expect(page.locator(".live-model-provenance")).toContainText("模型 ID 不是第三方 Provider 保证的固定版本号");
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(page.locator(".live-model-provenance summary")).toContainText("已记录");
+  await page.locator(".live-model-provenance summary").click();
+  await expect(page.locator(".live-model-provenance")).toContainText("fixture-profile");
+  await expect(page.locator(".live-model-provenance")).not.toContainText("API_KEY");
+});
+
 test("anonymous browser cannot read ResearchRun or bypass Web login", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
