@@ -1,8 +1,8 @@
 # Aegis 开发路线图（唯一开发导航）
 
-> 更新：2026-10-10。目的：当前阶段结束后，打开本文件即可找到**下一项应实施的任务**、实施范围、验收条件、完成证据；不需要重新讨论产品方向。
+> 更新：2026-10-11。目的：当前阶段结束后，打开本文件即可找到**下一项应实施的任务**、实施范围、验收条件、完成证据；不需要重新讨论产品方向。
 >
-> 基线参考：2026-10-10 本次核查 `main` 为 `d79aee1cbb6422cecb33f0d6bc12e90be6b6d05c`，PR #123、#125、#126 均已有合并提交；这些包括 F4 CLI 风控校验与失败回归，不能代替单独核实最新 Hosted E2E 是否成功。开发前仍需刷新 SHA/CI/运行证据。
+> V1 内核完成证据：2026-10-11 [PR #142](https://github.com/NSObjects/Aegis/pull/142) 的固定 head `61de58d0c0812de5d98c35e481491355debdff4f` 运行 [Integration #38098687921](https://github.com/NSObjects/Aegis/actions/runs/38098687921)：8/8 真实 Hosted Job 均 SUCCESS；[CI #38098690842](https://github.com/NSObjects/Aegis/actions/runs/38098690842) SUCCESS。合并后 `main` merge SHA 为 `b6ab9b688450c8f62f40483e0b5ccd870a3614ca`，[main CI #38098968618](https://github.com/NSObjects/Aegis/actions/runs/38098968618) SUCCESS。详见 [V1 验收记录](V1_ACCEPTANCE.md)。
 >
 > 原有仓库工程版本（如 V2.13）保持不变。这里的「V1 完成」专指**当前 Multi-Agent 研究内核完整闭环验收**；后续用 R0～R8 作为**路线任务编号**，不擅自重新给代码编号。
 >
@@ -10,18 +10,18 @@
 
 ## 0. 从这里继续开发（必须随任务完成更新）
 
-**现在：R0 — 当前多 Agent V1 收尾。**
+**现在：R1 — Web 研究工作台（R0 V1 内核已完成验收）。**
 
-**下一项：R0-01 — 固定最新 main SHA，核实已合并 PR #123/#125/#126 后的真实 CLI/Hosted E2E、Go tests/vet、完整结果及失败路径。**
+**下一项：R1-01 — 核实现有 `internal/application` Application Service 与 CLI 共享完整正式研究入口，补齐缺口后进入 R1-02 ResearchRun 生命周期。**
 
-**R0 验收完成后：直接进入 R1-01 — 为研究工作台抽离可复用 Application Service。**
+**R0 Exit Gate：已满足。** 不再重复开发多 Agent 内核；R1-01 先复核已存在的 `internal/application/research_service.go`、`cmd/aegis/main.go` 与现有 HTTP/任务能力，已经满足的验收不重复实现。
 
 **开发优先级已确认：研究工作台 > 对话与研究历史 > 研究发现/持续跟踪 > 独立验证；组合级仓位管理是独立的大型后续阶段 R7，**绝不是 R1～R6 的前置条件，也不能因为它尚未实现而挡住 Web 上线。已有 Risk/Portfolio 审查功能照常展示，但不要称之为已完成的动态仓位系统。
 
 | 执行顺序 | 阶段/主要成果 | 状态 | 通过后进入 |
 | --- | --- | --- | --- |
-| **R0** | 当前 V1：Multi-Agent 研究内核实际跑通 | **IN_PROGRESS**（待验收证据） | **R1-01** |
-| **R1** | **研究工作台 V1**：API/任务/实时过程/Web/研究报告/历史 | PLANNED | **R2-01** |
+| **R0** | 当前 V1：Multi-Agent 研究内核实际跑通 | **DONE**（固定 SHA 全量 Hosted 8/8 + 合并后 main CI） | **R1-01** |
+| **R1** | **研究工作台 V1**：API/任务/实时过程/Web/研究报告/历史 | **IN_PROGRESS**（复核已实现能力） | **R2-01** |
 | **R2** | 对话研究：Conversation Agent、追问、跨运行比较 | PLANNED | R3-01 |
 | **R3** | 研究发现：确定性选股、Watchlist、横向比较 | PLANNED | R4-01 |
 | **R4** | 自动研究：监控、触发、增量复查、定期报告 | PLANNED | R5-01 |
@@ -45,15 +45,17 @@
 
 **产出**：真实研究数据 → Market/Technical/Event/可选 Fundamental → Synthesis → Bull/Bear → Research Manager → TradeIntent → Risk Analyst → Portfolio Manager → 可核验 JSON。参照 [F0～F4](MULTI_AGENT_ROADMAP.md)；现有角色不重复实现。
 
-- [ ] **R0-01 验证最新 main 的真实执行**
+- [x] **R0-01 验证正式 V1 研究闭环与合并后 main 的 CI**
   - 对照已合并 PR #123/#125/#126 内容，固定当前 main SHA，执行 `go test ./... -count=1`、`go vet ./...` 与正式 `.github/workflows/integration.yml` 适用的真实 CLI/Hosted 工作流。
   - **验收**：证明同一次运行的 `research_artifact`、辩论、`research_plan`、`trade_intent`、`risk_context`、`portfolio_decision` 连贯，附运行 URL、提交 SHA、来源说明；至少一个真实正常场景和一个受控失败/不足场景。
-- [ ] **R0-02 修复 R0-01 发现的真正阻断缺陷**
+- [x] **R0-02 修复 R0-01 发现的真正阻断缺陷**
   - 只修错误交接、核心契约、真实来源失败或风控安全问题；没有阻断项则明确记录跳过。
   - **验收**：同一真实场景复验或可证明受控失败，Go/CLI 回归不倒退。
-- [ ] **R0-03 V1 收口记录**
+- [x] **R0-03 V1 收口记录**
   - 固定 CLI 运行示例、必需配置、真实样例 JSON、支持范围、风险审查不足数据语义、已知限制；记录相应 CI/Hosted 证据及 main commit。
   - **验收**：可独立复现，不需手动拼 Agent；更新 F0～F4 和此文档的顶部状态。
+
+**Exit Gate（DONE）**：PR #142 固定 head 的 8/8 Hosted Job 全部实际执行并通过；合并后 main Go CI 全绿。真实结果摘要、复现命令、缺失数据语义、历史失败与仍未验证范围，均记录于 [V1_ACCEPTANCE.md](V1_ACCEPTANCE.md)。**需区分 Hosted 运行 SHA 与 main 合并 SHA；本次没有宣称对 merge commit 再执行一轮全量付费 Hosted 测试。**
 
 **Exit Gate**：当前研究主链真实可运行且失败可解释。**通过后立即开始 R1-01，不继续扩展 Risk Debate、复杂仓位、Memory 或 UI 边角优化。**
 
