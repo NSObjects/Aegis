@@ -7,6 +7,7 @@ test("completed live research exposes only backend-linked evidence and argument 
   await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
   await page.getByLabel("股票代码").fill("600519.SH");
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
   const runId = await page.locator(".live-run-fields code").innerText();
   expect(runId).toMatch(/^[0-9a-f]{32}$/);
 
@@ -36,6 +37,7 @@ test("a nonterminal run cannot display the selected study's evidence inspector",
   await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
   await page.getByLabel("研究关注点（可选）").fill("hold fixture");
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toContainText("600519.SH");
   await expect(page.locator("#report-evidence-inspector")).toHaveCount(0);
   await page.getByRole("button", { name: "请求取消" }).click();
