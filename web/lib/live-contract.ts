@@ -13,6 +13,8 @@ export interface LiveRun {
   started_at?: string;
   finished_at?: string;
   failure_code?: string;
+  /** Server-validated terminal Run this new study was deliberately started from. */
+  rerun_of?: string;
 }
 export interface LiveStageEvent {
   seq: number;
@@ -36,7 +38,8 @@ export function isLiveRun(x: unknown): x is LiveRun {
     typeof r.symbol === "string" && isAshareSymbol(r.symbol) &&
     typeof r.state === "string" && states.has(r.state) &&
     typeof r.created_at === "string" && Number.isFinite(Date.parse(r.created_at)) &&
-    typeof r.requested_as_of === "string" && Number.isFinite(Date.parse(r.requested_as_of));
+    typeof r.requested_as_of === "string" && Number.isFinite(Date.parse(r.requested_as_of)) &&
+    (r.rerun_of === undefined || (typeof r.rerun_of === "string" && isRunID(r.rerun_of)));
 }
 export function isLiveEvent(x: unknown): x is LiveStageEvent {
   if (typeof x !== "object" || x === null) return false;
