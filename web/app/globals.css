@@ -538,3 +538,14 @@ svg { flex-shrink: 0; }
 .live-trace-raw summary { cursor:pointer; color:#a8becf; font-size:11px; padding:11px; }
 .live-trace-raw .live-event-list { max-height:300px; }
 .live-trace-boundary { margin:8px 15px 17px; color:#8da1b6; font-size:10px; line-height:1.8; }
+
+
+/* R1 request constraints are immutable submitted facts, not runtime-model claims. */
+.live-request-snapshot { margin:0 20px 12px; border:1px solid #294258; border-radius:10px; padding:0 14px; background:#111e30; }
+.live-request-snapshot>summary { color:#a9d9cc; font-size:12px; font-weight:650; padding:13px 2px; cursor:pointer; }
+.live-request-snapshot>p { color:#8fa6bc; font-size:11px; line-height:1.7; margin:10px 2px 13px; }
+.live-request-snapshot-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin:4px 0 13px; }
+.live-request-snapshot-grid>div { min-width:0; padding:10px 11px; border:1px solid #2a4055; border-radius:7px; display:grid; gap:7px; }
+.live-request-snapshot-grid small { color:#8ea7bf; font-size:10px; }
+.live-request-snapshot-grid strong { color:#d6e6f0; font-size:11px; overflow-wrap:anywhere; font-weight:600; }
+@media(max-width:720px){ .live-request-snapshot-grid {grid-template-columns:1fr;} .live-request-snapshot {margin-left:14px; margin-right:14px;} }
