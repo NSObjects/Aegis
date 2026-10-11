@@ -15,7 +15,11 @@ function config() {
 describe("single-operator server-side session", () => {
   it("requires explicit secrets and does not enable auth in demo", () => {
     delete process.env.AEGIS_WEB_MODE;
-    expect(liveConfig()).toBeNull();
+    expect(liveConfig()).toBeNull(); // No secrets: fail closed despite default Live.
+    config(); delete process.env.AEGIS_WEB_MODE;
+    expect(liveConfig()).not.toBeNull(); // Valid secure production credentials work without mode switch.
+    process.env.AEGIS_WEB_MODE = "demo";
+    expect(liveConfig()).toBeNull(); // Explicit demo disables Live session.
     config(); process.env.AEGIS_WEB_API_TOKEN = "short";
     expect(liveConfig()).toBeNull();
   });
