@@ -81,11 +81,18 @@ export function projectEvidenceNavigator(input: unknown): EvidenceNavigatorModel
   const eventContext = object(research.event);
   const events: EvidenceEvent[] = [];
   const eventIDs = new Set<string>();
+  // Duplicate event IDs are ambiguous even if each individual record looks
+  // valid. Never project the first match as if it were uniquely referenced.
+  const eventCounts = new Map<string, number>();
+  items(eventContext?.events).forEach(raw => {
+    const id = string(object(raw)?.id);
+    if (id) eventCounts.set(id, (eventCounts.get(id) ?? 0) + 1);
+  });
 
   items(eventContext?.events).forEach(raw => {
     const item = object(raw);
     const id = string(item?.id);
-    if (!id || eventIDs.has(id)) return;
+    if (!id || eventCounts.get(id) !== 1) return;
     eventIDs.add(id);
     events.push({
       id,
@@ -99,13 +106,18 @@ export function projectEvidenceNavigator(input: unknown): EvidenceNavigatorModel
   });
 
   const argumentsOut: EvidenceArgument[] = [];
-  const argumentIDs = new Set<string>();
+  // Exclude every occurrence of a duplicated argument ID, not just later
+  // occurrences: otherwise Manager argument_ids could silently pick a claim.
+  const argumentCounts = new Map<string, number>();
+  items(ledger.arguments).forEach(raw => {
+    const id = string(object(raw)?.id);
+    if (id) argumentCounts.set(id, (argumentCounts.get(id) ?? 0) + 1);
+  });
   items(ledger.arguments).forEach(raw => {
     const item = object(raw);
     const id = string(item?.id);
     const claim = string(item?.claim);
-    if (!id || !claim || argumentIDs.has(id)) return;
-    argumentIDs.add(id);
+    if (!id || !claim || argumentCounts.get(id) !== 1) return;
     const challenges: EvidenceChallenge[] = items(item?.challenges).flatMap(rawChallenge => {
       const ch = object(rawChallenge);
       const text = string(ch?.claim);
