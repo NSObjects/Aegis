@@ -235,3 +235,19 @@ Live 工作台从 URL 恢复当前页面和服务端 Run：
 - 目前 Go Stage Events **不含脱敏工具调用、来源信息、模型 prompts、链式推理**。UI 明确告知不可用；R1-07 工具级追踪仍需先设计、验证并接入受保护的 Go 事件契约。此 PR 不声称这些字段已经存在。
 
 E2E 仅验证固定的 Go 协议 fixture；不是实盘、行情或真实模型数据验证。
+
+
+## R1-03: submitted research request snapshot
+
+For new Live runs, the task detail panel has an expandable **提交时研究配置快照**
+section. It shows only server-saved request constraints: evidence window and PIT
+requirement, preferred (not necessarily contacted) source types, minimum
+document/source constraints, whether a research question was provided (not its
+text), and an optional explicit account state. `NOT_PROVIDED` always means
+unknown, never a zero portfolio.
+
+This is persisted by Go in the single-process RunStore, survives restarts,
+and is returned as optional `request_snapshot` metadata on new Run records.
+Older runs display **旧任务未记录**. This metadata is not a model/version
+capture and does not imply any source successfully returned data.
+The browser does not receive provider secrets or stored research-query text.
