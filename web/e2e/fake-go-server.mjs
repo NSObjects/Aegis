@@ -56,15 +56,15 @@ function report(run) {
         conflicts: [],
         risks: ["FIXTURE_NO_LIVE_MARKET_QUOTE"],
       },
-      market: { as_of: "20261009", regime: "MIXED", advance_count: 0, decline_count: 2,
-        turnover: 0, evidence: ["FIXTURE_MARKET_ONLY"], risk: ["no provider"] },
-      technical: run.scenario === "snapshot" ? {
+      market: { as_of: "20261009", regime: run.scenario === "comparison" ? "RISK_OFF" : "MIXED", advance_count: run.scenario === "comparison" ? 115 : 0, decline_count: 2,
+        turnover: run.scenario === "comparison" ? null : 0, evidence: ["FIXTURE_MARKET_ONLY"], risk: ["no provider"] },
+      technical: (run.scenario === "snapshot" || run.scenario === "comparison") ? {
         symbol: run.symbol, requested_as_of: "20261011", effective_as_of: "20261009",
         last_trade_date: "20261009", status: "NORMAL",
-        snapshot: { open: 1500.12, high: 1531.4, low: 1487.8, close: 1512.65,
+        snapshot: { open: 1500.12, high: 1531.4, low: 1487.8, close: run.scenario === "comparison" ? 1528.2 : 1512.65,
           pre_close: 1499.88, change_percent: 0.85, volume: 42000, amount: 64000000, turnover_rate: 1.5 },
         returns: { return_1d: 0.85, return_5d: -1.2, return_20d: null },
-        moving_averages: { ma5: 1507.2, ma10: 1499.1, ma20: null, ma60: 1468.2 },
+        moving_averages: { ma5: run.scenario === "comparison" ? 1509.6 : 1507.2, ma10: 1499.1, ma20: null, ma60: 1468.2 },
         momentum: { rsi14: 56.4, macd: { dif: 2.41, dea: 1.33, hist: 2.16 } },
         volume: { volume_ma5: 38000, volume_vs_ma5: 1.1053, volume_vs_ma20: null },
         evidence: ["PROTOCOL_FIXTURE_ONLY technical values"], risk: [],
@@ -72,11 +72,11 @@ function report(run) {
         last_trade_date: "20261009", status: "NO_DATA", returns: {}, moving_averages: {},
         momentum: { macd: {} }, volume: {}, evidence: [], risk: [] },
       event: { symbol: run.symbol, requested_as_of: "2026-10-11T00:00:00Z",
-        evidence_as_of: "2026-10-11T00:05:00Z", status: "NO_EVENT", events: [] },
+        evidence_as_of: "2026-10-11T00:05:00Z", status: run.scenario === "comparison" ? "NORMAL" : "NO_EVENT", events: run.scenario === "comparison" ? [{ id: "fixture-comparison-event-1", type: "OTHER", headline: "PROTOCOL_FIXTURE_ONLY", fact_summary: "synthetic event for browser diff", facts: [], evidence_document_ids: ["fixture-doc-1"], source_count: 1, has_primary_source: false }] : [] },
     },
     portfolio_review: {
       research_plan: { symbol: run.symbol, conclusion: "INSUFFICIENT_EVIDENCE",
-        summary: "FIXTURE_ONLY_MANAGER_NO_RESEARCH",
+        summary: run.scenario === "comparison" ? "FIXTURE_ONLY_MANAGER_FOLLOW_UP" : "FIXTURE_ONLY_MANAGER_NO_RESEARCH",
         opportunities: [], risks: [], unresolved_argument_ids: ["fixture-a1"], trading_constraints: [] },
       debate_state: { symbol: run.symbol, turns: [{ round: 1, side: "BULL",
         thesis: "FIXTURE_BULL_ONLY", arguments: [{
@@ -88,7 +88,7 @@ function report(run) {
       trade_intent: { symbol: run.symbol, status: "MONITOR", thesis: "FIXTURE_NOT_A_TRADE",
         evidence: [], risk: [] },
       risk_context: { symbol: run.symbol, assessment: "INSUFFICIENT_CONTEXT",
-        summary: "FIXTURE_MISSING_ACCOUNT_INFORMATION", findings: [], constraints: [],
+        summary: run.scenario === "comparison" ? "FIXTURE_NEW_RISK_REVIEW" : "FIXTURE_MISSING_ACCOUNT_INFORMATION", findings: [], constraints: [],
         unresolved: [{ claim: "FIXTURE_ACCOUNT_UNKNOWN" }] },
       portfolio_decision: { symbol: run.symbol, disposition: "REVIEW_REQUIRED",
         reason_code: "ACCOUNT_DATA_ABSENT", summary: "FIXTURE_ACCOUNT_UNKNOWN",
@@ -149,7 +149,7 @@ const server = createServer(async (req, res) => {
     }
     const run_id = randomBytes(16).toString("hex");
     const created_at = asOf();
-    const scenario = body.market_query?.includes("hold") ? "hold" : body.market_query?.includes("fail") ? "fail" : body.market_query?.includes("technical snapshot fixture") ? "snapshot" : "complete";
+    const scenario = body.market_query?.includes("hold") ? "hold" : body.market_query?.includes("fail") ? "fail" : body.market_query?.includes("historical comparison fixture") ? "comparison" : body.market_query?.includes("technical snapshot fixture") ? "snapshot" : "complete";
     const request_snapshot = {
       schema_version: 1, market_query_provided: Boolean(body.market_query?.trim()),
       event_window_start: new Date(Date.parse(created_at) - 7*24*3600*1000).toISOString(),

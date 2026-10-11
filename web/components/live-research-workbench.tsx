@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Ban, BookOpenText, ChevronRight, CircleDot,
+  ArrowLeftRight, ArrowRight, Ban, BookOpenText, ChevronRight, CircleDot,
   Database, Download, FileClock, LockKeyhole, LogOut, Radar, RefreshCcw,
   Search, ShieldCheck, TerminalSquare, TriangleAlert, RotateCcw,
 } from "lucide-react";
@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
 import ProviderSettings from "@/components/provider-settings";
 import LiveResearchReport from "@/components/live-research-report";
 import LiveStageTrace from "@/components/live-stage-trace";
-import { readWorkbenchLocation, workbenchHref, type WorkbenchView } from "@/lib/workbench-location";
+import LiveRunComparison from "@/components/live-run-comparison";
+import { readWorkbenchLocation, readComparisonLocation, comparisonHref, workbenchHref, type WorkbenchView } from "@/lib/workbench-location";
 
 const base = "/api/workbench";
 const states: Record<LiveRun["state"], string> = {
@@ -51,6 +52,7 @@ export default function LiveResearchWorkbench() {
   const events = eventRecord?.runId === selectedId ? eventRecord.values : [];
   const artifact = artifactRecord?.runId === selectedId ? artifactRecord.value : null;
   const [view, setView] = useState<WorkbenchView>("workspace");
+  const [comparisonPair, setComparisonPair] = useState<{leftId:string|null;rightId:string|null}>({leftId:null,rightId:null});
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,7 +70,15 @@ export default function LiveResearchWorkbench() {
       window.history.pushState(null, "", href);
     }
     setView(target);
+    if (target === "compare") setComparisonPair({leftId:null,rightId:null});
     if (target === "workspace" && runId) setSelectedId(runId);
+  }, []);
+
+  const openComparison = useCallback((leftId: string | null, rightId: string | null) => {
+    const href = comparisonHref(window.location.pathname, leftId, rightId);
+    if (window.location.pathname + window.location.search !== href) window.history.pushState(null, "", href);
+    setComparisonPair({leftId, rightId});
+    setView("compare");
   }, []);
 
   const refresh = useCallback(async () => {
@@ -94,6 +104,7 @@ export default function LiveResearchWorkbench() {
     const restoreLocation = () => {
       const location = readWorkbenchLocation(window.location.search);
       setView(location.view);
+      setComparisonPair(readComparisonLocation(window.location.search));
       if (location.view === "workspace") setSelectedId(location.runId);
     };
     restoreLocation();
@@ -173,6 +184,7 @@ export default function LiveResearchWorkbench() {
     try { await jsonRequest(`${base}/session`, { method: "DELETE" }); } catch { /* local session closes regardless */ }
     pendingStart.current = null;
     setRerunFrom(null);
+    setComparisonPair({leftId:null,rightId:null});
     setSession(current => current && { ...current, authenticated: false }); setRuns([]); setSelectedId(null); setEventRecord(null); setArtifactRecord(null);
   }
   function prepareRerun() {
@@ -229,16 +241,16 @@ export default function LiveResearchWorkbench() {
   return <div className="workspace live-workspace">
     <aside className="sidebar" aria-label="实时研究导航">
       <div className="brand"><span className="brand-mark"><Radar size={24}/></span><div><div className="brand-title">AEGIS<span style={{color:"#7ceac7"}}>.</span></div><div className="brand-sub">Live research console</div></div></div>
-      <nav aria-label="研究导航"><div className="nav-label">WORKSPACE</div><button type="button" onClick={()=>navigate("workspace", selectedId)} className={cn("nav-item",view==="workspace"&&"active")}><Radar size={17}/>研究工作区</button><button type="button" onClick={()=>navigate("history")} className={cn("nav-item",view==="history"&&"active")}><FileClock size={17}/>研究历史<span className="nav-count">{runs.length}</span></button><button type="button" onClick={()=>navigate("settings")} className={cn("nav-item",view==="settings"&&"active")}><ShieldCheck size={17}/>凭证设置</button></nav>
+      <nav aria-label="研究导航"><div className="nav-label">WORKSPACE</div><button type="button" onClick={()=>navigate("workspace", selectedId)} className={cn("nav-item",view==="workspace"&&"active")}><Radar size={17}/>研究工作区</button><button type="button" onClick={()=>navigate("history")} className={cn("nav-item",view==="history"&&"active")}><FileClock size={17}/>研究历史<span className="nav-count">{runs.length}</span></button><button type="button" onClick={()=>navigate("compare")} className={cn("nav-item",view==="compare"&&"active")}><ArrowLeftRight size={17}/>研究对比</button><button type="button" onClick={()=>navigate("settings")} className={cn("nav-item",view==="settings"&&"active")}><ShieldCheck size={17}/>凭证设置</button></nav>
       <div className="sidebar-sep"/><div className="watch-title">最新研究 <span>LIVE</span></div><div className="live-side-list">{runs.slice(0,12).map(r=><button type="button" key={r.run_id} onClick={()=>{navigate("workspace",r.run_id);setError("");}} className={cn("live-side-run",selectedId===r.run_id&&"chosen")}><strong>{r.symbol}</strong><small>{states[r.state]} · {formatDate(r.created_at)}</small></button>)}{runs.length===0&&<p className="live-empty">尚无真实研究任务</p>}</div>
       <div className="sidebar-bottom"><div className="terminal-note"><ShieldCheck size={18}/><span><strong>Go Agent 已连接</strong><br/>任务和模型运行均由服务端负责</span></div><button type="button" className="live-signout" onClick={()=>void signOut()}><LogOut size={15}/>退出会话</button></div>
     </aside>
-    <main className="main-area"><header className="topbar"><div className="breadcrumb"><span>Research workspace</span><ChevronRight size={13}/><strong>{view==="history"?"研究历史":view==="settings"?"凭证设置":"实时研究"}</strong></div><div className="topbar-spacer"/><span className="badge green"><CircleDot size={12}/> LIVE · GO API</span><button className="icon-button" aria-label="刷新" type="button" onClick={()=>void refresh()}><RefreshCcw size={16}/></button></header>
-    <div className="content live-content"><div className="page-heading"><div><div className="eyebrow">Multi-agent research / production source</div><h1>{view==="history"?"研究历史":view==="settings"?"数据源与模型凭证":"实时研究工作台"}</h1><p>{view==="settings"?"凭证加密保存在 Go 服务端；输入后立即清空表单，不回显密钥":"真实 Go 后端 · 严格数据时点 · Agent 执行过程可追踪"}</p></div><div className="heading-right"><button className="btn" type="button" disabled={!artifact||selected?.state!=="COMPLETED"} onClick={downloadArtifact}><Download size={14}/>导出真实 JSON</button></div></div>
+    <main className="main-area"><header className="topbar"><div className="breadcrumb"><span>Research workspace</span><ChevronRight size={13}/><strong>{view==="history"?"研究历史":view==="compare"?"研究对比":view==="settings"?"凭证设置":"实时研究"}</strong></div><div className="topbar-spacer"/><span className="badge green"><CircleDot size={12}/> LIVE · GO API</span><button className="icon-button" aria-label="刷新" type="button" onClick={()=>void refresh()}><RefreshCcw size={16}/></button></header>
+    <div className="content live-content"><div className="page-heading"><div><div className="eyebrow">Multi-agent research / production source</div><h1>{view==="history"?"研究历史":view==="compare"?"研究历史对比":view==="settings"?"数据源与模型凭证":"实时研究工作台"}</h1><p>{view==="settings"?"凭证加密保存在 Go 服务端；输入后立即清空表单，不回显密钥":"真实 Go 后端 · 严格数据时点 · Agent 执行过程可追踪"}</p></div><div className="heading-right"><button className="btn" type="button" disabled={!artifact||selected?.state!=="COMPLETED"} onClick={downloadArtifact}><Download size={14}/>导出真实 JSON</button></div></div>
     <div className="live-scope-banner"><ShieldCheck size={16}/><span>当前为真实研究连接。仅使用 Go 返回的 Run、阶段事件和工件；未接入真实行情视图时不绘制假价格图。组合账户默认显式标记 NOT_PROVIDED（未知），不执行交易。</span></div>
     {error&&<div role="alert" className="live-alert"><TriangleAlert size={15}/>{error}<button onClick={()=>setError("")} type="button">关闭</button></div>}
     {info&&<div role="status" className="live-info">{info}</div>}
-    {view==="settings"?<ProviderSettings localDev={session.local_dev === true}/>:view==="history"?<section className="surface live-history"><div className="panel-head"><h2>服务端持久化记录</h2><span className="badge blue">{runs.length} 条（接口返回上限 100）</span></div>{runs.length===0?<p className="live-empty">尚无研究记录。</p>:<div className="live-history-table">{runs.map(r=><button key={r.run_id} className="live-history-row" onClick={()=>{navigate("workspace",r.run_id);setError("");}} type="button"><strong>{r.symbol}</strong><code>{r.run_id.slice(0,12)}…</code><small>{formatDate(r.created_at)}</small><span className={`badge ${statusColors[r.state]}`}>{states[r.state]}</span><ArrowRight size={15}/></button>)}</div>}</section>:<div className="main-grid live-grid"><div className="left-stack">
+    {view==="settings"?<ProviderSettings localDev={session.local_dev === true}/>:view==="compare"?<LiveRunComparison runs={runs} pair={comparisonPair} onPairChange={openComparison}/>:view==="history"?<section className="surface live-history"><div className="panel-head"><h2>服务端持久化记录</h2><div className="live-history-actions"><span className="badge blue">{runs.length} 条（接口返回上限 100）</span><button type="button" className="btn" onClick={()=>navigate("compare")}><ArrowLeftRight size={14}/>对比历史研究</button></div></div>{runs.length===0?<p className="live-empty">尚无研究记录。</p>:<div className="live-history-table">{runs.map(r=><button key={r.run_id} className="live-history-row" onClick={()=>{navigate("workspace",r.run_id);setError("");}} type="button"><strong>{r.symbol}</strong><code>{r.run_id.slice(0,12)}…</code><small>{formatDate(r.created_at)}</small><span className={`badge ${statusColors[r.state]}`}>{states[r.state]}</span><ArrowRight size={15}/></button>)}</div>}</section>:<div className="main-grid live-grid"><div className="left-stack">
       <section className="surface live-create"><div className="eyebrow">New research run</div><h2>发起股票研究</h2><p>研究时点由后端创建任务时确定。正式执行可能触发数据源请求和模型费用。</p>{rerunFrom&&<div className="live-rerun-notice" role="status"><strong>再次研究 · 来源任务 {rerunFrom.runId.slice(0, 12)}…</strong><span>仅预填标的，不会复制旧的关注点、账户状态或研究时间。请确认本次研究参数后手动启动全新任务。</span><button type="button" onClick={()=>{setRerunFrom(null);pendingStart.current=null;}}>取消再次研究</button></div>}<form onSubmit={startRun}><label>股票代码<input value={symbol} onChange={e=>{setSymbol(e.target.value.toUpperCase());setRerunFrom(null);pendingStart.current=null;}} placeholder="600519.SH" required/></label><label>研究关注点（可选）<input maxLength={1024} value={marketQuery} onChange={e=>setMarketQuery(e.target.value)} placeholder="例如：近期市场环境与标的事件"/></label><div className="live-create-foot"><span className="badge blue">{session.mode}</span>{session.mode==="PORTFOLIO_REVIEW"&&<span className="badge gray">账户：NOT_PROVIDED · 未知</span>}<button className="btn primary" type="submit" disabled={busy}><Search size={15}/>{busy?"处理中…":"启动真实研究"}</button></div></form></section>
       <section className="surface live-run-detail"><div className="panel-head"><div><h2>任务运行详情</h2><p>异步任务进程不依赖浏览器标签页</p></div>{selected&&<span className={`badge ${statusColors[selected.state]}`}>{states[selected.state]}</span>}</div>{selected?<div className="live-run-fields"><div><small>标的</small><strong>{selected.symbol}</strong></div><div><small>研究时点 (PIT)</small><strong>{formatDate(selected.requested_as_of)}</strong></div><div><small>任务 ID</small><code>{selected.run_id}</code><a className="live-permalink" href={workbenchHref("/", "workspace", selected.run_id)}>任务固定链接 ↗</a></div><div><small>状态</small><strong>{states[selected.state]}</strong></div><div><small>开始</small><strong>{formatDate(selected.started_at)}</strong></div><div><small>结束</small><strong>{formatDate(selected.finished_at)}</strong></div>{selected.failure_code&&<div className="live-full"><small>错误代码</small><strong className="down">{selected.failure_code}</strong></div>}{selected.rerun_of&&<div className="live-full"><small>来源研究任务</small><a className="live-permalink" href={workbenchHref("/", "workspace", selected.rerun_of)}>{selected.rerun_of} ↗</a></div>}</div>:<p className="live-empty">{selectedId ? `找不到任务 ${selectedId}，或当前会话无权访问。不会显示其他任务的报告。` : "尚未选择任务。发起一次研究或从历史中打开。"}</p>}{selected&&<details className="live-request-snapshot">
         <summary>提交时研究配置快照 · {selected.request_snapshot?.schema_version===1?"已记录":"旧任务未记录"}</summary>
@@ -252,7 +264,7 @@ export default function LiveResearchWorkbench() {
           {selected.request_snapshot.portfolio_state&&<div><small>提交时账户状态</small><strong>{selected.request_snapshot.portfolio_state==="NOT_PROVIDED"?"NOT_PROVIDED · 未知":selected.request_snapshot.portfolio_state}</strong></div>}
         </div>:<p>此任务创建时尚未保存请求配置快照；不会追溯推断过去的研究参数。</p>}
         <p>此处仅显示提交时已记录的请求约束，不代表实际命中的数据源，也不代表模型或 Provider 版本。未留存原始研究关注点及账户明细。</p>
-      </details>}{selected&&<div className="live-cancel">{!isTerminal(selected.state)?<button type="button" className="btn danger" disabled={busy} onClick={()=>void cancelRun()}><Ban size={14}/>请求取消</button>:<button type="button" className="btn" disabled={busy} onClick={prepareRerun}><RotateCcw size={14}/>再次研究该标的</button>}</div>}</section>
+      </details>}{selected&&<div className="live-cancel">{!isTerminal(selected.state)?<button type="button" className="btn danger" disabled={busy} onClick={()=>void cancelRun()}><Ban size={14}/>请求取消</button>:<button type="button" className="btn" disabled={busy} onClick={prepareRerun}><RotateCcw size={14}/>再次研究该标的</button>}{selected.state==="COMPLETED"&&<button type="button" className="btn" onClick={()=>openComparison(selected.run_id,null)}><ArrowLeftRight size={14}/>与历史研究对比</button>}</div>}</section>
       {selected?.state==="COMPLETED"&&artifact?<LiveResearchReport artifact={artifact} run={selected}/>:<section className="surface live-report-empty"><BookOpenText size={21}/><div><h2>研究结果</h2><p>{selected?.state==="COMPLETED"?"正在加载后端已完成工件…":selected?.state==="FAILED"||selected?.state==="CANCELLED"?"任务没有完成，研究报告不可用；不会显示上一次任务的结果。":"只有后端状态为 COMPLETED 才会展示真实报告。"}</p></div></section>}
     </div><aside className="right-stack"><LiveStageTrace run={selected} events={events} artifact={artifact} stream={streamState}/><section className="surface live-help"><div className="panel-head"><h2>研究安全边界</h2></div><p><Database size={14}/>结果仅来自 Go Typed Artifact</p><p><ShieldCheck size={14}/>账户未知不等于空仓或零现金</p><p><TerminalSquare size={14}/>无委托、资金划拨与自动交易</p></section></aside></div>}
     <footer className="live-footer">AEGIS RESEARCH · SINGLE-OPERATOR LIVE MODE · 不包含交易执行</footer></div></main></div>;
