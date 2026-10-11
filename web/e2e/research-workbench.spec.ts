@@ -253,3 +253,55 @@ test("protocol refuses nonterminal, unknown and cross-symbol rerun provenance", 
   expect(await post("000001.SZ", run)).toBe(400);
   expect(await post("600519.SH", run)).toBe(202);
 });
+
+
+test("observed Go stages show duration, lifecycle, links and restore after refresh", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const trace = page.getByRole("region", { name: "Agent 执行轨迹" });
+  await expect(trace.locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功");
+  await expect(trace.locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("Go 记录耗时");
+  await expect(trace.locator(".live-trace-stage").filter({ hasText: "Event" })).toContainText("成功");
+  await expect(trace.locator(".live-trace-lifecycle")).toContainText("COMPLETED");
+  await expect(trace.locator(".live-trace-stage")).toHaveCount(2);
+  await expect(trace.locator(".live-trace-stage").filter({ hasText: "Market" }).locator("a")).toHaveAttribute("href", "#report-market");
+  await expect(trace.getByText("未提供脱敏工具调用", { exact: false })).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(page.locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功");
+  await expect(page.locator(".live-event-item").filter({ hasText: "Market" }).first()).toBeVisible();
+});
+
+test("failed and cancelled Go Runs show only observed stage failures, never inferred successes", async ({ page }) => {
+  await signIn(page);
+  const failed = await submit(page, "fail provider fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  const trace = page.getByRole("region", { name: "Agent 执行轨迹" });
+  await expect(trace.locator(".live-trace-error")).toContainText("Event");
+  await expect(trace.locator(".live-trace-stage").filter({ hasText: "Event" })).toContainText("失败");
+  await expect(trace.locator(".live-trace-stage a.live-trace-report-link")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+
+  const held = await submit(page, "hold fixture");
+  await page.getByRole("button", { name: "请求取消" }).click();
+  await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
+  await expect(trace.getByText("未收到 DONE 的阶段不代表成功", { exact: false })).toBeVisible();
+  await expect(trace.locator(".live-trace-stage a.live-trace-report-link")).toHaveCount(0);
+  await page.goto("/?run=" + failed);
+  await expect(trace.locator(".live-trace-error")).toContainText("Event");
+  await expect(page.locator(".live-run-fields")).toContainText(failed);
+  await expect(page.locator(".live-run-fields")).not.toContainText(held);
+});
+
+test("persisted-event polling restores trace when EventSource is unavailable", async ({ page }) => {
+  await signIn(page);
+  await page.route("**/api/workbench/runs/*/stream", route => route.abort());
+  const id = await submit(page);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await expect(page.getByRole("region", { name: "Agent 执行轨迹" }).locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功", { timeout: 20_000 });
+  await expect(page.locator(".live-trace-lifecycle")).toContainText("COMPLETED");
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(page.locator(".live-trace-stage").filter({ hasText: "Event" })).toContainText("成功");
+});
