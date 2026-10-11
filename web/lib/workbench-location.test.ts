@@ -21,6 +21,14 @@ describe("Live workbench URL contract", () => {
     expect(workbenchHref("/", "settings", id)).toBe("/?view=settings");
   });
 
+  it("keeps existing root research entry while offering explicit overview deep links", () => {
+    expect(readWorkbenchLocation("")).toEqual({view:"workspace",runId:null});
+    expect(readWorkbenchLocation("?view=overview&run="+id)).toEqual({view:"overview",runId:null});
+    expect(workbenchHref("/","overview")).toBe("/?view=overview");
+    expect(workbenchHref("/","overview",id)).toBe("/?view=overview");
+    expect(readComparisonLocation("?view=overview&left="+id)).toEqual({leftId:null,rightId:null});
+  });
+
   it("round trips two opaque Run IDs for comparison and preserves absence safely", () => {
     const other = "f".repeat(32);
     expect(readWorkbenchLocation("?view=compare&left=" + id)).toEqual({ view: "compare", runId: null });

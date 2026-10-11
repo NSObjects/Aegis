@@ -291,3 +291,12 @@ Old records, or runs whose graph could not initialize, show **未记录**.
 No API keys, endpoints, prompt text or portfolio holdings are included.
 This complements (but does not replace) the submitted-input snapshot and
 the event/document evidence sources shown in individual research artifacts.
+
+## R1-12：Live 研究任务概览（只读）
+
+- 点击左侧 **研究概览** 或访问 `/?view=overview`，通过已有的工作台会话读取 `GET /api/workbench/runs`。为了保留旧版研究启动入口和自动化测试兼容性，原来 `/` 仍是实时研究工作区；`?run={id}`、`?view=compare` 仍照常工作。
+- 概览显示当前 Go 列表样本的等待/运行中、已完成、失败、已取消数量和不同标的数；按服务端 `created_at` 倒序显示任务。按 7 个 UTC 日分组的柱图仅为**任务创建数量**，不代表股价走势、策略收益、模型准确率或请求成本。
+- 搜索股票代码或 Run ID，按状态筛选，直接查看目标 Run：执行中到原始阶段事件；已完成到同一任务真实报告；失败到原始失败代码与用户主动选择的「再次研究该标的」入口；取消任务只显示真实记录。支持从概览手动发起全新研究和进入研究历史对比；概览本身不执行模型，不产生下单行为。
+- **采样口径必须正确：** Go 列表最多返回最近 100 条。所有计数只针对本次已返回、经 DTO 校验并去重的记录；当已达到 100 条明确提示历史实际数量可能更高。只有成功获取过列表才渲染计数，不会把首次未加载错误渲染成 0；刷新失败时标记已有列表可能过期。
+- 页面的“最近一次浏览器同步”时间仅表示浏览器成功收到列表时刻，不是服务端最后更新时刻，也不保证每个后端 Agent 在页面渲染的瞬间仍处于同一状态。Go 列表轮询约每 3 秒，用户可手动刷新。
+- E2E 使用明确标记的 `PROTOCOL_FIXTURE_ONLY` Go 协议模拟服务检查空列表、登录隔离、导航、状态筛选及刷新恢复，不声称已验证真实证券行情或 Hosted 研究模型。

@@ -467,3 +467,82 @@ test("anonymous comparison deep link never leaks run data before login", async (
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "两次研究记录对比" })).toHaveCount(0);
 });
+
+
+test("overview is authenticated, URL-addressable and opens the same completed Run report", async ({ page }) => {
+  await page.goto("/?view=overview");
+  await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "研究任务总览" })).toHaveCount(0);
+  await signIn(page);
+  const id = await submit(page, "technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  await expect(page).toHaveURL("/?view=overview");
+  const overview = page.getByRole("region", { name: "研究任务概览" });
+  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByText("样本最多 100 条", { exact: false })).toBeVisible();
+  await expect(overview.getByRole("img", { name: "最近七个 UTC 日", exact: false })).toBeVisible();
+  const list = overview.getByRole("region", { name: "近期研究任务列表" });
+  await list.getByRole("textbox", { name: "筛选股票或任务 ID" }).fill(id);
+  await expect(list.locator(".run-overview-row")).toHaveCount(1);
+  await expect(list.locator(".run-overview-row")).toContainText("查看报告");
+  await list.locator(".run-overview-row").click();
+  await expect(page).toHaveURL("/?run=" + id);
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(page.getByRole("heading", { name: "结构化研究报告" })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL("/?view=overview");
+  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await page.reload();
+  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await overview.getByRole("button", { name: "对比研究" }).click();
+  await expect(page).toHaveURL("/?view=compare");
+});
+
+test("overview active and failed filters open live progress or exact failure, with no synthetic reports", async ({ page }) => {
+  await signIn(page);
+  const failed = await submit(page, "fail provider fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  const held = await submit(page, "hold fixture");
+  await expect(page.locator(".live-run-fields")).toContainText(held);
+  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  const overview = page.getByRole("region", { name: "研究任务概览" });
+  const list = overview.getByRole("region", { name: "近期研究任务列表" });
+  const filter = overview.getByRole("group", { name: "研究任务状态筛选" });
+  await filter.getByRole("button", { name: "执行中" }).click();
+  await list.getByRole("textbox", { name: "筛选股票或任务 ID" }).fill(held);
+  await expect(list.locator(".run-overview-row")).toHaveCount(1);
+  await expect(list.locator(".run-overview-row")).toContainText("查看进度");
+  await list.locator(".run-overview-row").click();
+  await expect(page).toHaveURL("/?run=" + held);
+  await expect(page.getByRole("region", { name: "Agent 执行轨迹" })).toBeVisible();
+  await page.getByRole("button", { name: "请求取消" }).click();
+  await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
+  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  await filter.getByRole("button", { name: "失败" }).click();
+  await list.getByRole("textbox", { name: "筛选股票或任务 ID" }).fill(failed);
+  await expect(list.locator(".run-overview-row")).toHaveCount(1);
+  await expect(list.locator(".run-overview-row")).toContainText("排查失败");
+  await list.locator(".run-overview-row").click();
+  await expect(page).toHaveURL("/?run=" + failed);
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED");
+  await expect(page.getByRole("heading", { name: "结构化研究报告" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "再次研究该标的" })).toBeVisible();
+});
+
+test("overview with a list of no records shows an empty state, not fabricated KPIs or report rows", async ({ page }) => {
+  await page.route("**/api/workbench/runs", async route => {
+    if (route.request().method() === "GET") await route.fulfill({ status:200, contentType:"application/json", body:JSON.stringify({runs:[]}) });
+    else await route.continue();
+  });
+  await page.goto("/?view=overview");
+  await page.getByLabel("工作台访问口令").fill(password);
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const overview = page.getByRole("region", { name: "研究任务概览" });
+  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByText("暂无已保存的研究任务")).toBeVisible();
+  await expect(overview.locator(".run-overview-row")).toHaveCount(0);
+  await overview.getByRole("button", { name: "发起第一项研究" }).click();
+  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  await expect(page.getByLabel("股票代码")).toBeVisible();
+});
