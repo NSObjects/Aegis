@@ -539,6 +539,58 @@ svg { flex-shrink: 0; }
 .live-trace-raw .live-event-list { max-height:300px; }
 .live-trace-boundary { margin:8px 15px 17px; color:#8da1b6; font-size:10px; line-height:1.8; }
 
+/* R1-09: verified one-day OHLC snapshot, never a fabricated historical series. */
+.technical-visual { padding:0; overflow:hidden; }
+.technical-visual-head { padding:22px 23px 15px; display:flex; align-items:flex-start; justify-content:space-between; gap:14px; border-bottom:1px solid var(--stroke); }
+.technical-visual-head h3 { font-size:18px; line-height:1.45; margin:6px 0 0; }
+.technical-visual-head h3 span { font-weight:450; color:#92b9c3; font-size:12px; margin-left:7px; }
+.technical-visual-cutoffs { margin:13px 22px 0; display:flex; flex-wrap:wrap; gap:8px; }
+.technical-visual-cutoffs>span { display:flex; flex-direction:column; gap:5px; padding:9px 13px; background:#17293c; border:1px solid #30495b; border-radius:8px; font-size:10px; color:#91a8c1; }
+.technical-visual-cutoffs strong { font-size:12px; color:#e3eef9; }
+.technical-chart-grid-layout { display:grid; grid-template-columns:minmax(0,1.18fr) minmax(0,1fr); gap:12px; padding:16px 22px 0; align-items:start; }
+.technical-metrics-stack { min-width:0; display:grid; gap:12px; }
+.technical-metric-panel { min-width:0; background:#101d2f; border:1px solid #304457; border-radius:11px; padding:15px; }
+.technical-metric-panel h4 { font-size:12px; font-weight:700; margin:0 0 15px; color:#b6dce6; }
+.technical-price-panel h4 { margin-bottom:8px; }
+.technical-candle-chart { min-width:0; padding:7px 0; }
+.technical-candle-chart svg { width:100%; height:auto; max-height:300px; display:block; }
+.technical-chart-grid { stroke:#2d465e; stroke-dasharray:4 5; stroke-width:1; }
+.technical-candle-wick { stroke:#e4b9a7; stroke-width:3; }
+.technical-candle-body { fill:#c2cad5; stroke:#dce5f4; stroke-width:1; }
+.technical-candle-up .technical-candle-wick { stroke:#f27f91; }
+.technical-candle-up .technical-candle-body { fill:#c94e67; stroke:#ee8ca0; }
+.technical-candle-down .technical-candle-wick { stroke:#63ddbe; }
+.technical-candle-down .technical-candle-body { fill:#269f86; stroke:#70dfbf; }
+.technical-chart-label { font-size:12px; fill:#a2bed3; font-weight:650; font-variant-numeric:tabular-nums; }
+.technical-candle-prices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:3px; }
+.technical-candle-prices>span { display:flex; gap:7px; justify-content:space-between; font-size:10px; color:#8ba9bc; padding:8px 10px; border-radius:5px; background:#1b3144; }
+.technical-candle-prices strong { color:#eff5fc; font-size:11px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.technical-metric-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.technical-metric-grid>div { display:grid; gap:5px; border-radius:7px; padding:10px; background:#1b2c41; min-width:0; }
+.technical-metric-grid dt { font-size:10px; color:#87a3ba; }
+.technical-metric-grid dd { margin:0; color:#e7f1fb; font-size:12px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; font-weight:670; }
+.technical-rsi-gauge,.technical-ratio-gauge { border:1px solid #304a5c; border-radius:9px; background:#132639; padding:12px 13px; }
+.technical-rsi-header { display:flex; justify-content:space-between; gap:7px; color:#a3bacf; font-size:10px; }
+.technical-rsi-header strong { font-size:12px; color:#ccedeb; }
+.technical-rsi-track,.technical-ratio-track { height:7px; background:#284157; border-radius:5px; overflow:hidden; margin-top:9px; }
+.technical-rsi-track>span,.technical-ratio-track>span { display:block; height:100%; border-radius:5px; background:linear-gradient(90deg,#347e9d,#6bd8b8); }
+.technical-ratio-gauge small { display:block; font-size:9px; color:#87a0bb; line-height:1.6; margin-top:9px; }
+.technical-missing { margin:0; color:#839bb0; font-size:11px; line-height:1.7; }
+.technical-snapshot-unavailable { margin:17px 22px; border:1px solid #635145; background:#292632; border-radius:11px; padding:15px; color:#d6b89b; font-size:11px; }
+.technical-snapshot-unavailable strong { font-size:12px; }
+.technical-snapshot-unavailable p { line-height:1.75; margin:7px 0 0; }
+.technical-source-note { font-size:10px; color:#8ea9b9; line-height:1.8; padding:13px 22px 17px; border-top:1px solid #293c52; margin:17px 0 0; }
+@media(max-width:950px) {
+ .technical-chart-grid-layout { grid-template-columns:1fr; }
+}
+@media(max-width:580px) {
+ .technical-visual-head { padding:17px; }
+ .technical-chart-grid-layout { padding:12px 15px 0; }
+ .technical-visual-cutoffs { margin:11px 15px; }
+ .technical-snapshot-unavailable { margin:13px 15px; }
+ .technical-source-note { padding:13px 15px; }
+ .technical-metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
 
 /* R1 request constraints are immutable submitted facts, not runtime-model claims. */
 .live-request-snapshot { margin:0 20px 12px; border:1px solid #294258; border-radius:10px; padding:0 14px; background:#111e30; }

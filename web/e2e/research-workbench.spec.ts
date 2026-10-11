@@ -335,3 +335,46 @@ test("persisted-event polling restores trace when EventSource is unavailable", a
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-trace-stage").filter({ hasText: "Event" })).toContainText("成功");
 });
+
+
+test("completed Run presents one source-owned OHLC candle and technical values without a fabricated price series", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page, "technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const chart = page.getByRole("region", { name: "技术行情快照可视化" });
+  await expect(chart).toBeVisible();
+  await expect(chart.getByText("2026-10-09")).toBeVisible();
+  await expect(chart.getByText("原始单日 OHLC · 仅一个交易日")).toBeVisible();
+  await expect(chart.getByRole("img", { name: "单个有效交易日的开盘价、最高价、最低价和收盘价（非历史走势图）" })).toBeVisible();
+  await expect(chart.locator("rect.technical-candle-body")).toHaveCount(1);
+  await expect(chart.locator(".technical-candle-prices")).toContainText("1,500.12");
+  await expect(chart.locator(".technical-candle-prices")).toContainText("1,531.4");
+  await expect(chart.locator(".technical-candle-prices")).toContainText("1,487.8");
+  await expect(chart.locator(".technical-candle-prices")).toContainText("1,512.65");
+  await expect(chart).toContainText("MA5");
+  await expect(chart).toContainText("1,507.2");
+  await expect(chart).toContainText("RSI14");
+  await expect(chart).toContainText("56.4");
+  await expect(chart).toContainText("MACD HIST");
+  await expect(chart).toContainText("量比 MA5");
+  await expect(chart).toContainText("1.1053");
+  await expect(chart).not.toContainText("MA20");
+  const raw = await page.request.get("/api/workbench/runs/" + id + "/artifact");
+  expect(raw.status()).toBe(200);
+  const technical = (await raw.json()).research_artifact.technical;
+  expect(technical.snapshot).toMatchObject({ open: 1500.12, high: 1531.4, low: 1487.8, close: 1512.65 });
+  expect(technical.moving_averages.ma5).toBe(1507.2);
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(page.getByRole("region", { name: "技术行情快照可视化" }).locator("rect.technical-candle-body")).toHaveCount(1);
+});
+
+test("NO_DATA never draws a synthetic OHLC candle", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const chart = page.getByRole("region", { name: "技术行情快照可视化" });
+  await expect(chart).toContainText("不可绘制单日行情");
+  await expect(chart).toContainText("NO_DATA");
+  await expect(chart.locator("rect.technical-candle-body")).toHaveCount(0);
+});

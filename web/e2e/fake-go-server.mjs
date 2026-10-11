@@ -58,7 +58,17 @@ function report(run) {
       },
       market: { as_of: "20261009", regime: "MIXED", advance_count: 0, decline_count: 2,
         turnover: 0, evidence: ["FIXTURE_MARKET_ONLY"], risk: ["no provider"] },
-      technical: { symbol: run.symbol, requested_as_of: "20261011", effective_as_of: "20261009",
+      technical: run.scenario === "snapshot" ? {
+        symbol: run.symbol, requested_as_of: "20261011", effective_as_of: "20261009",
+        last_trade_date: "20261009", status: "NORMAL",
+        snapshot: { open: 1500.12, high: 1531.4, low: 1487.8, close: 1512.65,
+          pre_close: 1499.88, change_percent: 0.85, volume: 42000, amount: 64000000, turnover_rate: 1.5 },
+        returns: { return_1d: 0.85, return_5d: -1.2, return_20d: null },
+        moving_averages: { ma5: 1507.2, ma10: 1499.1, ma20: null, ma60: 1468.2 },
+        momentum: { rsi14: 56.4, macd: { dif: 2.41, dea: 1.33, hist: 2.16 } },
+        volume: { volume_ma5: 38000, volume_vs_ma5: 1.1053, volume_vs_ma20: null },
+        evidence: ["PROTOCOL_FIXTURE_ONLY technical values"], risk: [],
+      } : { symbol: run.symbol, requested_as_of: "20261011", effective_as_of: "20261009",
         last_trade_date: "20261009", status: "NO_DATA", returns: {}, moving_averages: {},
         momentum: { macd: {} }, volume: {}, evidence: [], risk: [] },
       event: { symbol: run.symbol, requested_as_of: "2026-10-11T00:00:00Z",
@@ -139,7 +149,7 @@ const server = createServer(async (req, res) => {
     }
     const run_id = randomBytes(16).toString("hex");
     const created_at = asOf();
-    const scenario = body.market_query?.includes("hold") ? "hold" : body.market_query?.includes("fail") ? "fail" : "complete";
+    const scenario = body.market_query?.includes("hold") ? "hold" : body.market_query?.includes("fail") ? "fail" : body.market_query?.includes("technical snapshot fixture") ? "snapshot" : "complete";
     const request_snapshot = {
       schema_version: 1, market_query_provided: Boolean(body.market_query?.trim()),
       event_window_start: new Date(Date.parse(created_at) - 7*24*3600*1000).toISOString(),
