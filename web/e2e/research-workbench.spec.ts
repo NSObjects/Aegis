@@ -600,3 +600,65 @@ test("overview with a list of no records shows an empty state, not fabricated KP
   await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
   await expect(page.getByLabel("股票代码")).toBeVisible();
 });
+
+
+test("readable research report prioritizes original manager conclusion, risk and source-linked viewpoints", async ({ page }) => {
+  await signIn(page);
+  const id=await submit(page,"technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成",{timeout:25_000});
+  const report=page.locator(".reader-report");
+  await expect(report.getByRole("heading",{name:"结构化研究报告"})).toBeVisible();
+  await expect(report.getByRole("region",{name:"研究报告概览"})).toContainText("FIXTURE_ONLY_MANAGER_NO_RESEARCH");
+  await expect(report.locator(".reader-status-grid")).toContainText("证据不足 · INSUFFICIENT_EVIDENCE");
+  await expect(report.locator(".reader-status-grid")).toContainText("NOT_PROVIDED · 未知");
+  await expect(report.getByRole("heading",{name:"先看支持、分歧与风险"})).toBeVisible();
+  await expect(report.locator(".reader-key-support")).toContainText("FIXTURE_MARKET_AGREEMENT");
+  await expect(report.locator(".reader-key-conflict")).toContainText("fixture-a1");
+  await expect(report.locator(".reader-key-risk")).toContainText("FIXTURE_MISSING_ACCOUNT_INFORMATION");
+  await expect(report.getByText("模型判断 ≠ 已核实事实",{exact:false})).toBeVisible();
+  await expect(report.locator("#report-market")).not.toHaveAttribute("open","");
+  await report.locator(".reader-key-support a").first().click();
+  await expect(page).toHaveURL(/#report-synthesis$/);
+  await expect(report.locator("#report-synthesis")).toHaveAttribute("open","");
+  await expect(report.locator("#report-synthesis")).toContainText("PROTOCOL_FIXTURE_ONLY");
+  await report.getByRole("button",{name:"展开全部"}).click();
+  await expect(report.locator("#report-market")).toHaveAttribute("open","");
+  await expect(report.locator("#report-technical")).toHaveAttribute("open","");
+  await expect(report.locator("#report-ledger")).toHaveAttribute("open","");
+  await expect(report.locator("#report-market")).toContainText("20261009");
+  await report.getByRole("button",{name:"收起全部"}).click();
+  await expect(report.locator("#report-market")).not.toHaveAttribute("open","");
+  await expect(report.locator("#report-portfolio")).toContainText("FIXTURE_NO_REAL_ACCOUNT");
+  const raw=await page.request.get("/api/workbench/runs/"+id+"/artifact");
+  expect(raw.status()).toBe(200);
+  const source=await raw.json();
+  expect(source.portfolio_review.research_plan.summary).toBe("FIXTURE_ONLY_MANAGER_NO_RESEARCH");
+  await page.reload();
+  await expect(report.getByRole("heading",{name:"结构化研究报告"})).toBeVisible();
+  await expect(report.locator(".reader-conclusion")).toContainText(source.portfolio_review.research_plan.summary);
+});
+
+test("report chapters opened from persisted Agent trace links remain readable rather than hidden", async ({page}) => {
+  await signIn(page);
+  await submit(page,"technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成",{timeout:25_000});
+  const report=page.locator(".reader-report");
+  await expect(report.locator("#report-market")).not.toHaveAttribute("open","");
+  const trace=page.locator(".live-trace-stage").filter({hasText:"Market"});
+  const jump=trace.locator("a.live-trace-report-link");
+  await expect(jump).toHaveAttribute("href","#report-market");
+  await jump.click();
+  await expect(page).toHaveURL(/#report-market$/);
+  await expect(report.locator("#report-market")).toHaveAttribute("open","");
+  await expect(report.locator("#report-market")).toContainText("MIXED");
+});
+
+test("readable report does not show previous Run content for failed or cancelled research", async ({page}) => {
+  await signIn(page);
+  await submit(page,"technical snapshot fixture");
+  await expect(page.locator(".reader-conclusion")).toContainText("FIXTURE_ONLY_MANAGER_NO_RESEARCH",{timeout:25_000});
+  await submit(page,"fail source fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED",{timeout:25_000});
+  await expect(page.locator(".reader-report")).toHaveCount(0);
+  await expect(page.getByRole("heading",{name:"结构化研究报告"})).toHaveCount(0);
+});
