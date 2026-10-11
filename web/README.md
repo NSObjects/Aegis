@@ -248,3 +248,18 @@ E2E 仅验证固定的 Go 协议 fixture；不是实盘、行情或真实模型�
 - 单元测试及 Chromium E2E 的可绘制样本是 `technical snapshot fixture`，数值均为明确的 **PROTOCOL_FIXTURE_ONLY** 模拟协议数据。浏览器测试不构成实际金融数据源或 Hosted LLM 接入验证。
 
 之后若要交付完整历史 K 线，应在 Go ResearchArtifact 内引入带 PIT 截止、复权、来源和完整性验证的 OHLCV 序列（当前版本没有），再在 Web 绘制多日价格/量能图。不能由单日指标逆向生成历史行情。
+
+## R1-03: submitted research request snapshot
+
+For new Live runs, the task detail panel has an expandable **提交时研究配置快照**
+section. It shows only server-saved request constraints: evidence window and PIT
+requirement, preferred (not necessarily contacted) source types, minimum
+document/source constraints, whether a research question was provided (not its
+text), and an optional explicit account state. `NOT_PROVIDED` always means
+unknown, never a zero portfolio.
+
+This is persisted by Go in the single-process RunStore, survives restarts,
+and is returned as optional `request_snapshot` metadata on new Run records.
+Older runs display **旧任务未记录**. This metadata is not a model/version
+capture and does not imply any source successfully returned data.
+The browser does not receive provider secrets or stored research-query text.
