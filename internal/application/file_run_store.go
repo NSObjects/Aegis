@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -61,6 +62,17 @@ func validRunID(id string) bool {
 func checkRunRecord(record RunRecord) error {
 	if !validRunID(record.ID) {
 		return errors.New("invalid research run ID")
+	}
+	if (record.IdempotencyDigest == "") != (record.RequestFingerprint == "") {
+		return errors.New("incomplete research idempotency metadata")
+	}
+	if record.IdempotencyDigest != "" {
+		for _, value := range []string{record.IdempotencyDigest, record.RequestFingerprint} {
+			decoded, err := hex.DecodeString(value)
+			if err != nil || len(value) != 64 || len(decoded) != 32 || value != strings.ToLower(value) {
+				return errors.New("invalid research idempotency digest")
+			}
+		}
 	}
 	if record.Mode != ModeDecision && record.Mode != ModePortfolio {
 		return errors.New("invalid research run mode")
