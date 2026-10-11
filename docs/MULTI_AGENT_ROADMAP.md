@@ -2,7 +2,9 @@
 
 > **本文件职责**：只管理当前 R0 / F0～F4 多 Agent 研究内核收尾。**R0 完成后的下一开发任务与后续完整顺序**，统一在 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 顶部维护；下文历史基线不自动代表最新 main。
 
-> 2026-10-10 基线：main commit `55967260b5bc0c5853256b496ee56a922c8941a9`（PR #111 / V2.12.9）。本文件是后续功能开发的任务顺序，不宣称已在本次文档 PR 中运行 Hosted E2E。
+> **2026-10-11：F0～F4 / R0 V1 内核已完成。** [固定提交 `61de58d0` 的全量真实 Hosted Integration #38098687921](https://github.com/NSObjects/Aegis/actions/runs/38098687921) 8/8 Job SUCCESS；PR #142 已合并，`main` SHA `b6ab9b68`，[main CI #38098968618](https://github.com/NSObjects/Aegis/actions/runs/38098968618) SUCCESS。详见 [正式验收记录](V1_ACCEPTANCE.md)。
+>
+> 下列 F0～F4 文字保留原始阶段范围和验收条件，以供审计；不要把历史任务说明当成未完成需求。下一项由 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) 指向 R1-01 Web 研究工作台。
 
 ## 本阶段唯一目标
 
@@ -10,40 +12,40 @@
 
 ## 代码核对后的基线（区别于未来角色清单）
 
-- **现有入口**：`cmd/aegis/main.go` 的 `-portfolio-review -portfolio-file`；[运行说明](README.md) 提供以 `{"state":"NOT_PROVIDED"}` 运行的示例。实际 Hosted Integration 尚需独立复核最近一次结果。
+- **正式入口**：`cmd/aegis/main.go` 的 `-portfolio-review -portfolio-file`，可选 `-fundamental`；[运行说明](README.md) 提供以 `{"state":"NOT_PROVIDED"}` 运行的示例。真实 Hosted 8/8 执行证据见 [V1_ACCEPTANCE.md](V1_ACCEPTANCE.md)。
 - **现有端到端编排**：`internal/research/full_portfolio_workflow.go` 先调用 `Research.RunArtifact`，然后 `PortfolioReview.Run`，并可选执行限制、What-if 情景和后置语义审查；不会替代缺失的团队职责。
 - **已有独立角色**：Market、Technical、Event → Synthesis → Bull/Bear → Research Manager → Trading Agent → Risk Analyst → Portfolio Manager；[现状索引](README.md) 描述这些模块，最终仍需以代码/Hosted 运行验证。
-- **明确缺口**：Fundamental Analyst 和独立 Sentiment Analyst 未列为当前实现；[风险设计](11-Risk-Portfolio-Review.md) 明确三方 Risk Debate 尚未实现；Portfolio Manager 目前采用确定性非执行审查。不要将 TradingAgents 参考资料中的角色误写成 Aegis 已实现。
+- **R0 实际状态（2026-10-11）**：Fundamental Analyst 已可选运行并通过生产 CLI Hosted E2E；独立 Sentiment Analyst 与三方 Risk Debate 仍非 V1 必需能力，不能称作已经实现。Portfolio Manager 仍为确定性非执行审查；详见 [验收记录](V1_ACCEPTANCE.md)。
 - **不重复开发**：现有 Evidence Ledger、Semantic Review、归档等代码保持兼容，不扩展新功能。现有 Risk/Portfolio 校验不得为了演示通过而放宽。
 
 ## 功能顺序（每项有可运行验收）
 
-### F0：验证现有主路径——立即执行
+### F0（DONE）：验证现有主路径
 
 1. 固定当前 main 提交，执行 `go test ./... -count=1`、`go vet ./...`。
 2. 按 `docs/README.md` 和 `.github/workflows/integration.yml` 的正式入口运行完整 CLI；记录是否真的调用真实模型及真实来源、输出 JSON 是否包含 `research_artifact`、`portfolio_review`。
 3. 将失败分为「环境/凭证/外部来源」「流程接线」「核心契约」三类，只修阻止端到端运行的缺陷。不得以测试桩冒充真实来源。
 4. 验收：可复现命令 + 输入来源说明 + 真实执行记录/受控失败原因。文档或单元测试不能代替 Hosted E2E。
 
-### F1：补齐必要 Analyst 职责
+### F1（DONE）：补齐必要 Analyst 职责
 
 1. 首先实现 Fundamental Analyst 的最小数据能力、typed Context、模型解释和 Synthesis 交接；无可用财报时明确报告不足，不凭空编数值。
 2. 按对实际研究的独立信息增益评估 Sentiment 是否必须是独立 Agent；若需要，实现同样的最小闭环，不为凑齐角色数创建空 Agent。
 3. 验收：对应角色独立测试 + Graph 实际调用 + 全链路 JSON 可消费；所需外部数据的缺失/失败可解释。
 
-### F2：确认 Research Debate / Trading 的完整协作
+### F2（DONE）：确认 Research Debate / Trading 的完整协作
 
 1. 审计现有 Bull/Bear 是否消费对方先前论点、轮数是否有界，以及 Research Manager 输出是否实际交给 Trading；只修阻塞协作的功能缺口。
 2. 验收：一次真实 workflow 记录多轮交接（如配置为多轮）、最终研究计划与 TradeIntent 能沿同一次运行传递；无重复上游数据获取。
 
-### F3：补齐 Risk/Portfolio 的角色协作
+### F3（DONE）：补齐 Risk/Portfolio 的角色协作
 
 1. **先检查数据条件**：已观察到的账户状态、估值、风险限制是否足以让不同风险角色产生独立信息；不足时保留现有单 Risk Analyst 并标记限制。
 2. 在真实职责和输入都存在时，增加有界 Aggressive / Conservative / Neutral Risk Debate + Risk Manager，并交给 Portfolio Manager；否则优先实现可信的现有单角色完整路径，禁止假装具备三方辩论。
 3. 增强 Portfolio Manager 的研究总结与冲突解释时，保留已有确定性风险否决边界，不把 LLM 结论升级为交易授权。
 4. 验收：Research Plan → TradeIntent → 风险评估（满足条件时含辩论）→ PortfolioDecision 完整可观察；未知账户仍为未知，绝不默认为空仓。
 
-### F4：正式端到端收口
+### F4（DONE）：正式端到端收口
 
 1. 提供一条可复制的 CLI 命令、最小配置说明、样例最终 JSON 结构和阶段日志。
 2. 覆盖正常完整路径以及至少一个真实缺失数据/模型失败的受控退出路径；保留现有 CI 基础门禁。
