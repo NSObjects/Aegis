@@ -2,6 +2,7 @@
 
 import type { LiveArtifact, LiveRun } from "@/lib/live-contract";
 import { readLiveReport, type ReportCard } from "@/lib/live-report";
+import LiveEvidenceInspector from "@/components/live-evidence-inspector";
 
 function RawArtifact({ value, label }: { value: unknown; label: string }) {
   if (value === null || value === undefined) return null;
@@ -48,6 +49,7 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
       <p className="live-report-notice">以下字段逐项取自同一 Run 的 Go Typed Artifact。研究日期不是实时报价时间；缺失字段不会被补成零。所有交易意向均仅供研究，不包含任何下单功能。</p>
     </section>
     {report.cards.length > 0 ? report.cards.map(card => <ReportCardView key={card.id} card={card}/>) : <section className="surface live-report-unavailable"><h3>无可识别的结构化段落</h3><p>原始工件仍可审计；请核对后端版本与 JSON 契约。</p></section>}
+    {report.mode === "PORTFOLIO_REVIEW" && <LiveEvidenceInspector key={run.run_id} artifact={artifact} />}
     <details className="live-report-source-details"><summary>高级：查看后端原始 JSON 工件</summary>
       <RawArtifact value={artifact.research_artifact} label="ResearchArtifact"/>
       <RawArtifact value={artifact.portfolio_review} label="PortfolioReview"/>
