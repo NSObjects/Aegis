@@ -100,6 +100,12 @@ func checkRunRecord(record RunRecord) error {
 			return errors.New("decision run cannot claim portfolio state")
 		}
 	}
+	if err := validateRunModelProvenance(record.ModelProvenance); err != nil {
+		return fmt.Errorf("invalid model configuration identity: %w", err)
+	}
+	if record.State == RunPending && record.ModelProvenance != nil {
+		return errors.New("pending run cannot have constructed model identity")
+	}
 	if record.Mode != ModeDecision && record.Mode != ModePortfolio {
 		return errors.New("invalid research run mode")
 	}
