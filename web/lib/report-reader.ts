@@ -73,7 +73,7 @@ export function buildReadingDigest(report: LiveReport, maxPoints = 3): ReadingDi
   ]);
   const riskFull = distinct([
     ...entries(report, "manager", ["风险 ", "研究约束"]),
-    ...entries(report, "risk", ["风险发现", "风险约束", "未解决问题"]),
+    ...entries(report, "risk", ["风险总结", "风险发现", "风险约束", "未解决问题"]),
     ...entries(report, "synthesis", ["研究风险"]),
     ...entries(report, "decision", ["风险"]),
   ]);
