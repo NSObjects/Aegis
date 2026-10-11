@@ -236,7 +236,8 @@ export function readLiveReport(input: unknown): LiveReport {
       field(f, "门禁原因", gate.reason);
       field(f, "当前风险规则状态", gate.current_limits_status);
     }
-    if (!object(review?.observed_exposure)) entry(e, "已观测敞口", "未提供可验证账户估值数据；不能推导现金、仓位或零敞口。");
+    if (!object(review?.observed_exposure) && portfolioState === "NOT_PROVIDED") entry(e, "已观测敞口", "账户状态未知且未提供可验证估值；不能推导现金、仓位或零敞口。");
+    if (!object(review?.observed_exposure) && portfolioState === "POSITIONS") entry(e, "已观测敞口", "已知存在持仓，但未提供可验证的估值信息；不能推导资金或敞口比例。");
   });
   card(cards, "ledger", "论点与证据索引 · EvidenceLedger", "仅显示后端明确提供的论点、引用域、事件 ID 与反驳关系。", review && object(review.evidence_ledger), (f, e, s) => {
     field(f, "归档结论", s.conclusion);
