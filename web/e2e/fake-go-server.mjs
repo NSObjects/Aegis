@@ -57,7 +57,7 @@ function report(run) {
         risks: ["FIXTURE_NO_LIVE_MARKET_QUOTE"],
       },
       market: { as_of: "20261009", regime: run.scenario === "comparison" ? "RISK_OFF" : "MIXED", advance_count: run.scenario === "comparison" ? 115 : 0, decline_count: 2,
-        turnover: 0, evidence: ["FIXTURE_MARKET_ONLY"], risk: ["no provider"] },
+        turnover: run.scenario === "comparison" ? null : 0, evidence: ["FIXTURE_MARKET_ONLY"], risk: ["no provider"] },
       technical: (run.scenario === "snapshot" || run.scenario === "comparison") ? {
         symbol: run.symbol, requested_as_of: "20261011", effective_as_of: "20261009",
         last_trade_date: "20261009", status: "NORMAL",
@@ -72,7 +72,7 @@ function report(run) {
         last_trade_date: "20261009", status: "NO_DATA", returns: {}, moving_averages: {},
         momentum: { macd: {} }, volume: {}, evidence: [], risk: [] },
       event: { symbol: run.symbol, requested_as_of: "2026-10-11T00:00:00Z",
-        evidence_as_of: "2026-10-11T00:05:00Z", status: run.scenario === "comparison" ? "HAS_EVENT" : "NO_EVENT", events: run.scenario === "comparison" ? [{ id: "fixture-comparison-event-1", headline: "PROTOCOL_FIXTURE_ONLY", fact_summary: "synthetic event for browser diff", evidence_document_ids: ["fixture-doc-1"] }] : [] },
+        evidence_as_of: "2026-10-11T00:05:00Z", status: run.scenario === "comparison" ? "NORMAL" : "NO_EVENT", events: run.scenario === "comparison" ? [{ id: "fixture-comparison-event-1", type: "OTHER", headline: "PROTOCOL_FIXTURE_ONLY", fact_summary: "synthetic event for browser diff", facts: [], evidence_document_ids: ["fixture-doc-1"], source_count: 1, has_primary_source: false }] : [] },
     },
     portfolio_review: {
       research_plan: { symbol: run.symbol, conclusion: "INSUFFICIENT_EVIDENCE",
