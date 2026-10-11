@@ -193,3 +193,14 @@ Live 工作台从 URL 恢复当前页面和服务端 Run：
 - Chromium 协议测试使用 `PROTOCOL_FIXTURE_ONLY` 模拟数据；它只验证 UI 与 HTTP 契约，**不是**真实金融研究 E2E 或供应商数据正确性验收。
 
 后续 R1-10 再实现证据/论点 ID 的交互跳转和原文审计，R1-11 再做跨运行比较。当前阅读器只负责只读报告。
+
+## Live EvidenceLedger 交互式导航（R1-10 第一批）
+
+仅在已完成的 Go `PORTFOLIO_REVIEW` 原始工件中存在 EvidenceLedger 的论点/观点时展示「论点与事件证据导航」：
+
+- 点选 Bull/Bear 论点或 Research Manager Insight，可查看它的 ID、阵营、回合、接受/未决状态、结构化来源 Reference 与显式针对该论点的反驳。
+- **仅**当引用是 `domain: EVENT` 且具有 `event_id`，并且此 ID 精确存在于**同一次 Run** 的 `research_artifact.event.events` 中，才允许继续打开事件详情；内容仅包含 Go 保存的 `fact_summary`、时间与 `evidence_document_ids`。
+- 领域引用（例如 `MARKET` 无 EventID）、缺失/无效的 EventID、没有文档 ID 时给出明确差异说明，绝不构造 URL 或把来源 ID 说成已核实原文。
+- `TradeIntent.Evidence` 是自由文本，不得被解析为引用关系。完整证据原文/URL 审计依赖后续服务端能力，当前不提供。
+- Run 的证据导航组件以 run_id 隔离选择状态，换 Run 不复用上一次选择；FAILED/CANCELLED 不显示成功工件或证据导航。
+- 单元测试断言严格引用边界；浏览器测试使用独立的 `PROTOCOL_FIXTURE_ONLY` 人工 JSON 截取 BFF 的 Artifact 响应，仅测试 UI，不证明实时数据来源可靠或真实 Hosted 模型结果。
