@@ -643,3 +643,86 @@ func TestGroundingRepairHintsNeverRepairUnmatchedQuote(t *testing.T){
  hints:=groundingRepairHints(extraction,[]capevent.CanonicalDocument{{ID:"doc-1",Content:"真实材料不包含该引用"}})
  if len(hints)!=0{t.Fatalf("no hints may be invented: %+v",hints)}
 }
+
+
+func TestFactExtractionKeepsUniqueQuoteAfterRepeatedCitation(t *testing.T) {
+	source := []capevent.CanonicalDocument{{
+		ID: "doc-repeated", Content: "公司发布业绩预告，收入增长。后续报告：公司发布业绩预告，成本下降。",
+	}}
+	input := FactExtractionResult{
+		Facts: []ExtractedFact{{
+			Type: EventOther, Headline: "业绩预告", Summary: "公司发布业绩预告，收入增长。",
+			EvidenceQuotes: []EvidenceQuote{
+				{DocumentID: "doc-repeated", Quote: "公司发布业绩预告"},
+				{DocumentID: "doc-repeated", Quote: "收入增长"},
+			},
+			Confidence: 0.9,
+		}},
+		Confidence: 0.9,
+	}
+	got, quotes, facts, err := omitAmbiguousEventQuotes(input, source)
+	if err != nil { t.Fatal(err) }
+	if quotes != 1 || facts != 0 || len(got.Facts) != 1 ||
+		len(got.Facts[0].EvidenceQuotes) != 1 ||
+		got.Facts[0].EvidenceQuotes[0].Quote != "收入增长" ||
+		got.Confidence > 0.5 {
+		t.Fatalf("unexpected provenance loss: %+v, quotes=%d facts=%d", got, quotes, facts)
+	}
+	if len(input.Facts[0].EvidenceQuotes) != 2 {
+		t.Fatal("source extraction must not be mutated")
+	}
+	if err := validateFactExtractionGroundings(got, source); err != nil { t.Fatal(err) }
+}
+
+func TestFactExtractionOmitsUnverifiableFactButKeepsGroundedFacts(t *testing.T) {
+	source := []capevent.CanonicalDocument{{ID: "doc", Content: "公告称公司回购股份。另一公告称公司回购股份。最终报告说明库存下降。"}}
+	input := FactExtractionResult{Facts: []ExtractedFact{
+		{Headline: "重复句", EvidenceQuotes: []EvidenceQuote{{DocumentID: "doc", Quote: "公司回购股份"}}},
+		{Headline: "独有句", EvidenceQuotes: []EvidenceQuote{{DocumentID: "doc", Quote: "库存下降"}}},
+	}}
+	got, quotes, facts, err := omitAmbiguousEventQuotes(input, source)
+	if err != nil || quotes != 1 || facts != 1 || len(got.Facts) != 1 ||
+		got.Facts[0].Headline != "独有句" {
+		t.Fatalf("unexpected result %+v, dropped quotes=%d facts=%d: %v", got, quotes, facts, err)
+	}
+}
+
+func TestFactExtractionNeverConvertsAllAmbiguousSourcesIntoNoEvent(t *testing.T) {
+	source := []capevent.CanonicalDocument{{ID: "doc", Content: "重复。重复。"}}
+	input := FactExtractionResult{Facts: []ExtractedFact{{
+		EvidenceQuotes: []EvidenceQuote{{DocumentID: "doc", Quote: "重复"}},
+	}}}
+	_, _, _, err := omitAmbiguousEventQuotes(input, source)
+	if err == nil || !strings.Contains(err.Error(), "all extracted facts") { t.Fatalf("expected hard failure, got %v", err) }
+}
+
+func TestFactExtractionNeverDropsWrongDocumentOrInventedQuote(t *testing.T) {
+	source := []capevent.CanonicalDocument{{ID: "doc", Content: "重复。重复。独有。"}}
+	for _, bad := range []EvidenceQuote{
+		{DocumentID: "unknown", Quote: "重复"},
+		{DocumentID: "doc", Quote: "凭空捏造"},
+		{DocumentID: "doc", Quote: " "},
+	} {
+		input := FactExtractionResult{Facts: []ExtractedFact{{
+			EvidenceQuotes: []EvidenceQuote{{DocumentID: "doc", Quote: "重复"}, bad,
+				{DocumentID: "doc", Quote: "独有"}},
+		}}}
+		if _, _, _, err := omitAmbiguousEventQuotes(input, source); err == nil {
+			t.Fatalf("unexpectedly accepted invalid document quote %+v", bad)
+		}
+	}
+}
+
+func TestAgenticFactExtractorFallsBackAfterOneAmbiguousRepair(t *testing.T) {
+	raw := "{\"facts\":[{\"type\":\"CONTRACT\",\"headline\":\"事件\",\"summary\":\"公司发布业绩预告，收入增长。\",\"evidence_quotes\":[{\"document_id\":\"doc\",\"quote\":\"公司发布业绩预告\"},{\"document_id\":\"doc\",\"quote\":\"收入增长\"}],\"confidence\":0.9}],\"confidence\":0.9}"
+	model := &eventModel{responses: []*schema.AgenticMessage{assistantJSON(raw), assistantJSON(raw)}}
+	got, err := (&AgenticEventFactExtractor{Model: model}).Extract(
+		context.Background(),
+		capevent.ResearchTask{Symbol: "600519.SH", AsOf: time.Date(2026, 9, 29, 15, 0, 0, 0, time.UTC)},
+		[]capevent.CanonicalDocument{{ID: "doc", Content: "公司发布业绩预告，收入增长。另有公司发布业绩预告。"}},
+	)
+	if err != nil || len(model.inputs) != 2 || len(got.Facts) != 1 ||
+		len(got.Facts[0].EvidenceQuotes) != 1 || got.Facts[0].EvidenceQuotes[0].Quote != "收入增长" {
+		t.Fatalf("expected grounded subset after one repair, got %+v, calls=%d error=%v", got, len(model.inputs), err)
+	}
+}
