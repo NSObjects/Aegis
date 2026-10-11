@@ -85,6 +85,8 @@ export default function LiveResearchWorkbench() {
   const selected = useMemo(() => runs.find(run => run.run_id === selectedId) ?? null, [runs, selectedId]);
   const selectedState = selected?.state;
   const mounted = useRef(true);
+  // Keep the same key if a POST response is lost; a deliberate new study gets a new key.
+  const pendingStart = useRef<{ payload: string; key: string } | null>(null);
 
   const refresh = useCallback(async () => {
     const data = await jsonRequest<{ runs: unknown[] }>(`${base}/runs`);
@@ -156,6 +158,7 @@ export default function LiveResearchWorkbench() {
   }
   async function signOut() {
     try { await jsonRequest(`${base}/session`, { method: "DELETE" }); } catch { /* local session closes regardless */ }
+    pendingStart.current = null;
     setSession(current => current && { ...current, authenticated: false }); setRuns([]); setSelectedId(null); setEventRecord(null); setArtifactRecord(null);
   }
   async function startRun(e: React.FormEvent<HTMLFormElement>) {
@@ -167,8 +170,13 @@ export default function LiveResearchWorkbench() {
     try {
       const payload = { symbol: name, mode: session.mode, ...(marketQuery.trim() ? { market_query: marketQuery.trim() } : {}),
         ...(session.mode === "PORTFOLIO_REVIEW" ? { portfolio: { state: "NOT_PROVIDED" } } : {}) };
-      const created: unknown = await jsonRequest(`${base}/runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const encoded = JSON.stringify(payload);
+      const previous = pendingStart.current;
+      const key = previous?.payload === encoded ? previous.key : crypto.randomUUID();
+      pendingStart.current = { payload: encoded, key };
+      const created: unknown = await jsonRequest(`${base}/runs`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": key }, body: encoded });
       if (!isLiveRun(created)) throw Error("服务器返回的 Run 结构无效");
+      pendingStart.current = null;
       setRuns(current => [created, ...current.filter(r => r.run_id !== created.run_id)]);
       setSelectedId(created.run_id); setView("workspace"); setInfo("研究任务已提交至 Go 服务；模型费用及数据源请求可能开始发生。");
     } catch(e) { setError((e as Error).message); } finally { setBusy(false); }
