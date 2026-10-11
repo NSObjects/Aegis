@@ -175,6 +175,7 @@ test("completed Run creates a new study with durable origin metadata and no copi
     symbol: "600519.SH", mode: "PORTFOLIO_REVIEW", rerun_of: first,
     market_query: "independent follow-up analysis", portfolio: { state: "NOT_PROVIDED" },
   });
+  await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
   const second = await page.locator(".live-run-fields code").innerText();
   expect(second).toMatch(/^[a-f0-9]{32}$/);
   expect(second).not.toBe(first);
@@ -196,6 +197,7 @@ test("failed and cancelled studies can be researched again without replaying old
   await page.getByRole("button", { name: "再次研究该标的" }).click();
   await expect(page.getByLabel("研究关注点（可选）")).toHaveValue("");
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
   const retried = await page.locator(".live-run-fields code").innerText();
   expect(retried).not.toBe(failed);
   await expect(page.locator(".live-run-fields")).toContainText(failed);
@@ -209,6 +211,7 @@ test("failed and cancelled studies can be researched again without replaying old
   await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
   await page.getByRole("button", { name: "再次研究该标的" }).click();
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
   const fresh = await page.locator(".live-run-fields code").innerText();
   expect(fresh).not.toBe(held);
   await expect(page.locator(".live-run-fields")).toContainText(held);
