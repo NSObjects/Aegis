@@ -383,3 +383,14 @@ An original URL is not a guaranteed current webpage or proof of independently
 audited claim accuracy. Links containing query parameters/tokens are omitted.
 The Go evidence snapshot store continues to own raw acquisition bytes; the
 Web metadata index never exposes raw source content or provider secrets.
+
+## R1-14：给人阅读的结论优先研究报告
+
+此前结构化报告将字段、英语枚举、事件 ID、长篇 Agent 辩论平铺成连续卡片，难以找到结论或判断哪些文字有来源。现在默认展示**阅读版**，其目标是帮助人逐层读懂同一 Run 的原始研究，而非生成新的结论：
+
+- **第一屏：核心结论与状态。** 优先取本次 Run 的 `portfolio_review.research_plan.summary`，否则采用已存在的 Synthesis 摘要或 Decision 的 market_view；保留原文，不修改语义。显示研究截止时间（非实时报价）、标的、研究结论、研究意向、风控门禁和账户状态。部分已知代码附中文解读，但始终保留 Go 原代码；未知枚举原样显示。缺失值明确注明未提供。
+- **第二屏：研究要点速读。** 逐字复用 Manager 机会、Synthesis 一致观点和冲突、Manager / Risk Agent 风险与未解决条目。每组默认展示前三条，若有更多标明余量并可跳至原始章节；这些是**Agent 观点**，不是已被验证的行情、文档原文或客观证据。
+- **下方：按主题可展开原始章节。** 结论/风控 → 市场/技术/事件/基本面 → Bull/Bear 辩论 → EvidenceLedger 引用、交互式证据导航和原始 JSON 审计。可「展开全部」「收起全部」。保留原 `#report-*` 章节 ID，Stage Trace 的报告片段链接会自动展开对应段落。历史切换时仍只使用选定 Run 的 Typed Artifact。
+- **可读性和真实性：** 调整正文到 14–16px、增加行距、限制大段正文宽度、移动端单栏；保留完整原始信息以及 JSON 导出。不做 AI 再总结、不编造因果、不生成新引用，不用缺失数值替代 0，不构造账户仓位，不推导交易操作。
+
+Vitest 使用真实 Go Typed Artifact 的字段结构构造可复现的 fixture，覆盖摘要优先级、状态翻译、缺失/零、两种研究模式；Chromium E2E 验证可见报告与原始工件一致、锚点自动展开、展开/收起以及失败 Run 不展示上一次报告。以上 fixture 测试不代表 Hosted LLM 或真实市场数据已完整验收。
