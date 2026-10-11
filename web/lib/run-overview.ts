@@ -35,7 +35,7 @@ export function summarizeRunOverview(input: unknown[], now: Date): RunOverview {
     const day = new Date(today.getTime() - (6 - index) * 86400000);
     return day.toISOString().slice(0, 10);
   });
-  const counts = new Map(days.map(d => [d, 0]));
+  const counts = new Map<string, number>(days.map(d => [d, 0]));
   for (const run of runs) {
     const day = new Date(run.created_at).toISOString().slice(0, 10);
     if (counts.has(day)) counts.set(day, (counts.get(day) ?? 0) + 1);
