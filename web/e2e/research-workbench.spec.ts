@@ -372,7 +372,7 @@ test("two completed research runs compare source-owned conclusion, market, techn
   await expect(chart.getByRole("table", { name: "技术分析对比" })).toContainText("1528.2");
   await expect(chart.getByRole("table", { name: "风险门禁对比" })).toContainText("FIXTURE_NEW_RISK_REVIEW");
   await expect(chart.getByText("fixture-comparison-event-1")).toBeVisible();
-  await expect(chart.getByText("仅一侧有数据").first()).toBeVisible();
+  await expect(chart.getByText("仅基准有数据").first()).toBeVisible();
   await expect(chart.locator(".live-compare-heads code")).toContainText([baseline,followup]);
   expect(methods).toEqual([]);
   const reference = await page.request.get("/api/workbench/runs/" + followup + "/artifact");
