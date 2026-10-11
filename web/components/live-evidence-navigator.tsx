@@ -16,7 +16,7 @@ function ReferenceLinks({ references, onSelect }: {
       const description = ref.status === "MATCHED_EVENT"
         ? "匹配到本次研究中的事件记录"
         : ref.status === "EVENT_NOT_FOUND"
-          ? "事件 ID 未在本次工件中找到"
+          ? "事件 ID 未在本次工件中唯一匹配"
           : ref.status === "DOMAIN_ONLY"
             ? "仅有领域引用，没有具体事件 ID"
             : "无效的引用结构";
