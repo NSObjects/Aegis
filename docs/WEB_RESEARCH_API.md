@@ -218,3 +218,36 @@ The deterministic data-source/document provenance index remains an
 independent R1-03 deliverable. API `GET /runs/:id` and `GET /runs`
 include this metadata as optional fields, while artifact JSON remains
 on the authorized completed-only artifact endpoint.
+
+
+### R1-03 Event evidence identity index in completed Run metadata
+
+New completed **PORTFOLIO_REVIEW** runs with a typed `research_artifact.event`
+include `evidence_index`, projected deterministically from the exact result
+serialized into the same Run record (the source of truth). Format:
+
+- `schema_version: 1`, `status` (`NORMAL`, `NO_EVENT`,
+  `INSUFFICIENT_EVIDENCE`), `requested_as_of`, optional `evidence_as_of`;
+- `events`: stable sorted event IDs, occurrence timestamps where available,
+  the EventContext's **reported** `source_count`, and deduplicated/sorted
+  document IDs drawn from event/fact/grounding identities;
+- `document_ids`: sorted union of all referenced documents in those events.
+
+Index and Artifact are saved together on the terminal transition.
+`FileRunStore` checks that any persisted index can be regenerated exactly
+from its persisted Artifact, in addition to the existing Artifact SHA256
+check. Restarted managers read the same index; historical pre-index records
+retain no field, not a reconstructed guess. `NO_EVENT` is explicit and
+different from absent metadata. Failed/CANCELLED/PENDING tasks cannot contain
+an index. Decision mode does not contain a research `EventContext` and does
+not gain a fictional index.
+
+**Limitations:** Event IDs/document IDs and source_count here are from the
+Go Typed Artifact. They are **not** raw source archives, independently
+authenticated publishers, canonical URLs, document content hashes or proof
+of semantic entailment. `evidence_as_of` is the EventContext observation
+timestamp and can be later than the requested PIT cutoff as described in
+the existing live capture contract. Per-document publication/availability
+timestamps and independently verifiable source URLs are not represented
+by this index. Original evidence snapshot archival and one-to-one source
+linkage remain further R1-03 verification work.
