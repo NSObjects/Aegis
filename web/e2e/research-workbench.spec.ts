@@ -600,3 +600,24 @@ test("overview with a list of no records shows an empty state, not fabricated KP
   await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
   await expect(page.getByLabel("股票代码")).toBeVisible();
 });
+
+
+test("completed research defaults to a readable brief with expandable source chapters", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page, "technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", {timeout:25000});
+  const overview = page.getByRole("region",{name:"研究报告概览"});
+  await expect(overview.getByText("研究结论 · 源自 Go 工件")).toBeVisible();
+  await expect(overview.getByRole("region",{name:"研究关键依据"})).toBeVisible();
+  await expect(overview.getByRole("region",{name:"研究风险与不确定性"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"完整研究章节"})).toBeVisible();
+  const manager = page.locator("#chapter-manager");
+  await expect(manager).not.toHaveAttribute("open");
+  await manager.locator("summary").click();
+  await expect(manager).toHaveAttribute("open");
+  await expect(page.locator("#report-manager")).toBeVisible();
+  await expect(page.locator(".live-report-source-details")).not.toHaveAttribute("open");
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(overview.getByText("研究结论 · 源自 Go 工件")).toBeVisible();
+});
