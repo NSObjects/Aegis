@@ -17,7 +17,7 @@ function setup() {
   if (!config) throw Error("invalid unit test env");
   return config;
 }
-function request(path: string, { method = "GET", authenticated = true, originHeader = true, body, lastEventId }: { method?: string; authenticated?: boolean; originHeader?: boolean; body?: string; lastEventId?: string; idempotencyKey?: string } = {}) {
+function request(path: string, { method = "GET", authenticated = true, originHeader = true, body, lastEventId, idempotencyKey }: { method?: string; authenticated?: boolean; originHeader?: boolean; body?: string; lastEventId?: string; idempotencyKey?: string } = {}) {
   const headers = new Headers();
   if (authenticated) headers.set("cookie", `${COOKIE_NAME}=${newSession(setup())}`);
   if (method !== "GET" && originHeader) {
