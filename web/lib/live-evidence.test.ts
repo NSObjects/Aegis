@@ -60,16 +60,19 @@ describe("Live EvidenceLedger identity navigation", () => {
   });
 
   it("does not turn event-domain-only, missing or ambiguous event IDs into concrete events", () => {
-    const model = structuredClone(fixture);
-    model.research_artifact.event.events.push({
-      ...model.research_artifact.event.events[0], fact_summary: "第二个同名 ID",
-    });
-    model.portfolio_review.evidence_ledger.arguments[0].references = [
-      { domain: "EVENT", event_id: "EVT-1" },
-      { domain: "EVENT", event_id: "EVT-NOT-FOUND" },
-      { domain: "EVENT" },
-      { domain: "MARKET" },
-    ];
+    const model = {
+      research_artifact: { event: { events: [
+        fixture.research_artifact.event.events[0],
+        { ...fixture.research_artifact.event.events[0], fact_summary: "第二个同名 ID" },
+      ] } },
+      portfolio_review: { evidence_ledger: { arguments: [{
+        id: "bull-1", claim: "多头主张", references: [
+          { domain: "EVENT", event_id: "EVT-1" },
+          { domain: "EVENT", event_id: "EVT-NOT-FOUND" },
+          { domain: "EVENT" }, { domain: "MARKET" },
+        ],
+      }] } },
+    };
     const refs = readLiveEvidence(model).arguments[0].references;
     expect(refs.map(ref => ref.status)).toEqual([
       "EVENT_UNRESOLVED", "EVENT_UNRESOLVED", "DOMAIN_ONLY", "DOMAIN_ONLY",
