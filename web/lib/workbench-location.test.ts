@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readWorkbenchLocation, workbenchHref } from "./workbench-location";
+import { readWorkbenchLocation, workbenchHref, readComparisonLocation, comparisonHref } from "./workbench-location";
 
 const id = "abcdef1234567890abcdef1234567890";
 
@@ -19,6 +19,20 @@ describe("Live workbench URL contract", () => {
     expect(readWorkbenchLocation("?view=settings")).toEqual({ view: "settings", runId: null });
     expect(workbenchHref("/", "history", id)).toBe("/?view=history");
     expect(workbenchHref("/", "settings", id)).toBe("/?view=settings");
+  });
+
+  it("round trips two opaque Run IDs for comparison and preserves absence safely", () => {
+    const other = "f".repeat(32);
+    expect(readWorkbenchLocation("?view=compare&left=" + id)).toEqual({ view: "compare", runId: null });
+    expect(readComparisonLocation(comparisonHref("/", id, other).slice(1))).toEqual({
+      leftId: id, rightId: other,
+    });
+    expect(comparisonHref("/", id, other)).toBe("/?view=compare&left=" + id + "&right=" + other);
+    expect(readComparisonLocation("?view=compare&left=../evil&right=" + other)).toEqual({
+      leftId: null, rightId: other,
+    });
+    expect(readComparisonLocation("?view=history&left=" + id)).toEqual({ leftId: null, rightId: null });
+    expect(workbenchHref("/", "compare")).toBe("/?view=compare");
   });
 
   it("rejects malformed run identifiers rather than requesting arbitrary paths", () => {
