@@ -16,6 +16,12 @@ export interface RunRequestSnapshot {
   min_independent_sources?: number;
   portfolio_state?: string;
 }
+/** Captured on successful Go graph construction, not a verified provider revision. */
+export interface RunModelProvenance {
+  schema_version: 1;
+  config_fingerprint: string;
+  bindings: Array<{ role: string; profile: string; provider: string; model: string }>;
+}
 export interface LiveRun {
   run_id: string;
   mode: LiveMode;
@@ -29,6 +35,7 @@ export interface LiveRun {
   /** Server-validated terminal Run this new study was deliberately started from. */
   rerun_of?: string;
   request_snapshot?: RunRequestSnapshot;
+  model_provenance?: RunModelProvenance;
 }
 export interface LiveStageEvent {
   seq: number;
