@@ -1,6 +1,7 @@
 "use client";
 
 import type { LiveArtifact, LiveRun } from "@/lib/live-contract";
+import { useEffect } from "react";
 import { readLiveReport, type ReportCard } from "@/lib/live-report";
 import { readResearchBrief, readableResearchCode } from "@/lib/research-brief";
 import { BookOpen, ShieldAlert, ListChecks, BarChart3 } from "lucide-react";
@@ -39,6 +40,21 @@ function ReportCardView({ card }: { card: ReportCard }) {
 export default function LiveResearchReport({ artifact, run }: { artifact: LiveArtifact; run: LiveRun }) {
   const report = readLiveReport(artifact);
   const brief = readResearchBrief(report);
+  // Stage trace and evidence links retain their existing #report-... targets.
+  // Expand the actual chapter before the browser navigates to the anchor.
+  useEffect(() => {
+    const openLinkedChapter = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const anchor = event.target.closest('a[href^="#report-"]');
+      const target = anchor?.getAttribute("href");
+      if (!target || !/^#report-[a-z-]+$/.test(target)) return;
+      const section = document.getElementById("chapter-" + target.slice("#report-".length));
+      if (section instanceof HTMLDetailsElement) section.open = true;
+    };
+    document.addEventListener("click", openLinkedChapter, true);
+    return () => document.removeEventListener("click", openLinkedChapter, true);
+  }, [run.run_id]);
+
   return <div className="live-report-stack live-structured-report">
     <section className="surface live-report-overview" aria-label="研究报告概览">
       <div className="eyebrow">Verified Run · read-only research artifact</div>
