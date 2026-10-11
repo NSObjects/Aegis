@@ -2,7 +2,7 @@
 
 import type { LiveArtifact, LiveRun } from "@/lib/live-contract";
 import { readLiveReport, type ReportCard } from "@/lib/live-report";
-import { readResearchBrief } from "@/lib/research-brief";
+import { readResearchBrief, readableResearchCode } from "@/lib/research-brief";
 import { BookOpen, ShieldAlert, ListChecks, BarChart3 } from "lucide-react";
 import LiveEvidenceNavigator from "@/components/live-evidence-navigator";
 import LiveTechnicalVisual from "@/components/live-technical-visual";
@@ -48,9 +48,9 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
       </div>
       <div className="live-brief-lead">
         <span className="live-brief-eyebrow">研究结论 · 源自 Go 工件</span>
-        <h3>{brief.conclusion ?? "未提供可核实的研究结论"}</h3>
+        <h3>{readableResearchCode(brief.conclusion)}</h3>
         <p>{brief.summary ?? "该次研究没有提供简要结论。请查看后续详情与原始工件。"}</p>
-        {brief.posture && <div className="live-brief-gate"><ShieldAlert size={15}/>风险门禁：<strong>{brief.posture}</strong></div>}
+        {brief.posture && <div className="live-brief-gate"><ShieldAlert size={15}/>风险门禁：<strong>{readableResearchCode(brief.posture)}</strong></div>}
       </div>
       {report.overview.length > 0 && <dl className="live-report-overview-facts">
         {report.overview.map((item, i) => <div key={item.label + i}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}
