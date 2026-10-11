@@ -29,6 +29,16 @@ func (x *indexedPortfolioExecutor) Run(_ context.Context, req ResearchRequest) (
 		Status: x.status,
 	}
 	if x.status == eventagent.StatusNormal {
+		available := req.Input.RequestedAsOf.Add(-time.Minute).UTC()
+		published := req.Input.RequestedAsOf.Add(-2*time.Hour).UTC()
+		eventCtx.CitedDocumentSources = []eventagent.CitedDocumentSource{
+			{DocumentID:"doc-a",VersionID:"version-1",ContentSHA256:strings.Repeat("a",64),
+				Publisher:"exchange",URL:"https://exchange.example/disclosure",
+				AvailableAt:&available,PublishedAt:&published,SourceType:"official",
+				Authority:"exchange",IsPrimary:true},
+			{DocumentID:"doc-b",VersionID:"version-2",ContentSHA256:strings.Repeat("b",64),
+				Publisher:"media",AvailableAt:&available,PublishedAt:&published,SourceType:"mainstream_media"},
+		}
 		eventCtx.Events = []eventagent.Event{{
 			ID: "evt-alpha", OccurredAt: req.Input.RequestedAsOf.Add(-time.Hour).UTC().Format(time.RFC3339),
 			EvidenceDocumentIDs: []string{"doc-b", "doc-a"}, SourceCount: 2,
@@ -81,6 +91,14 @@ func TestEvidenceIndexFromActualCompletedArtifactSurvivesRestart(t *testing.T) {
 		t.Fatalf("restart lost exact typed source IDs: %#v %v", saved.EvidenceIndex, err)
 	}
 	if len(saved.Artifact) == 0 { t.Fatal("completed artifact missing after restart") }
+	if len(saved.EvidenceIndex.Documents)!=2 ||
+		saved.EvidenceIndex.Documents[0].URL!="https://exchange.example/disclosure" ||
+		saved.EvidenceIndex.Documents[1].URL!="" ||
+		saved.EvidenceIndex.Documents[0].VersionID!="version-1" ||
+		!saved.EvidenceIndex.Documents[0].IsPrimary ||
+		saved.EvidenceIndex.Documents[0].AvailableAt==nil {
+		t.Fatalf("lost exact persisted source metadata: %#v",saved.EvidenceIndex.Documents)
+	}
 }
 
 func TestEvidenceIndexPreservesNoEventVsMissingAndFailed(t *testing.T) {
@@ -131,6 +149,16 @@ func TestEvidenceIndexTamperingRejectedButLegacyStillReadable(t *testing.T) {
 	invalid.Artifact = nil
 	invalid.ArtifactVersion, invalid.ArtifactSHA256 = 0, ""
 	if err := store.Save(context.Background(), invalid); err == nil { t.Fatal("failed Run accepted index") }
+	// Altering only document metadata is a corruption even when the event IDs
+	// and count match. The index must reproduce from the saved artifact.
+	invalid = done
+	copyIndex = *done.EvidenceIndex
+	copyIndex.Documents = append([]eventagent.CitedDocumentSource(nil),done.EvidenceIndex.Documents...)
+	copyIndex.Documents[0].Publisher = "rewritten-later"
+	invalid.EvidenceIndex = &copyIndex
+	if err:=store.Save(context.Background(),invalid);err==nil{
+		t.Fatal("tampered publisher metadata was accepted")
+	}
 	// Old completed records without the new optional field remain readable
 	// and are never backfilled with synthetic event IDs.
 	legacy := done
