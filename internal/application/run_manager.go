@@ -92,6 +92,8 @@ type RunRecord struct {
 	Symbol        string          `json:"symbol"`
 	RerunOf       string          `json:"rerun_of,omitempty"`
 	RequestSnapshot *RunRequestSnapshot `json:"request_snapshot,omitempty"`
+	// Present only if the live model graph was constructed successfully.
+	ModelProvenance *RunModelProvenance `json:"model_provenance,omitempty"`
 	RequestedAsOf time.Time       `json:"requested_as_of"`
 	State         RunState        `json:"state"`
 	CreatedAt     time.Time       `json:"created_at"`
@@ -417,6 +419,27 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		return
 	}
 
+	// Record actual graph construction metadata before model research starts.
+	// The sink is scoped to this Run; concurrent Runs cannot cross-write state.
+	ctx = withModelProvenanceSink(ctx, func(meta *RunModelProvenance) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if record.State != RunRunning || eventPersistError || record.ModelProvenance != nil {
+			return errors.New("model identity cannot be recorded for this run")
+		}
+		if err := validateRunModelProvenance(meta); err != nil { return err }
+		if meta == nil { return errors.New("model identity must not be nil") }
+		cloned := *meta
+		cloned.Bindings = append([]ModelRoleBinding(nil), meta.Bindings...)
+		record.ModelProvenance = &cloned
+		if err := m.store.Save(context.Background(), record); err != nil {
+			record.ModelProvenance = nil
+			eventPersistError = true
+			cancel() // never continue paid research after persistence fails
+			return err
+		}
+		return nil
+	})
 	ctx = research.WithProgressEvents(ctx, func(ev research.ProgressEvent) {
 		mu.Lock()
 		defer mu.Unlock()
