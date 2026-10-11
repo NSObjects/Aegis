@@ -98,3 +98,41 @@ test("settings lets a signed-in operator save provider credentials without echoi
   await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
   await expect(page.locator(".provider-settings-row").filter({ hasText: "DeepSeek" })).toContainText("已配置");
 });
+
+
+test("Live Run permalink, refresh and browser back/forward restore the correct workspace", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page);
+  await expect(page).toHaveURL(new RegExp(`\\?run=${id}$`));
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+
+  await page.getByRole("button", { name: "研究历史" }).click();
+  await expect(page).toHaveURL(/\\?view=history$/);
+  await expect(page.getByRole("heading", { name: "研究历史" })).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`\\?run=${id}$`));
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "研究历史" })).toBeVisible();
+
+  await page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) }).click();
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(page.locator(".live-permalink")).toHaveAttribute("href", `/?run=${id}`);
+
+  await page.goto("/?view=settings");
+  await expect(page.getByRole("heading", { name: "数据源与模型凭证" })).toBeVisible();
+  await page.goto(`/?run=${id}`);
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+});
+
+test("unknown Live Run permalink never substitutes the latest report", async ({ page }) => {
+  await signIn(page);
+  await submit(page);
+  const unknown = "ffffffffffffffffffffffffffffffff";
+  await page.goto(`/?run=${unknown}`);
+  await expect(page.getByText(`找不到任务 ${unknown}`, { exact: false })).toBeVisible();
+  await expect(page.locator(".live-run-fields")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+});
