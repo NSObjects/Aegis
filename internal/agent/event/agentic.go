@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"reflect"
 	"strings"
 
@@ -220,13 +221,81 @@ func (a *AgenticEventFactExtractor) Extract(
 			repaired,
 			documents,
 		); err != nil {
-			return FactExtractionResult{}, fmt.Errorf(
-				"event fact extraction grounding repair: %w",
-				err,
-			)
+			// After one LLM repair, only repeated verbatim quotations may
+			// be removed. Never choose a matching source offset arbitrarily.
+			// Preserve validated quotes and facts; all other failures remain
+			// hard errors. If no grounded facts remain, fail rather than
+			// returning a misleading NO_EVENT result.
+			filtered, removedQuotes, removedFacts, pruneErr :=
+				omitAmbiguousEventQuotes(repaired, documents)
+			if pruneErr != nil {
+				return FactExtractionResult{}, fmt.Errorf(
+					"event fact extraction grounding repair: %w",
+					err,
+				)
+			}
+			if err := validateFactExtractionGroundings(filtered, documents); err != nil {
+				return FactExtractionResult{}, fmt.Errorf(
+					"event fact extraction filtered groundings: %w", err,
+				)
+			}
+			log.Printf("event fact grounding: omitted %d ambiguous quote(s), %d fact(s) without verified evidence", removedQuotes, removedFacts)
+			return filtered, nil
 		}
 		return repaired, nil
 	}
+}
+
+
+// omitAmbiguousEventQuotes is a conservative fallback after the single model
+// correction. It drops only quotations which occur in multiple locations of
+// their claimed canonical document. Missing, mismatched, malformed or unknown
+// document citations remain fatal. No offsets or source claims are invented.
+func omitAmbiguousEventQuotes(
+	extraction FactExtractionResult,
+	documents []capevent.CanonicalDocument,
+) (FactExtractionResult, int, int, error) {
+	byID := make(map[string]capevent.CanonicalDocument, len(documents))
+	for _, document := range documents {
+		byID[document.ID] = document
+	}
+	filtered := FactExtractionResult{
+		Facts: make([]ExtractedFact, 0, len(extraction.Facts)),
+		Confidence: extraction.Confidence,
+	}
+	droppedQuotes, droppedFacts := 0, 0
+	for _, fact := range extraction.Facts {
+		kept := make([]EvidenceQuote, 0, len(fact.EvidenceQuotes))
+		for _, quote := range fact.EvidenceQuotes {
+			_, err := ResolveEvidenceGroundings([]EvidenceQuote{quote}, byID)
+			if err == nil {
+				kept = append(kept, quote)
+				continue
+			}
+			if !strings.Contains(err.Error(), "is ambiguous in canonical document") {
+				return FactExtractionResult{}, 0, 0, err
+			}
+			droppedQuotes++
+		}
+		if len(kept) == 0 {
+			droppedFacts++
+			continue
+		}
+		// Preserve the full original fact but only proven source quotes.
+		fact.EvidenceQuotes = kept
+		filtered.Facts = append(filtered.Facts, fact)
+	}
+	if droppedQuotes == 0 {
+		return FactExtractionResult{}, 0, 0, errors.New("no ambiguous citations to omit")
+	}
+	if len(filtered.Facts) == 0 {
+		return FactExtractionResult{}, 0, 0, errors.New("all extracted facts lost their groundings")
+	}
+	// Do not portray an incomplete extraction as high confidence.
+	if filtered.Confidence > 0.5 {
+		filtered.Confidence = 0.5
+	}
+	return filtered, droppedQuotes, droppedFacts, nil
 }
 
 // groundingRepairHint is a verbatim, unambiguous source excerpt around a
