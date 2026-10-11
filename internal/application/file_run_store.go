@@ -135,6 +135,9 @@ func checkRunRecord(record RunRecord) error {
 	} else if len(record.Artifact) != 0 || record.ArtifactVersion != 0 || record.ArtifactSHA256 != "" {
 		return errors.New("unfinished research must not expose an artifact or checksum")
 	}
+	if err := checkRunEvidenceIndex(record); err != nil {
+		return err
+	}
 	if record.State == RunFailed || record.State == RunCancelled {
 		if record.FinishedAt == nil {
 			return errors.New("terminal run requires completion time")

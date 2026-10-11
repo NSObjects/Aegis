@@ -94,6 +94,8 @@ type RunRecord struct {
 	RequestSnapshot *RunRequestSnapshot `json:"request_snapshot,omitempty"`
 	// Present only if the live model graph was constructed successfully.
 	ModelProvenance *RunModelProvenance `json:"model_provenance,omitempty"`
+	// Present on completed Portfolio Review only when its EventContext exists.
+	EvidenceIndex *RunEvidenceIndex `json:"evidence_index,omitempty"`
 	RequestedAsOf time.Time       `json:"requested_as_of"`
 	State         RunState        `json:"state"`
 	CreatedAt     time.Time       `json:"created_at"`
@@ -371,6 +373,7 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 	// authoritative snapshot while persisting each event atomically.
 	var mu sync.Mutex
 	var eventPersistError bool
+	var completedIndex *RunEvidenceIndex
 	appendEvent := func(stage, status string, at time.Time, durationMS int64) error {
 		record.Events = append(record.Events, RunEvent{Seq: uint64(len(record.Events) + 1), Stage: stage, Status: status, At: at, DurationMS: durationMS})
 		return m.store.Save(context.Background(), record)
@@ -386,9 +389,11 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		record.FinishedAt = &done
 		record.Artifact = output
 		if state == RunCompleted {
+			record.EvidenceIndex = completedIndex
 			record.ArtifactVersion = 1
 			record.ArtifactSHA256 = artifactDigest(output)
 		} else {
+			record.EvidenceIndex = nil
 			record.ArtifactVersion = 0
 			record.ArtifactSHA256 = ""
 		}
@@ -477,6 +482,12 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		terminal(RunFailed, FailureInvalidResult, nil)
 		return
 	}
+	index, e := projectRunEvidenceIndex(artifact, response.Mode, record.Symbol, record.RequestedAsOf)
+	if e != nil {
+		terminal(RunFailed, FailureInvalidResult, nil)
+		return
+	}
+	completedIndex = index
 	terminal(RunCompleted, "", artifact)
 }
 

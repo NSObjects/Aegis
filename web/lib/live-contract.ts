@@ -22,6 +22,23 @@ export interface RunModelProvenance {
   config_fingerprint: string;
   bindings: Array<{ role: string; profile: string; provider: string; model: string }>;
 }
+/**
+ * Copied from the exact completed Portfolio Review EventContext.
+ * References are canonical identities only, not original URLs or audited sources.
+ */
+export interface RunEvidenceIndex {
+  schema_version: 1;
+  status: "NORMAL" | "NO_EVENT" | "INSUFFICIENT_EVIDENCE";
+  requested_as_of: string;
+  evidence_as_of?: string;
+  events: Array<{
+    event_id: string;
+    occurred_at?: string;
+    source_count: number;
+    document_ids: string[];
+  }>;
+  document_ids: string[];
+}
 export interface LiveRun {
   run_id: string;
   mode: LiveMode;
@@ -36,6 +53,7 @@ export interface LiveRun {
   rerun_of?: string;
   request_snapshot?: RunRequestSnapshot;
   model_provenance?: RunModelProvenance;
+  evidence_index?: RunEvidenceIndex;
 }
 export interface LiveStageEvent {
   seq: number;

@@ -40,9 +40,24 @@ function evolve(run) {
     append(run, "Run", run.state);
   }
 }
+function completedEvidenceIndex(run) {
+  // Test-only projection of the synthetic completed report, never a
+  // second database or a provider/source archive.
+  const event = report(run).research_artifact.event;
+  const events = event.events.map(item => ({
+    event_id: item.id, ...(item.occurred_at ? { occurred_at: item.occurred_at } : {}),
+    source_count: item.source_count, document_ids: [...new Set(item.evidence_document_ids)].sort(),
+  })).sort((a,b) => a.event_id.localeCompare(b.event_id));
+  return {
+    schema_version: 1, status: event.status,
+    requested_as_of: event.requested_as_of,
+    ...(event.evidence_as_of ? { evidence_as_of: event.evidence_as_of } : {}),
+    events, document_ids: [...new Set(events.flatMap(item => item.document_ids))].sort(),
+  };
+}
 function metadata(run) {
   const { run_id, symbol, mode, requested_as_of, state, created_at, started_at, finished_at, failure_code, rerun_of, request_snapshot, model_provenance } = run;
-  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}), ...(request_snapshot ? { request_snapshot } : {}), ...(state !== "PENDING" && model_provenance ? { model_provenance } : {}) };
+  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}), ...(request_snapshot ? { request_snapshot } : {}), ...(state !== "PENDING" && model_provenance ? { model_provenance } : {}), ...(state === "COMPLETED" && mode === "PORTFOLIO_REVIEW" ? { evidence_index: completedEvidenceIndex(run) } : {}) };
 }
 function report(run) {
   // Synthetic protocol values only: verify UI maps Go JSON paths without
