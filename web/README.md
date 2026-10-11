@@ -235,3 +235,16 @@ Live 工作台从 URL 恢复当前页面和服务端 Run：
 - 目前 Go Stage Events **不含脱敏工具调用、来源信息、模型 prompts、链式推理**。UI 明确告知不可用；R1-07 工具级追踪仍需先设计、验证并接入受保护的 Go 事件契约。此 PR 不声称这些字段已经存在。
 
 E2E 仅验证固定的 Go 协议 fixture；不是实盘、行情或真实模型数据验证。
+
+## R1-09 单日技术行情快照（真实 Go Typed Artifact）
+
+完成 Run 的结构化报告中，TechnicalContext 的 **同一标的、同一 Run** 若满足以下条件，显示真实研究时点的「单日 OHLC K 线」：
+
+- 状态 `NORMAL`，存在有效的 `snapshot.open/high/low/close`，且 OHLC 高低与开收符合价格关系、均为有限正数。
+- `symbol` 同时匹配 Run 与 ResearchArtifact；`effective_as_of` 不晚于 `requested_as_of`，研究日期不晚于 Run 截止的 UTC 日，`last_trade_date`（存在时）应匹配有效交易日。
+- 显示来自 Typed Artifact 的开高低收、昨收、涨跌幅及原始成交量/额；MA5/10/20/60、RSI14、MACD、收益率与量比使用各自源字段，零值是合法实测数值，`null`/字段缺失不渲染假零值。
+- 日线 OHLC 是 **RAW 原价**。Go 当前 TuShare 技术研究实现的 MA/RSI/MACD 计算使用 `PIT_QFQ` 序列；由于工件没有附完整的复权来源和历史序列，这些指标 **独立展示**，不会错误地在原价 K 线上叠加 MA 或声称走势已核验。
+- `NO_DATA`、`SUSPENDED`、无效日期、错误标的、缺失或无效 OHLC 均不产生 K 线。图内只描绘 **一个有效交易日**，不暗示存在或调用了多日/实时行情。研究用价不等于现价。
+- 单元测试及 Chromium E2E 的可绘制样本是 `technical snapshot fixture`，数值均为明确的 **PROTOCOL_FIXTURE_ONLY** 模拟协议数据。浏览器测试不构成实际金融数据源或 Hosted LLM 接入验证。
+
+之后若要交付完整历史 K 线，应在 Go ResearchArtifact 内引入带 PIT 截止、复权、来源和完整性验证的 OHLCV 序列（当前版本没有），再在 Web 绘制多日价格/量能图。不能由单日指标逆向生成历史行情。
