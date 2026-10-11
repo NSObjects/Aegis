@@ -12,9 +12,9 @@
 
 **现在：R1 — Web 研究工作台（R0 V1 内核已完成验收）。**
 
-**下一项：R1-02 — 验收现有 ResearchRun 生命周期，完成请求幂等保护及其重启/并发回归；之后复核 R1-03 持久化能力。**
+**下一项：R1-03 — 补齐 ResearchRun 可审计的运行配置/模型版本与来源索引，并核验真实完成及失败的历史恢复；现有阶段事件和 Artifact 文件持久化已验收，勿重写。**
 
-**R0 Exit Gate：已满足。R1-01 已核实。** `internal/application/research_service.go` 和 `live_factory.go` 统一装配与执行路径，CLI `cmd/aegis/main.go`、HTTP `cmd/aegis-web/main.go` 都复用此入口；现有 `research_service_test.go` 验证 typed 输出及原 CLI JSON 形状，V1 Hosted 验证正式 CLI。R1-02 的重复提交保护在本阶段补齐；不重复搭建 Eino Graph。
+**R0 Exit Gate：已满足。R1-01、R1-02 的已有运行闭环已核实。** `internal/application/research_service.go` 和 `live_factory.go` 统一装配与执行路径，CLI `cmd/aegis/main.go`、HTTP `cmd/aegis-web/main.go` 都复用此入口；现有 `research_service_test.go` 验证 typed 输出及原 CLI JSON 形状，V1 Hosted 验证正式 CLI。R1-02 的并发、取消、重启和幂等由已合并 PR #145 验证；R1-03 的 Artifact 完整性由 PR #147 验证；不重复搭建 Eino Graph。
 
 **开发优先级已确认：研究工作台 > 对话与研究历史 > 研究发现/持续跟踪 > 独立验证；组合级仓位管理是独立的大型后续阶段 R7，**绝不是 R1～R6 的前置条件，也不能因为它尚未实现而挡住 Web 上线。已有 Risk/Portfolio 审查功能照常展示，但不要称之为已完成的动态仓位系统。
 
@@ -113,11 +113,13 @@ R1 不包含 Watchlist 智能扫描（R3）、自动监控（R4）、研究 Memo
 - [x] **R1-01 共用 Application Service（已核实 main 现有实现）**
   - 复核 `cmd/aegis/main.go` 与现有 Research/Portfolio Workflow，把通用配置、依赖装配和研究执行抽离为单一应用入口；CLI 只负责解析命令与输出。不得复制 Eino Graph。
   - **验收**：Go 测试直接调用 Application Service 与 CLI 获得相同的 typed Artifact/风险审查结果；原 CLI 测试保持通过。
-- [ ] **R1-02 ResearchRun 任务生命周期**
+- [x] **R1-02 ResearchRun 任务生命周期（PR #145：持久幂等、并发和重启恢复已完成）**
   - run_id、symbol、requested_as_of、配置/模型版本、状态 PENDING/RUNNING/COMPLETED/FAILED/CANCELLED、阶段失败代码、超时/取消、有限重试/幂等。
   - **验收**：任务在调用方断开后仍可查询；取消和模型失败不生成伪成功；重复请求不会产生不受控的重复运行。
-- [ ] **R1-03 运行事件、证据与 Artifact 持久化**
+- [ ] **R1-03 运行事件、证据与 Artifact 持久化（IN_PROGRESS）**
   - 持久化经校验的输入/运行配置、StepEvent 序列、结构化研究结果、来源/时间/摘要、工件版本与最终错误；保证一次 run 的数据可复原。优先简单可靠的存储，必要迁移可复跑。
+  - **已核实**：`RunManager` + `FileRunStore` 单进程文件持久化、严格顺序阶段事件、终态 Artifact、失败代码、中断转 FAILED、重启后查询和读取；[PR #147](https://github.com/NSObjects/Aegis/pull/147) 新增完成 Artifact 的版本/校验摘要、旧记录兼容、JSON 篡改拒绝、失败重启回归，PR Go CI 通过。
+  - **剩余**：确认不含凭证/原始账户数据的运行输入与配置版本快照；核验模型/数据源版本、研究证据索引和摘要可追溯；实际文件恢复的 API/GUI 验收。文件摘要仅检测意外损坏，不是证明来源真实性，也不是模型版本。
   - **验收**：服务重启后已完成和失败任务、证据与阶段事件仍可查询；未完成任务恢复/终止规则明确。
 - [ ] **R1-04 API、SSE 和基础安全**
   - 创建/取消/查询/列表 Run，查询工件与历史；SSE 阶段事件支持断线重连或按序补读；验证输入、鉴权/授权、参数限额、密钥不下发浏览器。
