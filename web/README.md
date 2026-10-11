@@ -222,3 +222,16 @@ Live 工作台从 URL 恢复当前页面和服务端 Run：
 - `TradeIntent.Evidence` 是自由文本，不得被解析为引用关系。完整证据原文/URL 审计依赖后续服务端能力，当前不提供。
 - Run 的证据导航组件以 run_id 隔离选择状态，换 Run 不复用上一次选择；FAILED/CANCELLED 不显示成功工件或证据导航。
 - 单元测试断言严格引用边界；浏览器测试使用独立的 `PROTOCOL_FIXTURE_ONLY` 人工 JSON 截取 BFF 的 Artifact 响应，仅测试 UI，不证明实时数据来源可靠或真实 Hosted 模型结果。
+
+## R1-07 Live Agent 执行轨迹（持久化事实源）
+
+工作台右侧「Agent 执行轨迹」读取 **Go RunEvent** 持久化事件（`seq`, `stage`, `status`, `at`, 可选 `duration_ms`），按实际观测到的阶段和 sequence 渲染。新的 UI **不假设图谱中所有 Agent 均已执行**：
+
+- START → 执行中；DONE → 成功；FAIL → 该阶段明确失败；若 Run 已进入终态而某阶段仅留下 START，则展示「未记录完成」，**不是**自动判成功或失败。
+- 原始状态不认识时标记「未知状态」并保留状态原文；未出现的 Fundamental 或其他阶段，不判定为「跳过」或「成功」。
+- `Run` 生命周期与 Agent 阶段分开展示；失败且没有阶段 FAIL 时，只展示 Run 自身 `failure_code`，不会猜测哪个 Agent 失败。
+- 仅在 **同一个已完成 Run** 的 Typed Artifact 确实存在相应报告分区时，允许从阶段点击定位报告；失败/取消运行没有虚构结果链接。
+- EventSource 用于低延迟展示；浏览器会对活动 Run 周期性查询服务端 `/events`，切换为终态再补读一次。历史 Run 直接恢复持久化日志；SSE 中断不是状态成功的证据。
+- 目前 Go Stage Events **不含脱敏工具调用、来源信息、模型 prompts、链式推理**。UI 明确告知不可用；R1-07 工具级追踪仍需先设计、验证并接入受保护的 Go 事件契约。此 PR 不声称这些字段已经存在。
+
+E2E 仅验证固定的 Go 协议 fixture；不是实盘、行情或真实模型数据验证。

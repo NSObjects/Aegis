@@ -1,0 +1,93 @@
+"use client";
+
+import { Activity, Clock3, Wifi, WifiOff } from "lucide-react";
+import type { LiveArtifact, LiveRun, LiveStageEvent } from "@/lib/live-contract";
+import { readLiveReport } from "@/lib/live-report";
+import { buildRunTrace, stageLabels, stageReportId, type StagePhase } from "@/lib/stage-trace";
+
+type StreamStatus = "connected" | "disconnected" | "idle";
+
+const phaseLabels: Record<StagePhase, string> = {
+  RUNNING: "执行中", DONE: "成功", FAIL: "失败",
+  INCOMPLETE: "未记录完成", UNKNOWN: "未知状态",
+};
+
+const formatTime = (s: string | null) => s ? new Date(s).toLocaleString("zh-CN", { hour12: false }) : "—";
+
+function duration(ms: number | null) {
+  return ms === null ? "未提供" : ms >= 1000 ? (ms / 1000).toFixed(2) + "s" : ms + "ms";
+}
+
+/** Render only server-observed progress and links to matching completed artifacts. */
+export default function LiveStageTrace({
+  run, events, artifact, stream,
+}: {
+  run: LiveRun | null;
+  events: LiveStageEvent[];
+  artifact: LiveArtifact | null;
+  stream: StreamStatus;
+}) {
+  const trace = run ? buildRunTrace(run, events) : null;
+  const terminal = run?.state === "COMPLETED" || run?.state === "FAILED" || run?.state === "CANCELLED";
+  const reportIds = artifact && run?.state === "COMPLETED"
+    ? new Set(readLiveReport(artifact).cards.map(c => c.id)) : new Set<string>();
+
+  return <section className="surface live-events" aria-label="Agent 执行轨迹">
+    <div className="panel-head">
+      <div><h2>Agent 执行轨迹</h2><p>Go 持久化阶段事件 · 按实际发生顺序</p></div>
+      <span title={terminal ? "任务已结束，查看持久化事件" : stream === "connected" ? "SSE 已连接" : stream === "disconnected" ? "SSE 已断开，轮询补读" : "等待阶段事件"}>
+        {terminal ? <Clock3 size={17} color="#a4b5c8"/> : stream === "connected" ?
+          <Wifi size={17} color="#65e1c4"/> : stream === "disconnected" ?
+          <WifiOff size={17} color="#e9b16c"/> : <Clock3 size={17} color="#71849b"/>}
+      </span>
+    </div>
+    {!run ? <p className="live-empty">选择任务后查看阶段事件</p> : <>
+      <div className="live-trace-summary">
+        <span>任务状态 <strong>{run.state}</strong></span>
+        <span>观测阶段 <strong>{trace?.stages.length ?? 0}</strong></span>
+      </div>
+      {trace?.explicitFailure && <p role="status" className="live-trace-error">Go 阶段事件明确记录失败：{trace.explicitFailure}（{stageLabels[trace.explicitFailure] ?? "未命名阶段"}）</p>}
+      {trace?.unlocatedFailure && <p role="status" className="live-trace-error">任务失败：{run.failure_code ?? "未提供失败代码"}。阶段事件未指明具体失败位置，不能推断哪个 Agent 出错。</p>}
+      {run.state === "CANCELLED" && <p className="live-trace-note">任务已取消；未收到 DONE 的阶段不代表成功。</p>}
+      {trace?.stages.length === 0 ?
+        <p className="live-empty">尚未收到 Agent 阶段事件。未出现的阶段不能推定已执行、跳过或失败。</p> :
+        <ol className="live-trace-stages" aria-label="已观测 Agent 阶段">
+          {trace?.stages.map(step => {
+            const reportId = stageReportId[step.stage];
+            const hasReport = !!reportId && reportIds.has(reportId);
+            return <li key={step.stage} className={"live-trace-stage trace-" + step.phase.toLowerCase()}>
+              <div className="live-trace-stage-heading"><div><strong>{stageLabels[step.stage] ?? step.stage}</strong><small>{step.stage} · #{step.firstSeq}–#{step.lastSeq}</small></div>
+                <span className="live-trace-phase">{phaseLabels[step.phase]}</span>
+              </div>
+              <dl className="live-trace-timing">
+                {step.startedAt && <div><dt>开始</dt><dd>{formatTime(step.startedAt)}</dd></div>}
+                {step.finishedAt && <div><dt>结束</dt><dd>{formatTime(step.finishedAt)}</dd></div>}
+                {(step.phase === "DONE" || step.phase === "FAIL") && <div><dt>Go 记录耗时</dt><dd>{duration(step.durationMS)}</dd></div>}
+              </dl>
+              {step.phase === "INCOMPLETE" && <p className="live-trace-small">最后只记录了 START；终态不表示该阶段已经完成。</p>}
+              {step.phase === "UNKNOWN" && <p className="live-trace-small">Go 原始状态：{step.rawStatus}，不能解释成成功。</p>}
+              {hasReport && <a className="live-trace-report-link" href={"#report-" + reportId}>查看本任务对应报告片段 ↗</a>}
+            </li>;
+          })}
+        </ol>}
+      {trace && trace.lifecycle.length > 0 && <div className="live-trace-lifecycle">
+        <strong>Run 生命周期</strong>
+        <div>{trace.lifecycle.map(ev => <span key={ev.seq}>{ev.status} <small>#{ev.seq}</small></span>)}</div>
+      </div>}
+      {events.length > 0 && <details className="live-trace-raw" open>
+        <summary>原始事件记录 · {events.length} 条（Go seq）</summary>
+        <div className="live-event-list">{events.map(ev =>
+          <div key={ev.seq} className="live-event-item">
+            <span className={"live-event-dot " + (ev.status === "DONE" || ev.status === "COMPLETED" ? "green" : ev.status === "FAIL" || ev.status === "FAILED" ? "red" : "")}/>
+            <div><strong>{ev.stage}</strong><small>{ev.status} · {formatTime(ev.at)}{typeof ev.duration_ms === "number" ? " · " + ev.duration_ms + "ms" : ""}</small></div>
+            <code>#{ev.seq}</code>
+          </div>)}</div>
+      </details>}
+      <p className="live-trace-boundary">当前 Go 事件只包含阶段、状态、时间与可选耗时；未提供脱敏工具调用、数据源名称和工具输入输出。这里不会伪造工具明细、跳过状态或模型内部推理。</p>
+    </>}
+    <div className="live-stream-foot"><Activity size={13}/>
+      {terminal ? "任务已结束 · 事件从持久化接口补读" : stream === "disconnected" ?
+        "SSE 中断 · 自动轮询补读 / 尝试重连" : "SSE 实时订阅 · 定期补读已持久化事件"}
+    </div>
+  </section>;
+}
