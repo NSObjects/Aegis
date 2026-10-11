@@ -31,7 +31,7 @@ export default function LiveRunOverview({
   const overview = useMemo(() => summarizeRunOverview(runs, new Date()), [runs]);
   const visible = useMemo(() => filterOverviewRuns(overview.runs, filter, query), [overview.runs, filter, query]);
   const peak = Math.max(1, ...overview.daily.map(day => day.count));
-  return <div className="run-overview" aria-label="研究任务概览">
+  return <div className="run-overview" role="region" aria-label="研究任务概览">
     <section className="run-overview-hero">
       <div>
         <div className="eyebrow">Operations center / Go ResearchRun</div>
