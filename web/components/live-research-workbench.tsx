@@ -264,7 +264,7 @@ export default function LiveResearchWorkbench() {
           {selected.request_snapshot.portfolio_state&&<div><small>提交时账户状态</small><strong>{selected.request_snapshot.portfolio_state==="NOT_PROVIDED"?"NOT_PROVIDED · 未知":selected.request_snapshot.portfolio_state}</strong></div>}
         </div>:<p>此任务创建时尚未保存请求配置快照；不会追溯推断过去的研究参数。</p>}
         <p>此处仅显示提交时已记录的请求约束，不代表实际命中的数据源，也不代表模型或 Provider 版本。未留存原始研究关注点及账户明细。</p>
-      </details>}{selected&&<details className="live-request-snapshot live-model-provenance">
+      </details>}{selected&&<details className="live-model-provenance">
         <summary>本次运行模型配置 · {selected.model_provenance?.schema_version===1?"已记录":"未记录"}</summary>
         {selected.model_provenance?.schema_version===1?<div>
           <p>这是 Go 在本次成功构建研究流程后记录的模型配置身份；模型 ID 不是第三方 Provider 保证的固定版本号。</p>
