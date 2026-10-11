@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -46,6 +47,8 @@ type RunEvent struct {
 // RunRecord stores metadata and exact typed workflow JSON, never a raw input
 // portfolio snapshot. Artifact exists only for completed runs.
 type RunRecord struct {
+	IdempotencyDigest string `json:"idempotency_digest,omitempty"`
+	RequestFingerprint string `json:"request_fingerprint,omitempty"`
 	ID            string          `json:"run_id"`
 	Mode          ResearchMode    `json:"mode"`
 	Symbol        string          `json:"symbol"`
@@ -72,6 +75,7 @@ var (
 	ErrRunNotActive     = errors.New("research run is not active")
 	ErrRunCapacity      = errors.New("research queue is at capacity")
 	ErrRunManagerClosed = errors.New("research run manager closed")
+	ErrRunIdempotencyConflict = errors.New("idempotency key already used for a different research request")
 )
 
 // ResearchExecutor is implemented by the existing ResearchService; a fake can
@@ -84,11 +88,17 @@ type ResearchExecutor interface {
 // ResearchService. It never constructs LLM/Provider dependencies.
 // One manager per storage directory is supported; concurrent processes require
 // a transactional DB-backed RunStore/claim mechanism instead of FileRunStore.
+type runKeyIndexEntry struct {
+	RunID string
+	Fingerprint string
+}
+
 type RunManager struct {
 	executor  ResearchExecutor
 	store     RunStore
 	mu        sync.Mutex
 	active    map[string]context.CancelFunc
+	idempotency map[string]runKeyIndexEntry
 	closed    bool
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -112,6 +122,15 @@ func NewRunManager(executor ResearchExecutor, store RunStore, maxParallel, maxAc
 	if err != nil {
 		return nil, fmt.Errorf("load research runs: %w", err)
 	}
+	index := make(map[string]runKeyIndexEntry)
+	for _, record := range existing {
+		if record.IdempotencyDigest != "" {
+			if previous, exists := index[record.IdempotencyDigest]; exists {
+				return nil, fmt.Errorf("duplicate persisted idempotency key for runs %s and %s", previous.RunID, record.ID)
+			}
+			index[record.IdempotencyDigest] = runKeyIndexEntry{RunID: record.ID, Fingerprint: record.RequestFingerprint}
+		}
+	}
 	now := time.Now().UTC()
 	for _, record := range existing {
 		if record.State != RunPending && record.State != RunRunning {
@@ -127,7 +146,7 @@ func NewRunManager(executor ResearchExecutor, store RunStore, maxParallel, maxAc
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &RunManager{executor: executor, store: store, active: make(map[string]context.CancelFunc), ctx: ctx, cancel: cancel, slots: make(chan struct{}, maxParallel), maxActive: maxActive, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &RunManager{executor: executor, store: store, active: make(map[string]context.CancelFunc), idempotency: index, ctx: ctx, cancel: cancel, slots: make(chan struct{}, maxParallel), maxActive: maxActive, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRecord, error) {
@@ -143,6 +162,8 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 	if err := validateRunRequest(request); err != nil {
 		return RunRecord{}, err
 	}
+	key := request.IdempotencyKey
+	if err := ValidateIdempotencyKey(key); err != nil {return RunRecord{}, err}
 	// Freeze caller-owned slices and portfolio pointers before async execution.
 	// JSON round-trip also rejects malformed/unserializable financial inputs
 	// before storing a task or invoking a paid provider.
@@ -155,16 +176,30 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 		return RunRecord{}, fmt.Errorf("restore research request snapshot: %w", err)
 	}
 	request = frozen
+	var keyDigest, requestFingerprint string
+	if key != "" {
+		keyHash := sha256.Sum256([]byte(key))
+		keyDigest = hex.EncodeToString(keyHash[:])
+		var err error
+		requestFingerprint, err = stableRequestFingerprint(request)
+		if err != nil {return RunRecord{}, err}
+	}
 	id, err := secureRunID()
 	if err != nil {
 		return RunRecord{}, err
 	}
 	now := m.now()
-	record := RunRecord{ID: id, Mode: request.Mode, Symbol: strings.TrimSpace(request.Input.Symbol), RequestedAsOf: request.Input.RequestedAsOf, State: RunPending, CreatedAt: now, Events: []RunEvent{{Seq: 1, Stage: "Run", Status: string(RunPending), At: now}}}
+	record := RunRecord{IdempotencyDigest:keyDigest, RequestFingerprint:requestFingerprint, ID: id, Mode: request.Mode, Symbol: strings.TrimSpace(request.Input.Symbol), RequestedAsOf: request.Input.RequestedAsOf, State: RunPending, CreatedAt: now, Events: []RunEvent{{Seq: 1, Stage: "Run", Status: string(RunPending), At: now}}}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
 		return RunRecord{}, ErrRunManagerClosed
+	}
+	if keyDigest != "" {
+		if previous, exists := m.idempotency[keyDigest]; exists {
+			if previous.Fingerprint != requestFingerprint {return RunRecord{}, ErrRunIdempotencyConflict}
+			return m.store.Get(ctx, previous.RunID)
+		}
 	}
 	if len(m.active) >= m.maxActive {
 		return RunRecord{}, ErrRunCapacity
@@ -177,10 +212,44 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 		return RunRecord{}, fmt.Errorf("persist new research run: %w", err)
 	}
 	runCtx, cancel := context.WithCancel(m.ctx)
+	if keyDigest != "" {m.idempotency[keyDigest] = runKeyIndexEntry{RunID:id, Fingerprint:requestFingerprint}}
 	m.active[id] = cancel
 	m.wg.Add(1)
 	go m.execute(runCtx, request, record, cancel)
 	return record, nil
+}
+
+// ValidateIdempotencyKey rejects long or unsafe external request identifiers.
+// The raw key is never persisted or emitted as part of a run.
+func ValidateIdempotencyKey(key string) error {
+	if key == "" {return nil}
+	if len(key)>128 || len(key)<8 {return errors.New("Idempotency-Key must be 8-128 ASCII characters")}
+	for _, c := range key {
+		if (c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='-'||c=='_'||c=='.'||c==':' {continue}
+		return errors.New("Idempotency-Key contains invalid characters")
+	}
+	return nil
+}
+
+// The API determines a fresh cutoff at submission. A retried HTTP request
+// must reuse the original run even though the wall clock has changed.
+// Exclude only generated cutoff timestamps; retain the evidence-window
+// duration and all caller-authored research constraints and account facts.
+func stableRequestFingerprint(request ResearchRequest) (string,error) {
+	window := request.Input.EventInput.Task.TimeRange.End.Sub(request.Input.EventInput.Task.TimeRange.Start)
+	canonical := request
+	canonical.IdempotencyKey = ""
+	canonical.Input.RequestedAsOf = time.Time{}
+	canonical.Input.EventInput.Task.AsOf = time.Time{}
+	canonical.Input.EventInput.Task.TimeRange.Start = time.Time{}
+	canonical.Input.EventInput.Task.TimeRange.End = time.Time{}
+	encoded,err := json.Marshal(struct{
+		Request ResearchRequest `json:"request"`
+		EventWindowNanos int64 `json:"event_window_nanos"`
+	}{Request:canonical,EventWindowNanos:int64(window)})
+	if err!=nil {return "",fmt.Errorf("fingerprint research request: %w",err)}
+	h := sha256.Sum256(encoded)
+	return hex.EncodeToString(h[:]),nil
 }
 
 func validateRunRequest(req ResearchRequest) error {
