@@ -3,6 +3,8 @@ name: Integration
 on:
   # Opt-in paid CI on ONE exact branch/commit; normal pushes never call providers.
   # To run, push one verified commit with message prefix [v1-gate].
+  # A normal push with all jobs skipped is NOT Hosted E2E acceptance evidence.
+  # Run the gated matrix only after the head commit has passed the regular Go CI.
   push:
     branches:
       - test/v1-integrated-acceptance
