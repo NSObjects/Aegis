@@ -200,6 +200,7 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		Symbol      string                   `json:"symbol"`
 		Mode        application.ResearchMode `json:"mode"`
 		MarketQuery string                   `json:"market_query,omitempty"`
+		RerunOf     string                   `json:"rerun_of,omitempty"`
 		Portfolio   *portfolio.Context       `json:"portfolio,omitempty"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
@@ -248,11 +249,13 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid research input", http.StatusBadRequest)
 		return
 	}
-	rec, err := h.runs.Submit(r.Context(), application.ResearchRequest{IdempotencyKey:key, Mode: payload.Mode, Input: input, Portfolio: payload.Portfolio})
+	rec, err := h.runs.Submit(r.Context(), application.ResearchRequest{IdempotencyKey:key, Mode: payload.Mode, Input: input, Portfolio: payload.Portfolio, RerunOf: payload.RerunOf})
 	if err != nil {
 		switch {
 		case errors.Is(err, application.ErrRunIdempotencyConflict):
 			http.Error(w, "Idempotency-Key is already bound to different research parameters", http.StatusConflict)
+		case errors.Is(err, application.ErrInvalidRerunSource):
+			http.Error(w, "invalid or unavailable rerun source", http.StatusBadRequest)
 		case errors.Is(err, application.ErrRunCapacity):
 			http.Error(w, "research capacity reached", http.StatusTooManyRequests)
 		case errors.Is(err, application.ErrRunManagerClosed):
