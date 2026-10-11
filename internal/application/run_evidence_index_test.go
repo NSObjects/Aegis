@@ -11,6 +11,7 @@ import (
 
 	eventagent "Aegis/internal/agent/event"
 	"Aegis/internal/research"
+	"Aegis/internal/portfolio"
 	"Aegis/internal/research/synthesis"
 )
 
@@ -55,7 +56,7 @@ func TestEvidenceIndexFromActualCompletedArtifactSurvivesRestart(t *testing.T) {
 	req := portfolioIndexFixture()
 	// This unit test directly indexes a synthetic typed result. It is not
 	// claiming that any provider source actually returned live documents.
-	req.Portfolio = explicitUnknownPortfolio()
+	req.Portfolio = &portfolio.Context{State: portfolio.StateNotProvided}
 	submitted, err := m.Submit(context.Background(), req)
 	if err != nil { t.Fatal(err) }
 	if submitted.EvidenceIndex != nil { t.Fatal("PENDING Run claims completed evidence") }
@@ -68,7 +69,7 @@ func TestEvidenceIndexFromActualCompletedArtifactSurvivesRestart(t *testing.T) {
 		!reflect.DeepEqual(idx.Events[0].DocumentIDs, []string{"doc-a", "doc-b"}) {
 		t.Fatalf("missing actual typed artifact identities: %#v", idx)
 	}
-	raw, err := json.Marshal(done)
+	raw, err := json.Marshal(idx)
 	if err != nil { t.Fatal(err) }
 	for _, forbidden := range []string{"https://", "api_key", "groundings", "quote", "source_url"} {
 		if strings.Contains(string(raw), forbidden) { t.Fatalf("unsafe metadata on Run: %s", raw) }
@@ -86,7 +87,7 @@ func TestEvidenceIndexPreservesNoEventVsMissingAndFailed(t *testing.T) {
 	store := newStore(t)
 	m := newMgr(t, &indexedPortfolioExecutor{status: eventagent.StatusNoEvent}, store, 1, 3)
 	req := portfolioIndexFixture()
-	req.Portfolio = explicitUnknownPortfolio()
+	req.Portfolio = &portfolio.Context{State: portfolio.StateNotProvided}
 	rec, err := m.Submit(context.Background(), req)
 	if err != nil { t.Fatal(err) }
 	done := awaitRun(t, m, rec.ID, RunCompleted)
@@ -110,7 +111,7 @@ func TestEvidenceIndexTamperingRejectedButLegacyStillReadable(t *testing.T) {
 	store := newStore(t)
 	m := newMgr(t, &indexedPortfolioExecutor{status: eventagent.StatusNormal}, store, 1, 2)
 	req := portfolioIndexFixture()
-	req.Portfolio = explicitUnknownPortfolio()
+	req.Portfolio = &portfolio.Context{State: portfolio.StateNotProvided}
 	rec, err := m.Submit(context.Background(), req)
 	if err != nil { t.Fatal(err) }
 	done := awaitRun(t, m, rec.ID, RunCompleted)
@@ -141,7 +142,7 @@ func TestEvidenceIndexTamperingRejectedButLegacyStillReadable(t *testing.T) {
 
 func TestEvidenceIndexRejectsAmbiguousOrMismatchedIdentity(t *testing.T) {
 	req := portfolioIndexFixture()
-	req.Portfolio = explicitUnknownPortfolio()
+	req.Portfolio = &portfolio.Context{State: portfolio.StateNotProvided}
 	runner := &indexedPortfolioExecutor{status: eventagent.StatusNormal}
 	res, err := runner.Run(context.Background(), req)
 	if err != nil { t.Fatal(err) }
