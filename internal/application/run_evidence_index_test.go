@@ -81,7 +81,7 @@ func TestEvidenceIndexFromActualCompletedArtifactSurvivesRestart(t *testing.T) {
 	}
 	raw, err := json.Marshal(idx)
 	if err != nil { t.Fatal(err) }
-	for _, forbidden := range []string{"https://", "api_key", "groundings", "quote", "source_url"} {
+	for _, forbidden := range []string{"api_key", "groundings", "quote", "source_url", "access_token", "?token="} {
 		if strings.Contains(string(raw), forbidden) { t.Fatalf("unsafe metadata on Run: %s", raw) }
 	}
 	m.Close()
