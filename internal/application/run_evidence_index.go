@@ -24,6 +24,8 @@ type RunEvidenceIndex struct {
 	EvidenceAsOf string `json:"evidence_as_of,omitempty"`
 	Events []RunEvidenceEvent `json:"events"`
 	DocumentIDs []string `json:"document_ids"`
+	// Present only when this run's Event Agent recorded canonical sources.
+	Documents []eventagent.CitedDocumentSource `json:"documents,omitempty"`
 }
 
 type RunEvidenceEvent struct {
@@ -115,6 +117,17 @@ func projectRunEvidenceIndex(raw json.RawMessage, mode ResearchMode, symbol stri
 	if len(allDocs) > 4096 { return nil, errors.New("too many indexed documents") }
 	sort.Slice(idx.Events, func(i,j int) bool { return idx.Events[i].ID < idx.Events[j].ID })
 	idx.DocumentIDs = sortedDocumentIDs(allDocs)
+	if len(ctx.CitedDocumentSources) != 0 {
+		if len(ctx.CitedDocumentSources) != len(idx.DocumentIDs) {
+			return nil, errors.New("event index source metadata does not cover cited documents")
+		}
+		for i, source := range ctx.CitedDocumentSources {
+			if source.DocumentID != idx.DocumentIDs[i] {
+				return nil, errors.New("event index source citation identity mismatch")
+			}
+		}
+		idx.Documents = append([]eventagent.CitedDocumentSource(nil), ctx.CitedDocumentSources...)
+	}
 	return idx, nil
 }
 

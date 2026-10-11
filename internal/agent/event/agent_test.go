@@ -343,6 +343,24 @@ func TestNewsEventAgentTwoRoundResearchProducesNormalContext(
 			result.Events[0].EvidenceDocumentIDs,
 		)
 	}
+	// These source records must be from the very canonical documents consumed
+	// by this execution, not from a later snapshot query or LLM-generated URLs.
+	if len(result.CitedDocumentSources) != 2 {
+		t.Fatalf("canonical cited source metadata missing: %#v", result.CitedDocumentSources)
+	}
+	byPublisher := map[string]CitedDocumentSource{}
+	for _, src := range result.CitedDocumentSources {
+		byPublisher[src.Publisher] = src
+		if src.VersionID == "" || len(src.ContentSHA256) != 64 ||
+			src.AvailableAt == nil || !src.AvailableAt.Equal(published) {
+			t.Fatalf("canonical source identity not preserved: %#v", src)
+		}
+	}
+	if byPublisher["issuer"].URL != "https://issuer.example/contract" ||
+		byPublisher["media"].URL != "https://media.example/contract" ||
+		!byPublisher["issuer"].IsPrimary {
+		t.Fatalf("original safe sources missing: %#v", byPublisher)
+	}
 }
 
 func TestNewsEventAgentUnsatisfiedResearchProducesInsufficientEvidence(

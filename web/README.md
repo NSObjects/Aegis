@@ -367,3 +367,19 @@ source URLs or document bodies. It does not assert original source
 availability, exact publication time for individual documents, or
 semantic proof of Bull/Bear claims. Sources and original content require
 separately archived, verified evidence. The page does not invent hyperlinks.
+
+
+## Original-source metadata on completed Event research
+
+For newly completed Portfolio Review Runs with referenced canonical sources,
+the existing evidence index displays publication/availability/first-seen
+timestamps, recorded publisher, canonical version ID, processed content SHA256
+and optionally a credential-free HTTPS source link. These are facts about
+the **same saved Event analysis**, not a fresh search for the URL. If an old Run
+has only document IDs, the workbench explicitly says source metadata is
+missing. `NO_EVENT`, FAILED, CANCELLED and DECISION modes must not invent it.
+
+An original URL is not a guaranteed current webpage or proof of independently
+audited claim accuracy. Links containing query parameters/tokens are omitted.
+The Go evidence snapshot store continues to own raw acquisition bytes; the
+Web metadata index never exposes raw source content or provider secrets.

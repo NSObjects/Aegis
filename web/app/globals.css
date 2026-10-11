@@ -763,3 +763,16 @@ svg { flex-shrink: 0; }
 .live-evidence-source-docs code{font-size:10px;padding:5px 7px;border:1px solid #365b5e;background:#143736;border-radius:6px}
 .live-evidence-source-docs span{font-size:11px;color:#9daec0}
 @media(max-width:720px){.live-evidence-source-index{margin-left:14px;margin-right:14px}.live-evidence-source-meta{grid-template-columns:1fr}}
+
+
+/* Canonical source metadata from this run, never a reconstructed source URL. */
+.live-evidence-source-records{display:grid;gap:8px;margin:15px 0}
+.live-evidence-source-records h4{margin:0;color:#c5eee1;font-size:12px}
+.live-evidence-source-records article{padding:13px;border:1px solid #36576a;border-radius:9px;background:#152c3e;min-width:0}
+.live-evidence-source-records dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 14px;margin:12px 0 0}
+.live-evidence-source-records dl div{min-width:0;display:grid;gap:5px}
+.live-evidence-source-records dt{font-size:10px;color:#8ba7b8}
+.live-evidence-source-records dd{font-size:11px;color:#d2e2ed;margin:0;overflow-wrap:anywhere}
+.live-evidence-source-records a{color:#78e0c6;text-decoration:underline;text-underline-offset:3px}
+.live-evidence-source-records code{overflow-wrap:anywhere;font-size:10px}
+@media(max-width:720px){.live-evidence-source-records dl{grid-template-columns:1fr}}

@@ -53,6 +53,16 @@ function completedEvidenceIndex(run) {
     requested_as_of: event.requested_as_of,
     ...(event.evidence_as_of ? { evidence_as_of: event.evidence_as_of } : {}),
     events, document_ids: [...new Set(events.flatMap(item => item.document_ids))].sort(),
+    // Synthetic captured source metadata; NEVER a real fetched document.
+    ...(events.length ? { documents: [{
+      document_id: "fixture-doc-1", version_id: "fixture-version-1",
+      content_sha256: "a".repeat(64), publisher: "FIXTURE_PUBLISHER_ONLY",
+      url: "https://example.org/fixture-document", source_type: "official",
+      authority: "issuer", is_primary: true,
+      published_at: "2026-10-10T12:00:00Z",
+      available_at: "2026-10-11T00:00:00Z",
+      first_seen_at: "2026-10-11T00:00:00Z",
+    }] } : {}),
   };
 }
 function metadata(run) {
