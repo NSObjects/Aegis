@@ -383,3 +383,11 @@ An original URL is not a guaranteed current webpage or proof of independently
 audited claim accuracy. Links containing query parameters/tokens are omitted.
 The Go evidence snapshot store continues to own raw acquisition bytes; the
 Web metadata index never exposes raw source content or provider secrets.
+
+## R1-14：结构化研究报告的可读简报层
+
+Live Run 完成后，默认先显示**研究结论、Go 研究经理原文摘要、风险门禁、关键依据、独立风险与未提供项**。独立的市场、技术字段只在来源确实存在时呈现，并标记“研究时点（非实时）”。
+
+完整原始 Market/Technical/Event/Fundamental/Bull-Bear/Manager/Intent/Risk/Portfolio/EvidenceLedger 仍可在「完整研究章节」逐节展开；原始 Typed Artifact JSON 导出、事件引用导航和 Agent 阶段事件不变。
+
+可读层仅从同一 Run 已投影的源字段中选取文字并归类，**没有新的 LLM 总结**，不承诺源模型判断正确，也不把缺失账户、缺行情当作零持仓或安全信号。长段落、移动端和标识码放入第二层审计视图，以结论→依据→风险→源数据的顺序阅读。
