@@ -10,6 +10,8 @@ const meanings: Record<string, string> = {
   REJECTED: "未通过门禁",
   BLOCKED: "门禁阻止",
   WATCH: "持续观察",
+  MONITOR: "继续跟踪",
+  INSUFFICIENT_CONTEXT: "研究上下文不足",
   AVOID: "暂不参与",
   CANDIDATE: "候选研究对象",
   RISK_OFF: "防御环境",
