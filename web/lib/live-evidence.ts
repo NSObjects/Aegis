@@ -100,17 +100,22 @@ export function readLiveEvidence(input: unknown): EvidenceInspectorData {
   }
 
   const argumentsList: EvidenceArgument[] = [];
-  const seen = new Set<string>();
+  // Reject every occurrence of a duplicate ID. Keeping the first occurrence
+  // would make an ambiguous Insight link appear to target one specific claim.
+  const idCounts = new Map<string, number>();
+  for (const raw of arr(ledger.arguments)) {
+    const id = str(obj(raw)?.id);
+    if (id) idCounts.set(id, (idCounts.get(id) ?? 0) + 1);
+  }
   let invalidArgumentCount = 0;
   for (const raw of arr(ledger.arguments)) {
     const source = obj(raw);
     const id = str(source?.id);
     const claim = str(source?.claim);
-    if (!id || !claim || seen.has(id)) {
+    if (!id || !claim || idCounts.get(id) !== 1) {
       invalidArgumentCount++;
       continue;
     }
-    seen.add(id);
     const challenges: EvidenceChallenge[] = arr(source?.challenges).flatMap(challengeRaw => {
       const challenge = obj(challengeRaw);
       const claim = str(challenge?.claim);
