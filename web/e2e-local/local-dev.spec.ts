@@ -36,3 +36,12 @@ test("zero-secret dev Web can save provider configuration without login", async 
   await page.getByRole("button", { name: "凭证设置" }).click();
   await expect(page.locator(".provider-settings-row").filter({ hasText: "DeepSeek" })).toContainText("已配置");
 });
+
+test("default local dev entry exposes the new operations overview rather than the legacy demo", async ({ page }) => {
+  await page.goto("/?view=overview");
+  await expect(page.getByRole("heading", { name: "研究任务总览" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "研究概览", exact: true })).toBeVisible();
+  const session = await page.request.get("/api/workbench/session");
+  expect((await session.json()).local_dev).toBe(true);
+  expect(await page.getByText("DEMO MODE", { exact: false }).count()).toBe(0);
+});
