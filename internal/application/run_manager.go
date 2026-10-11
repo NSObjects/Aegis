@@ -44,6 +44,44 @@ type RunEvent struct {
 	DurationMS int64     `json:"duration_ms,omitempty"`
 }
 
+// RunRequestSnapshot is a small, non-sensitive, immutable projection of the
+// submitted research input. It does not record query text, account holdings,
+// credentials, model parameters or the actual sources eventually retrieved.
+// SchemaVersion is this snapshot's schema, not a model/provider version.
+type RunRequestSnapshot struct {
+	SchemaVersion int `json:"schema_version"`
+	MarketQueryProvided bool `json:"market_query_provided"`
+	EventWindowStart *time.Time `json:"event_window_start,omitempty"`
+	EventWindowEnd *time.Time `json:"event_window_end,omitempty"`
+	EventPITSafe bool `json:"event_pit_safe"`
+	PreferredSourceTypes []string `json:"preferred_source_types,omitempty"`
+	MinDocuments int `json:"min_documents,omitempty"`
+	MinIndependentSources int `json:"min_independent_sources,omitempty"`
+	PortfolioState string `json:"portfolio_state,omitempty"`
+}
+
+// snapshotRunRequest runs on the already JSON-frozen input. Only individually
+// allowlisted fields may be persisted; never persist the original request.
+func snapshotRunRequest(req ResearchRequest) *RunRequestSnapshot {
+	task := req.Input.EventInput.Task
+	meta := &RunRequestSnapshot{
+		SchemaVersion: 1,
+		MarketQueryProvided: strings.TrimSpace(req.Input.MarketQuery) != "",
+		EventPITSafe: task.Requirements.PITSafe,
+		MinDocuments: task.Requirements.MinDocuments,
+		MinIndependentSources: task.Requirements.MinIndependentSources,
+	}
+	if !task.TimeRange.Start.IsZero() && !task.TimeRange.End.IsZero() {
+		start, end := task.TimeRange.Start, task.TimeRange.End
+		meta.EventWindowStart, meta.EventWindowEnd = &start, &end
+	}
+	for _, source := range task.Requirements.PreferredSourceTypes {
+		meta.PreferredSourceTypes = append(meta.PreferredSourceTypes, string(source))
+	}
+	if req.Portfolio != nil { meta.PortfolioState = string(req.Portfolio.State) }
+	return meta
+}
+
 // RunRecord stores metadata and exact typed workflow JSON, never a raw input
 // portfolio snapshot. Artifact exists only for completed runs.
 type RunRecord struct {
@@ -53,6 +91,7 @@ type RunRecord struct {
 	Mode          ResearchMode    `json:"mode"`
 	Symbol        string          `json:"symbol"`
 	RerunOf       string          `json:"rerun_of,omitempty"`
+	RequestSnapshot *RunRequestSnapshot `json:"request_snapshot,omitempty"`
 	RequestedAsOf time.Time       `json:"requested_as_of"`
 	State         RunState        `json:"state"`
 	CreatedAt     time.Time       `json:"created_at"`
@@ -183,6 +222,7 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 		return RunRecord{}, fmt.Errorf("restore research request snapshot: %w", err)
 	}
 	request = frozen
+	requestSnapshot := snapshotRunRequest(request)
 	var keyDigest, requestFingerprint string
 	if key != "" {
 		keyHash := sha256.Sum256([]byte(key))
@@ -196,7 +236,7 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 		return RunRecord{}, err
 	}
 	now := m.now()
-	record := RunRecord{IdempotencyDigest:keyDigest, RequestFingerprint:requestFingerprint, ID: id, Mode: request.Mode, Symbol: strings.TrimSpace(request.Input.Symbol), RerunOf: request.RerunOf, RequestedAsOf: request.Input.RequestedAsOf, State: RunPending, CreatedAt: now, Events: []RunEvent{{Seq: 1, Stage: "Run", Status: string(RunPending), At: now}}}
+	record := RunRecord{IdempotencyDigest:keyDigest, RequestFingerprint:requestFingerprint, ID: id, Mode: request.Mode, Symbol: strings.TrimSpace(request.Input.Symbol), RerunOf: request.RerunOf, RequestSnapshot: requestSnapshot, RequestedAsOf: request.Input.RequestedAsOf, State: RunPending, CreatedAt: now, Events: []RunEvent{{Seq: 1, Stage: "Run", Status: string(RunPending), At: now}}}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
