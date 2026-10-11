@@ -275,7 +275,16 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 	m.active[id] = cancel
 	m.wg.Add(1)
 	go m.execute(runCtx, request, record, cancel)
-	return record, nil
+	// Detach response metadata from the goroutine-owned persisted snapshot.
+	// A caller may mutate its response without changing a running research task.
+	returned := record
+	if returned.RequestSnapshot != nil {
+		copy := *returned.RequestSnapshot
+		copy.PreferredSourceTypes = append([]string(nil), copy.PreferredSourceTypes...)
+		returned.RequestSnapshot = &copy
+	}
+	returned.Events = append([]RunEvent(nil), record.Events...)
+	return returned, nil
 }
 
 // ValidateIdempotencyKey rejects long or unsafe external request identifiers.
