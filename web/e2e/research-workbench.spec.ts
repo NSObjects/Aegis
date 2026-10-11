@@ -107,7 +107,7 @@ test("Live Run permalink, refresh and browser back/forward restore the correct w
   await expect(page.locator(".live-run-fields")).toContainText(id);
 
   await page.getByRole("button", { name: "研究历史" }).click();
-  await expect(page).toHaveURL(/\\?view=history$/);
+  await expect(page).toHaveURL(/\?view=history$/);
   await expect(page.getByRole("heading", { name: "研究历史" })).toBeVisible();
 
   await page.goBack();
