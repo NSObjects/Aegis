@@ -4,6 +4,15 @@ import type { LiveMode, RunEvidenceIndex } from "@/lib/live-contract";
  * An audit of saved EventContext identities, not independent verification of
  * publisher authenticity or an archive/document download browser.
  */
+function isSafeSourceLink(raw: string): boolean {
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "https:" && Boolean(parsed.hostname) &&
+      !parsed.username && !parsed.password && !parsed.search && !parsed.hash &&
+      (!parsed.port || parsed.port === "443");
+  } catch { return false; }
+}
+
 export default function LiveEvidenceSourceIndex({
   index, mode,
 }: { index?: RunEvidenceIndex; mode: LiveMode }) {
@@ -34,7 +43,27 @@ export default function LiveEvidenceSourceIndex({
           </div>
         </article>)}
       </div>}
-      <p>仅从同次完成的 Go Typed Artifact 中提取事件 / 文档 ID。这里没有原文 URL、文档正文或独立的来源真实性认证；来源数量是研究工件给出的值，不代表已经对原文逐项审计。</p>
+      {index.documents?.length ? <div className="live-evidence-source-records">
+        <h4>本次实际引用的规范化来源元数据</h4>
+        {index.documents.map(source => <article key={source.document_id}>
+          <div className="live-evidence-source-event-title">
+            <strong>文档 <code>{source.document_id}</code></strong>
+            <span>{source.source_type || "来源类型未注明"} · {source.authority || "权威等级未注明"}</span>
+          </div>
+          <dl>
+            <div><dt>发布方</dt><dd>{source.publisher || "未记录"}</dd></div>
+            <div><dt>发布时间</dt><dd>{source.published_at || "未记录"}</dd></div>
+            <div><dt>可用时间（PIT）</dt><dd>{source.available_at || "未记录"}</dd></div>
+            <div><dt>首次观察时间</dt><dd>{source.first_seen_at || "未记录"}</dd></div>
+            <div><dt>规范化版本 ID</dt><dd><code>{source.version_id || "未记录"}</code></dd></div>
+            <div><dt>已处理正文 SHA256</dt><dd><code>{source.content_sha256 || "未记录"}</code></dd></div>
+            <div><dt>来源地址</dt><dd>{source.url && isSafeSourceLink(source.url)
+              ? <a href={source.url} target="_blank" rel="noopener noreferrer">访问记录中的来源地址 ↗</a>
+              : "未安全记录可访问地址"}</dd></div>
+          </dl>
+        </article>)}
+      </div> : index.document_ids.length > 0 ? <p>该次运行只有文档 ID，没有可追溯的规范化文档元数据；不使用当前源数据库补写历史。</p> : null}
+      <p>以上字段直接保留自本次分析引用的 CanonicalDocument。来源地址不保证今天仍可访问；哈希不是独立原文审计，也不证明具体论点真实。包含查询参数或认证信息的 URL 会被省略。</p>
     </>}
   </details>;
 }
