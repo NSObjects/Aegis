@@ -743,3 +743,23 @@ svg { flex-shrink: 0; }
 @media(max-width:1120px) {.run-overview-metrics {grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:780px) {.run-overview-hero {flex-direction:column;align-items:flex-start;padding:19px}.run-overview-metrics {grid-template-columns:repeat(2,minmax(0,1fr))}.run-overview-two-col {grid-template-columns:1fr}.run-overview-list-head {flex-direction:column;align-items:stretch}.run-overview-search {min-width:0}}
 @media(max-width:510px) {.run-overview-row {grid-template-columns:1fr 1fr;gap:10px;padding:11px 14px}.run-overview-action {justify-content:flex-start}.run-overview-metrics {gap:7px}.run-overview-kpi {padding:14px 11px}.run-overview-kpi strong {font-size:25px}.run-overview-hero h2 {font-size:20px}.run-overview-week {gap:4px}.run-overview-day small {font-size:8px}}
+
+
+/* Persisted event/document identity index: never an unverified source link. */
+.live-evidence-source-index{margin:0 20px 12px;border:1px solid #365b65;background:#122637;border-radius:10px;padding:0 14px;min-width:0}
+.live-evidence-source-index>summary{padding:13px 2px;color:#a9ebd8;cursor:pointer;font-weight:650;font-size:12px}
+.live-evidence-source-index>p{color:#9cb4c6;font-size:11px;line-height:1.8;margin:10px 2px 14px}
+.live-evidence-source-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:6px 0 14px}
+.live-evidence-source-meta>div{border:1px solid #345165;background:#142b3b;border-radius:8px;padding:10px 11px;display:grid;gap:6px;min-width:0}
+.live-evidence-source-meta small{color:#8facbf;font-size:10px}
+.live-evidence-source-meta strong{color:#dae9f2;font-size:11px;overflow-wrap:anywhere}
+.live-evidence-source-events{display:grid;gap:8px;margin-bottom:14px}
+.live-evidence-source-events article{border:1px solid #39556a;background:#152a3e;border-radius:8px;padding:12px;min-width:0}
+.live-evidence-source-event-title{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;font-size:11px}
+.live-evidence-source-event-title strong{font-size:11px;color:#e0f2fa}
+.live-evidence-source-event-title span,.live-evidence-source-events article>small{color:#a5bacc;font-size:10px}
+.live-evidence-source-event-title code,.live-evidence-source-docs code{overflow-wrap:anywhere;color:#a1e7d5}
+.live-evidence-source-docs{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
+.live-evidence-source-docs code{font-size:10px;padding:5px 7px;border:1px solid #365b5e;background:#143736;border-radius:6px}
+.live-evidence-source-docs span{font-size:11px;color:#9daec0}
+@media(max-width:720px){.live-evidence-source-index{margin-left:14px;margin-right:14px}.live-evidence-source-meta{grid-template-columns:1fr}}
