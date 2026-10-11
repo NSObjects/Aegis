@@ -403,3 +403,88 @@ func TestRunManagerStopsPaidWorkWhenStagePersistenceFails(t *testing.T) {
 		t.Fatal("research worker did not receive cancellation after stage persistence failure")
 	}
 }
+
+func TestRunManagerIdempotencyReusesRunAfterRestart(t *testing.T) {
+ store:=newStore(t)
+ ex:=&controlledRunExecutor{}
+ manager:=newMgr(t,ex,store,1,2)
+ req:=runFixture("600519.SH")
+ req.IdempotencyKey="browser-retry-key-0001"
+ first,err:=manager.Submit(context.Background(),req)
+ if err!=nil{t.Fatal(err)}
+ done:=awaitRun(t,manager,first.ID,RunCompleted)
+ if len(done.IdempotencyDigest)!=64 || len(done.RequestFingerprint)!=64 {
+  t.Fatal("idempotency metadata must be hashed and durable")
+ }
+ // HTTP derives a fresh PIT cutoff on each POST. Retrying the same payload
+ // must return the original run rather than paying for new model calls.
+ req.Input.RequestedAsOf=req.Input.RequestedAsOf.Add(time.Minute)
+ duplicate,err:=manager.Submit(context.Background(),req)
+ if err!=nil || duplicate.ID!=first.ID || ex.count()!=1 {
+  t.Fatalf("retry created another run: first=%s repeated=%s calls=%d err=%v",first.ID,duplicate.ID,ex.count(),err)
+ }
+ manager.Close()
+ restartedExecutor:=&controlledRunExecutor{}
+ restarted:=newMgr(t,restartedExecutor,store,1,2)
+ duplicate,err=restarted.Submit(context.Background(),req)
+ if err!=nil || duplicate.ID!=first.ID || restartedExecutor.count()!=0 {
+  t.Fatalf("restart did not reuse durable run: run=%s calls=%d err=%v",duplicate.ID,restartedExecutor.count(),err)
+ }
+ req.Input.MarketQuery="different research question"
+ if _,err=restarted.Submit(context.Background(),req);!errors.Is(err,ErrRunIdempotencyConflict) {
+  t.Fatalf("same key with different request must conflict, got %v",err)
+ }
+ req.IdempotencyKey="browser-new-run-0002"
+ next,err:=restarted.Submit(context.Background(),req)
+ if err!=nil || next.ID==first.ID {t.Fatalf("new key must create a new run: %+v %v",next,err)}
+ _=awaitRun(t,restarted,next.ID,RunCompleted)
+ if restartedExecutor.count()!=1 {t.Fatalf("new research should run exactly once: %d",restartedExecutor.count())}
+}
+
+func TestRunManagerConcurrentDuplicateKeyOnlyExecutesOnce(t *testing.T){
+ store:=newStore(t)
+ ex:=&controlledRunExecutor{started:make(chan struct{},1),release:make(chan struct{})}
+ manager:=newMgr(t,ex,store,1,2)
+ req:=runFixture("600519.SH")
+ req.IdempotencyKey="concurrent-request-123"
+ first,err:=manager.Submit(context.Background(),req)
+ if err!=nil{t.Fatal(err)}
+ <-ex.started
+ var wg sync.WaitGroup
+ results:=make(chan RunRecord,12)
+ errs:=make(chan error,12)
+ for i:=0;i<12;i++{
+  wg.Add(1)
+  go func(){
+   defer wg.Done()
+   result,e:=manager.Submit(context.Background(),req)
+   results<-result
+   errs<-e
+  }()
+ }
+ wg.Wait();close(results);close(errs)
+ for e:=range errs{if e!=nil{t.Fatalf("duplicate error: %v",e)}}
+ for r:=range results{if r.ID!=first.ID{t.Fatalf("duplicate run id %q; expected %q",r.ID,first.ID)}}
+ close(ex.release)
+ _=awaitRun(t,manager,first.ID,RunCompleted)
+ if ex.count()!=1{t.Fatalf("duplicate requests caused %d paid calls",ex.count())}
+}
+
+func TestRunManagerIdempotencyRejectsInvalidKeyBeforeExecution(t *testing.T) {
+ manager:=newMgr(t,&controlledRunExecutor{},newStore(t),1,2)
+ for _,key:=range []string{"short","unexpected whitespace",strings.Repeat("a",129),"ü-invalid-key"}{
+  req:=runFixture("600519.SH")
+  req.IdempotencyKey=key
+  if _,err:=manager.Submit(context.Background(),req);err==nil{t.Fatalf("unsafe key %q accepted",key)}
+ }
+ records,err:=manager.List(context.Background())
+ if err!=nil||len(records)!=0{t.Fatalf("invalid key persisted run: %+v, %v",records,err)}
+}
+
+func TestFileStoreRejectsIncompleteIdempotencyMetadata(t *testing.T) {
+ store:=newStore(t)
+ r:=RunRecord{ID:strings.Repeat("a",32),Mode:ModeDecision,Symbol:"600519.SH",RequestedAsOf:time.Now(),CreatedAt:time.Now(),State:RunPending,IdempotencyDigest:strings.Repeat("0",64)}
+ if err:=store.Save(context.Background(),r);err==nil{t.Fatal("incomplete hash fields accepted")}
+ r.RequestFingerprint=strings.Repeat("z",64)
+ if err:=store.Save(context.Background(),r);err==nil{t.Fatal("malformed fingerprint accepted")}
+}

@@ -61,6 +61,36 @@ current live research cutoff and keeps the original CLI PIT evidence task
 parameters (lookback is configured server-side). There is **no arbitrary
 historical-as-of HTTP parameter** in this first slice.
 
+### Retry-safe Run creation
+
+The optional `Idempotency-Key` header on `POST /api/v1/research/runs` is
+recommended for the real Web client. Use a freshly generated opaque 8–128
+character ASCII key (letters, digits, `_`, `-`, `.`, `:`) for each
+**intended new** research request. Preserve the same key if the HTTP response
+is lost and the client retries the **same** request.
+
+- Matching key and request identity return the original Run ID, even across
+  process restart or while the original study is still running. No second
+  provider workflow starts.
+- A reused key with different symbol, mode, query, account facts or evidence
+  lookback returns HTTP `409` without invoking providers.
+- A new research attempt, including an intentional rerun of the same stock,
+  **requires a new key**.
+- Auto-generated research cutoff timestamps do not cause retry fingerprint
+  mismatches. The original run retains its original cutoff, never a newer
+  silently refreshed snapshot.
+- Raw keys are not stored. Private RunStore files contain only SHA-256 key
+  digests and request fingerprints; GET/list API responses remove both.
+  This is **one-process** idempotency, not a cross-node guarantee.
+
+```sh
+curl -sS -X POST http://127.0.0.1:8686/api/v1/research/runs \
+  -H "Authorization: Bearer $AEGIS_WEB_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: study-600519-20261011-001' \
+  -d '{"symbol":"600519.SH","portfolio":{"state":"NOT_PROVIDED"}}'
+```
+
 ### Stage stream / reconnect
 
 The SSE stream replays persisted stage events from the beginning unless the

@@ -12,9 +12,9 @@
 
 **现在：R1 — Web 研究工作台（R0 V1 内核已完成验收）。**
 
-**下一项：R1-01 — 核实现有 `internal/application` Application Service 与 CLI 共享完整正式研究入口，补齐缺口后进入 R1-02 ResearchRun 生命周期。**
+**下一项：R1-02 — 验收现有 ResearchRun 生命周期，完成请求幂等保护及其重启/并发回归；之后复核 R1-03 持久化能力。**
 
-**R0 Exit Gate：已满足。** 不再重复开发多 Agent 内核；R1-01 先复核已存在的 `internal/application/research_service.go`、`cmd/aegis/main.go` 与现有 HTTP/任务能力，已经满足的验收不重复实现。
+**R0 Exit Gate：已满足。R1-01 已核实。** `internal/application/research_service.go` 和 `live_factory.go` 统一装配与执行路径，CLI `cmd/aegis/main.go`、HTTP `cmd/aegis-web/main.go` 都复用此入口；现有 `research_service_test.go` 验证 typed 输出及原 CLI JSON 形状，V1 Hosted 验证正式 CLI。R1-02 的重复提交保护在本阶段补齐；不重复搭建 Eino Graph。
 
 **开发优先级已确认：研究工作台 > 对话与研究历史 > 研究发现/持续跟踪 > 独立验证；组合级仓位管理是独立的大型后续阶段 R7，**绝不是 R1～R6 的前置条件，也不能因为它尚未实现而挡住 Web 上线。已有 Risk/Portfolio 审查功能照常展示，但不要称之为已完成的动态仓位系统。
 
@@ -110,7 +110,7 @@ R1 不包含 Watchlist 智能扫描（R3）、自动监控（R4）、研究 Memo
 
 ### 按顺序执行的开发任务
 
-- [ ] **R1-01 共用 Application Service（V1 后第一项）**
+- [x] **R1-01 共用 Application Service（已核实 main 现有实现）**
   - 复核 `cmd/aegis/main.go` 与现有 Research/Portfolio Workflow，把通用配置、依赖装配和研究执行抽离为单一应用入口；CLI 只负责解析命令与输出。不得复制 Eino Graph。
   - **验收**：Go 测试直接调用 Application Service 与 CLI 获得相同的 typed Artifact/风险审查结果；原 CLI 测试保持通过。
 - [ ] **R1-02 ResearchRun 任务生命周期**

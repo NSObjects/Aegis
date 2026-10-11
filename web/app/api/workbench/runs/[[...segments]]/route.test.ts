@@ -17,7 +17,7 @@ function setup() {
   if (!config) throw Error("invalid unit test env");
   return config;
 }
-function request(path: string, { method = "GET", authenticated = true, originHeader = true, body, lastEventId }: { method?: string; authenticated?: boolean; originHeader?: boolean; body?: string; lastEventId?: string } = {}) {
+function request(path: string, { method = "GET", authenticated = true, originHeader = true, body, lastEventId, idempotencyKey }: { method?: string; authenticated?: boolean; originHeader?: boolean; body?: string; lastEventId?: string; idempotencyKey?: string } = {}) {
   const headers = new Headers();
   if (authenticated) headers.set("cookie", `${COOKIE_NAME}=${newSession(setup())}`);
   if (method !== "GET" && originHeader) {
@@ -25,6 +25,7 @@ function request(path: string, { method = "GET", authenticated = true, originHea
     headers.set("sec-fetch-site", "same-origin");
   }
   if (lastEventId !== undefined) headers.set("last-event-id", lastEventId);
+  if (idempotencyKey !== undefined) headers.set("idempotency-key", idempotencyKey);
   if (body) headers.set("content-type", "application/json");
   return new NextRequest(`${origin}/api/workbench/runs${path}`, { method, headers, body });
 }
@@ -77,6 +78,15 @@ describe("authenticated Next.js ResearchRun BFF", () => {
     const [, opts] = fetchSpy.mock.calls[0];
     expect(JSON.parse(opts.body)).toEqual(payload);
     expect(opts.redirect).toBe("manual");
+  });
+  it("forwards only a validated Idempotency-Key on new research requests", async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ run_id: runID, state: "PENDING" }), { status: 202 }));
+    const good = await POST(request("", { method: "POST", body: '{"symbol":"600519.SH"}', idempotencyKey: "request-retry-001" }), params());
+    expect(good.status).toBe(202);
+    expect((fetchSpy.mock.calls[0][1].headers as Headers).get("Idempotency-Key")).toBe("request-retry-001");
+    const invalid = await POST(request("", { method: "POST", body: '{"symbol":"600519.SH"}', idempotencyKey: "bad key" }), params());
+    expect(invalid.status).toBe(400);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
   it("streams ordered SSE without buffering and forwards numeric replay cursor", async () => {
     const sse = 'id: 7\nevent: research_stage\ndata: {"seq":7,"stage":"Event","status":"DONE","at":"2026-10-10T12:00:00Z"}\n\n';
