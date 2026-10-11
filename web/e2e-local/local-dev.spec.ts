@@ -16,7 +16,9 @@ test("zero-secret loopback Live Web opens without login and can run a task", asy
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 20_000 });
-  await expect(page.locator(".live-brief-lead")).toContainText("PROTOCOL_FIXTURE_ONLY", { timeout: 20_000 });
+  await expect(page.locator(".live-brief-lead")).toContainText("FIXTURE_ONLY_MANAGER_NO_RESEARCH", { timeout: 20_000 });
+  await page.locator("#chapter-synthesis summary").click();
+  await expect(page.locator("#report-synthesis")).toContainText("PROTOCOL_FIXTURE_ONLY");
 });
 
 test("zero-secret dev Web can save provider configuration without login", async ({ page }) => {
