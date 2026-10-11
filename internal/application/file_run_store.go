@@ -74,6 +74,9 @@ func checkRunRecord(record RunRecord) error {
 			}
 		}
 	}
+	if record.RerunOf != "" && (!validRunID(record.RerunOf) || record.RerunOf == record.ID) {
+		return errors.New("invalid rerun provenance")
+	}
 	if record.Mode != ModeDecision && record.Mode != ModePortfolio {
 		return errors.New("invalid research run mode")
 	}
