@@ -94,6 +94,11 @@ test("completed portfolio source IDs stay attached to the original historical Ru
   await panel.locator("summary").click();
   await expect(panel).toContainText("fixture-comparison-event-1");
   await expect(panel).toContainText("fixture-doc-1");
+  await expect(panel).toContainText("FIXTURE_PUBLISHER_ONLY");
+  await expect(panel).toContainText("2026-10-11T00:00:00Z");
+  await expect(panel).toContainText("fixture-version-1");
+  await expect(panel.locator(".live-evidence-source-records a")).toHaveAttribute("href", "https://example.org/fixture-document");
+  await expect(panel.locator(".live-evidence-source-records a")).toHaveAttribute("rel", "noopener noreferrer");
   await expect(panel).toContainText("文档 ID");
   await expect(panel.locator("a")).toHaveCount(0);
   await page.reload();
@@ -101,6 +106,7 @@ test("completed portfolio source IDs stay attached to the original historical Ru
   await expect(panel.locator("summary")).toContainText("已记录");
   await panel.locator("summary").click();
   await expect(panel).toContainText("fixture-doc-1");
+  await expect(panel).toContainText("FIXTURE_PUBLISHER_ONLY");
 });
 
 test("source index differentiates explicit NO_EVENT from failed research", async ({ page }) => {
