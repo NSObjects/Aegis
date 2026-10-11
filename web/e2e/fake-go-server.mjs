@@ -44,9 +44,45 @@ function metadata(run) {
   return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}) };
 }
 function report(run) {
+  // Synthetic protocol values only: verify UI maps Go JSON paths without
+  // implying that any finance provider, model or actual account was queried.
   return {
-    research_artifact: { symbol: run.symbol, synthesis: { summary: "PROTOCOL_FIXTURE_ONLY — simulated research artifact for browser contract testing", agreements: [], conflicts: [], risks: [] } },
-    portfolio_review: { trade_intent: { status: "MONITOR" }, evidence_ledger: { entries: [] } },
+    research_artifact: {
+      symbol: run.symbol,
+      synthesis: {
+        summary: "PROTOCOL_FIXTURE_ONLY — synthetic research synthesis for browser contract testing",
+        agreements: [{ claim: "FIXTURE_MARKET_AGREEMENT", references: [{ domain: "MARKET" }] }],
+        conflicts: [],
+        risks: ["FIXTURE_NO_LIVE_MARKET_QUOTE"],
+      },
+      market: { as_of: "20261009", regime: "MIXED", advance_count: 0, decline_count: 2,
+        turnover: 0, evidence: ["FIXTURE_MARKET_ONLY"], risk: ["no provider"] },
+      technical: { symbol: run.symbol, requested_as_of: "20261011", effective_as_of: "20261009",
+        last_trade_date: "20261009", status: "NO_DATA", returns: {}, moving_averages: {},
+        momentum: { macd: {} }, volume: {}, evidence: [], risk: [] },
+      event: { symbol: run.symbol, requested_as_of: "2026-10-11T00:00:00Z",
+        evidence_as_of: "2026-10-11T00:05:00Z", status: "NO_EVENT", events: [] },
+    },
+    portfolio_review: {
+      research_plan: { symbol: run.symbol, conclusion: "INSUFFICIENT_EVIDENCE",
+        summary: "FIXTURE_ONLY_MANAGER_NO_RESEARCH",
+        opportunities: [], risks: [], unresolved_argument_ids: ["fixture-a1"], trading_constraints: [] },
+      debate_state: { symbol: run.symbol, turns: [{ round: 1, side: "BULL",
+        thesis: "FIXTURE_BULL_ONLY", arguments: [{
+          id: "fixture-a1", claim: "FIXTURE_UNRESOLVED_ARGUMENT", references: [{ domain: "MARKET" }],
+        }], rebuttals: [] }] },
+      evidence_ledger: { symbol: run.symbol, conclusion: "INSUFFICIENT_EVIDENCE",
+        arguments: [{ id: "fixture-a1", side: "BULL", round: 1, claim: "FIXTURE_UNRESOLVED_ARGUMENT",
+          references: [{ domain: "MARKET" }], disposition: "UNRESOLVED" }], insights: [] },
+      trade_intent: { symbol: run.symbol, status: "MONITOR", thesis: "FIXTURE_NOT_A_TRADE",
+        evidence: [], risk: [] },
+      risk_context: { symbol: run.symbol, assessment: "INSUFFICIENT_CONTEXT",
+        summary: "FIXTURE_MISSING_ACCOUNT_INFORMATION", findings: [], constraints: [],
+        unresolved: [{ claim: "FIXTURE_ACCOUNT_UNKNOWN" }] },
+      portfolio_decision: { symbol: run.symbol, disposition: "REVIEW_REQUIRED",
+        reason_code: "ACCOUNT_DATA_ABSENT", summary: "FIXTURE_ACCOUNT_UNKNOWN",
+        portfolio_state: "NOT_PROVIDED", risk_assessment: "INSUFFICIENT_CONTEXT" },
+    },
     final_risk_gate: { disposition: "REVIEW_REQUIRED", reason: "FIXTURE_NO_REAL_ACCOUNT" },
   };
 }
