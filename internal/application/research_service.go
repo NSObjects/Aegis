@@ -36,6 +36,9 @@ type PortfolioRunner interface {
 // ResearchRequest deliberately uses the existing typed research and portfolio
 // contracts. HTTP DTOs, file inputs and queue metadata belong to adapters.
 type ResearchRequest struct {
+	// IdempotencyKey belongs to the request adapter; never forward it to the LLM,
+	// serialize it in a provider payload, or include it in a workflow artifact.
+	IdempotencyKey string `json:"-"`
 	Mode      ResearchMode
 	Input     research.Input
 	Portfolio *portfolio.Context
