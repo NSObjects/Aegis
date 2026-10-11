@@ -86,9 +86,9 @@ describe("Live EvidenceLedger identity navigation", () => {
       ...model.portfolio_review.evidence_ledger.arguments[0], claim: "冲突论点",
     });
     const read = readLiveEvidence(model);
-    expect(read.invalidArgumentCount).toBe(1);
-    expect(read.arguments).toHaveLength(2);
-    expect(read.arguments[0].claim).toBe("多头主张");
+    expect(read.invalidArgumentCount).toBe(2);
+    expect(read.arguments).toHaveLength(1);
+    expect(read.arguments[0].id).toBe("bear-1");
   });
 
   it("never treats a numeric source count or metadata as a source URL", () => {
