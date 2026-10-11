@@ -25,6 +25,10 @@ func TestPublicRunKeepsSafeInputProvenanceWithoutPrivatePayloads(t *testing.T) {
 			MinDocuments: 1, MinIndependentSources: 1,
 			PortfolioState: "NOT_PROVIDED",
 		},
+		ModelProvenance: &application.RunModelProvenance{
+			SchemaVersion: 1, ConfigFingerprint: strings.Repeat("a", 64),
+			Bindings: []application.ModelRoleBinding{{Role: "market", Profile: "default", Provider: "deepseek", Model: "deepseek-chat"}},
+		},
 		Events: []application.RunEvent{{Seq: 1, Stage: "Run", Status: "PENDING", At: cutoff}},
 	}
 	safe := publicRun(rec)
@@ -38,5 +42,10 @@ func TestPublicRunKeepsSafeInputProvenanceWithoutPrivatePayloads(t *testing.T) {
 		safe.RequestSnapshot.PortfolioState != "NOT_PROVIDED" ||
 		safe.RequestSnapshot.EventWindowStart == nil {
 		t.Fatalf("public Run lost explicit safe provenance: %#v", safe.RequestSnapshot)
+	}
+	if safe.ModelProvenance == nil || safe.ModelProvenance.SchemaVersion != 1 ||
+		safe.ModelProvenance.Bindings[0].Model != "deepseek-chat" ||
+		!strings.Contains(string(b), "config_fingerprint") {
+		t.Fatalf("public Run lost nonsecret actual model identity: %s", b)
 	}
 }

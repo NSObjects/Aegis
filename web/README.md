@@ -276,3 +276,18 @@ Live Web 侧边栏「研究对比」、历史页「对比历史研究」和已�
 - 本 PR 的 Browser E2E 使用明确标记的 `PROTOCOL_FIXTURE_ONLY` 两组 Go 形状样本，并断言刷新/URL、身份/终态保护、数据和报告的对应关系。该 fixture 不是金融数据/实测研究。
 
 下一步可在 Go 保存研究输入来源/模型配置版本及源数据版本后，增加有可比性证据的研究差异解释，不从 Web 推断缺失背景。
+
+
+## R1-03: executed model configuration identity
+
+Completed or running Live Run details show **本次运行模型配置** when the Go
+graph factory has successfully constructed the model dependencies and
+persisted its actual role/profile/provider/model mapping. The panel shows
+a deterministic mapping fingerprint for comparing configurations between
+runs. It is **not** the verified upstream provider model version; use it
+to audit configured model identity, not to claim reproducible remote inference.
+
+Old records, or runs whose graph could not initialize, show **未记录**.
+No API keys, endpoints, prompt text or portfolio holdings are included.
+This complements (but does not replace) the submitted-input snapshot and
+the event/document evidence sources shown in individual research artifacts.

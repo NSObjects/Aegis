@@ -193,3 +193,28 @@ remain separate R1-03 work. Older records without `request_snapshot` are
 still readable and must be shown as missing historical metadata instead of
 being reconstructed from today's configuration. The Run artifact has its
 independent version/checksum; do not confuse it with this snapshot schema.
+
+
+### R1-03 executed model graph identity (schema v1)
+
+New Run metadata can include `model_provenance` **after** the live Go
+`NewLiveResearchService` successfully constructs its graph (not at Submit).
+The RunManager persists it **before** the paid workflow begins; it remains
+available for COMPLETED, FAILED or CANCELLED runs as long as graph
+construction actually succeeded. Older runs and failures before
+initialization omit the field without inventing a version.
+
+`schema_version: 1`, `config_fingerprint`, and `bindings` each containing
+`role`, `profile`, `provider`, `model` come from the **same in-memory model
+configuration** used by that graph. The fingerprint is a deterministic SHA256
+of precisely these ordered role bindings, **not** a whole-file hash. Raw API
+keys, API key environment variable names, BaseURLs, header secrets, prompts,
+and portfolio details are **not serialized** in model provenance.
+
+Configured `model` is the API model ID, not an independently verified
+provider revision. This metadata cannot prove which model artifact the
+remote provider deployed or guarantee the LLM actually returned an answer.
+The deterministic data-source/document provenance index remains an
+independent R1-03 deliverable. API `GET /runs/:id` and `GET /runs`
+include this metadata as optional fields, while artifact JSON remains
+on the authorized completed-only artifact endpoint.
