@@ -1,17 +1,67 @@
-# Aegis Web · Research Workspace (mock-first)
+# Aegis Web · Live Research Workspace
 
-Standalone Next.js App Router UI living in `web/`, intentionally isolated from the Go/Eino core.
+The **real Go-connected Live research workbench is the default**. The old
+synthetic demo is now explicitly opt-in (`npm run dev:demo` /
+`AEGIS_WEB_MODE=demo`). The modes never mix: a demo chart is not real data.
 
-## Run locally
+## Local quick start (Live, no authentication on loopback only)
 
-Requires Node.js >= 20.9 and npm. From the repository root:
+Requires Go 1.26, Node.js >= 20.9 and npm, two terminal windows and the latest
+`main` branch. From the repository root:
 
 ```bash
+# Terminal 1: Go research API (NOT the browser UI)
+go run ./cmd/aegis-web -dev -listen 127.0.0.1:8686
+```
+
+```bash
+# Terminal 2: Next.js browser UI
 cd web
 npm install
 npm run dev
-# http://localhost:3000
+# Open http://127.0.0.1:3000/?view=overview
 ```
+
+The local `npm run dev` enables `AEGIS_WEB_MODE=live` and
+`AEGIS_WEB_DEV_MODE=1` **only** in Next.js development. It binds the UI
+to loopback and uses the Go loopback API URL by default. `-dev` on Go
+also requires a literal loopback address and never makes this setup suitable
+for public or LAN exposure. Settings can be saved locally without entering
+Web access passwords or Go API bearer tokens. **Provider credentials are
+still required to run paid/real research**; viewing the Web does not invoke
+an LLM.
+
+If your already-running Go service is listening on a different port, provide
+that specific URL to the Next.js process:
+
+```bash
+cd web
+AEGIS_WEB_API_URL=http://127.0.0.1:51833 npm run dev
+```
+
+**The Go server is API-only:** opening `http://127.0.0.1:8686`
+(or `51833`) in the browser does not display the workbench. Open the
+Next.js URL printed by `npm run dev`; if port 3000 is occupied, stop the
+old Next.js process or use its displayed port. After changing modes,
+restart Next.js. On an older Git checkout run `git pull` before starting.
+
+To intentionally open the **old demo-only UI**, run:
+
+```bash
+cd web
+npm run dev:demo
+```
+
+Production `npm run build && npm run start` defaults to Live mode too,
+but remains **fail-closed without proper server-side API token, Web
+password and session-signing secret**. Never expose development's loopback
+no-auth configuration to the network.
+
+## Historical mock-first development notes
+
+The original UI was built as a separate mock-first slice. The following
+sections describe that earlier phase and are not the default launch path
+today. The demo is still available with `npm run dev:demo`.
 
 Static checks after installing dependencies:
 
@@ -22,7 +72,7 @@ npm run test
 npm run build
 ```
 
-**This PR ships a mock frontend only**. All price paths, stock information, research opinions, research stages, evidence and history are **synthetic demo data** — not market quotes, not an LLM output and not financial advice. The app prominently labels the mode in its UI. It only persists dummy demo task state in localStorage, not financial or account data. Clicking "开始演示研究" simulates progress locally and does not start Go agents or query APIs. Each simulated task has its own status/Run ID, and can be cancelled, retried, or opened from history. Switch the scenario picker to simulate an Event provider failure; the UI deliberately hides reports for failed/cancelled runs. Run history is stored in browser localStorage (demo-only, last 50 entries); unfinished timers are marked failed on refresh to avoid implying server persistence.
+**The explicit `dev:demo` mode renders a mock frontend only**. All price paths, stock information, research opinions, research stages, evidence and history are **synthetic demo data** — not market quotes, not an LLM output and not financial advice. The app prominently labels the mode in its UI. It only persists dummy demo task state in localStorage, not financial or account data. Clicking "开始演示研究" simulates progress locally and does not start Go agents or query APIs. Each simulated task has its own status/Run ID, and can be cancelled, retried, or opened from history. Switch the scenario picker to simulate an Event provider failure; the UI deliberately hides reports for failed/cancelled runs. Run history is stored in browser localStorage (demo-only, last 50 entries); unfinished timers are marked failed on refresh to avoid implying server persistence.
 
 ## Visual & component foundation
 
@@ -31,7 +81,7 @@ npm run build
 - `components.json` is prepared for importing official `shadcn/ui` components (`npx shadcn@latest add ...`) as real interaction needs emerge; this first slice does not require a component registry download.
 - Responsive shell, usable research view, interactive demo run, stock switching, research stage inspection, evidence panel, history table, provider settings status, chart range switch and JSON export.
 
-## Go integration hand-off (not implemented yet)
+## Original Go integration hand-off (implemented in Live mode)
 
 `lib/research-contract.ts` describes the frontend-facing boundary. When the Go API is ready, introduce an HTTP/SSE adapter behind `ResearchGateway` without replacing UI components. Server-side Go/Eino remains the only source of validated financial artifacts.
 
