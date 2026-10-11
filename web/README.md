@@ -211,3 +211,26 @@ Live 工作台从 URL 恢复当前页面和服务端 Run：
 - Go 在私有 RunStore 中持久化原任务 ID，并通过新 Run 的元数据返回 `rerun_of`；历史刷新/重启后仍可从新任务回到来源任务。来源任务内容不被覆盖。
 - 任务未到终态不能再次研究。失败/取消任务不显示伪造报告；新任务是否成功只由新的 Go 运行状态决定。
 - 这不是历史回放功能，也不是“精确复用原参数”：原始研究请求内容和旧账户事实不会由 Web 复制。当前接口仅研究当前时点；历史 PIT 重放属于后续独立工作。
+
+
+## Live 证据检查器（R1-10 增量）
+
+Portfolio Review 的 `COMPLETED` 报告下方提供交互式 **论点与证据检查器**，
+仅阅读这次运行的 `portfolio_review.evidence_ledger` 和
+`research_artifact.event.events`，不请求第二次模型推理：
+
+- 选择原始 Bull/Bear 论点，查看 Ledger 的 `id`、`side`、
+  `disposition`、领域引用与被反驳记录。
+- 只有明确的 `insight.argument_ids` 才产生研究经理 → 论点的导航链接；
+  `argument_reference_audits` 只代表引用重叠，不证明语义蕴含。
+- EVENT 引用仅在具体 `event_id` 能在本次 Event 工件中唯一匹配时
+  展示该事件的原有标题、事实、时间、来源数量和文档 ID；仅有
+  `domain: EVENT`、缺失或重复 ID 不会虚构事件来源。
+- 领域引用与证据文档 ID **并非外部原文链接**；没有真实 URL 时不造链接。
+  未返回 Ledger、没有反驳或没有明确 Insight 链接时均明确说明。
+- 该增量不改变 ResearchRun API、研究结果、Go 校验规则或原始 JSON。
+  它不包含完整的来源原文跳转 / 历史对比验收，因此不代表 R1-10 已完成。
+
+验证：`npm run test` 包含引用缺失、重复事件 ID、重复论点 ID、
+Manager 显式关联与无数据契约；`npm run e2e` 使用合成 Go 协议 fixture
+测试浏览器选择、恢复历史和取消任务不显示证据检查器。
