@@ -59,6 +59,11 @@ type RunRecord struct {
 	FinishedAt    *time.Time      `json:"finished_at,omitempty"`
 	FailureCode   string          `json:"failure_code,omitempty"`
 	Artifact      json.RawMessage `json:"artifact,omitempty"`
+	// ArtifactVersion is the version of Aegis's persisted result envelope,
+	// not a claim about the provider's model version.
+	// Zero identifies pre-R1-03 legacy run records.
+	ArtifactVersion int `json:"artifact_version,omitempty"`
+	ArtifactSHA256 string `json:"artifact_sha256,omitempty"`
 	Events        []RunEvent      `json:"events,omitempty"`
 }
 
@@ -271,6 +276,18 @@ func validateRunRequest(req ResearchRequest) error {
 	return nil
 }
 
+// artifactDigest uses canonical JSON bytes so changes in insignificant
+// whitespace cannot invalidate a previously persisted result.
+func artifactDigest(raw json.RawMessage) string {
+	var canonical strings.Builder
+	// json.Marshal compacts valid RawMessage and retains field ordering.
+	compact, err := json.Marshal(raw)
+	if err != nil { return "" }
+	canonical.Write(compact)
+	sum := sha256.Sum256([]byte(canonical.String()))
+	return hex.EncodeToString(sum[:])
+}
+
 func secureRunID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -302,6 +319,13 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		record.State = state
 		record.FinishedAt = &done
 		record.Artifact = output
+		if state == RunCompleted {
+			record.ArtifactVersion = 1
+			record.ArtifactSHA256 = artifactDigest(output)
+		} else {
+			record.ArtifactVersion = 0
+			record.ArtifactSHA256 = ""
+		}
 		record.FailureCode = code
 		// The store is authoritative. A failed disk write leaves prior state
 		// for process-interrupted recovery and cannot claim completion.

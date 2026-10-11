@@ -107,6 +107,9 @@ func TestRunManagerSubmitDurableResultAndRestart(t *testing.T) {
 	if ex.count() != 1 || done.StartedAt == nil || done.FinishedAt == nil || done.FailureCode != "" {
 		t.Fatalf("bad completed run %#v", done)
 	}
+	if done.ArtifactVersion != 1 || len(done.ArtifactSHA256) != 64 || done.ArtifactSHA256 != artifactDigest(done.Artifact) {
+		t.Fatalf("completed run must persist a versioned, checked artifact: %#v",done)
+	}
 	var output decision.Decision
 	if e := json.Unmarshal(done.Artifact, &output); e != nil || output.Symbol != "600519.SH" {
 		t.Fatalf("invalid artifact %s: %v", done.Artifact, e)
@@ -487,4 +490,77 @@ func TestFileStoreRejectsIncompleteIdempotencyMetadata(t *testing.T) {
  if err:=store.Save(context.Background(),r);err==nil{t.Fatal("incomplete hash fields accepted")}
  r.RequestFingerprint=strings.Repeat("z",64)
  if err:=store.Save(context.Background(),r);err==nil{t.Fatal("malformed fingerprint accepted")}
+}
+
+func TestResearchArtifactIntegrityRejectsTamperingAfterRestart(t *testing.T) {
+ store:=newStore(t)
+ manager:=newMgr(t,&controlledRunExecutor{},store,1,2)
+ rec,err:=manager.Submit(context.Background(),runFixture("600519.SH"))
+ if err!=nil {t.Fatal(err)}
+ completed:=awaitRun(t,manager,rec.ID,RunCompleted)
+ manager.Close()
+ path:=store.filePath(rec.ID)
+ raw,err:=os.ReadFile(path)
+ if err!=nil {t.Fatal(err)}
+ var document map[string]json.RawMessage
+ if err:=json.Unmarshal(raw,&document);err!=nil {t.Fatal(err)}
+ document["artifact"]=json.RawMessage(`{"symbol":"000001.SZ","action":"WATCH"}`)
+ corrupted,err:=json.Marshal(document)
+ if err!=nil {t.Fatal(err)}
+ if err:=os.WriteFile(path,corrupted,0600);err!=nil {t.Fatal(err)}
+ if _,err:=store.Get(context.Background(),rec.ID);err==nil || !strings.Contains(err.Error(),"checksum mismatch") {
+  t.Fatalf("tampering valid JSON must fail closed: %v",err)
+ }
+ if _,err:=NewRunManager(&controlledRunExecutor{},store,1,2);err==nil || !strings.Contains(err.Error(),"checksum mismatch") {
+  t.Fatalf("restart accepted a corrupted completed artifact: %v",err)
+ }
+ _=completed
+}
+
+func TestResearchArtifactLegacyCompatibilityAndVersionRejection(t *testing.T) {
+ store:=newStore(t)
+ now:=time.Now().UTC()
+ base:=RunRecord{
+  ID:strings.Repeat("c",32),Mode:ModeDecision,Symbol:"600519.SH",
+  RequestedAsOf:now,CreatedAt:now,FinishedAt:&now,State:RunCompleted,
+  Artifact:json.RawMessage(`{"symbol":"600519.SH","action":"WATCH"}`),
+ }
+ // Pre-version data is read without silently inventing a checksum.
+ if err:=store.Save(context.Background(),base);err!=nil {t.Fatal(err)}
+ legacy,err:=store.Get(context.Background(),base.ID)
+ if err!=nil || legacy.ArtifactVersion!=0 || legacy.ArtifactSHA256!="" {
+  t.Fatalf("legacy artifact not readable as legacy: %+v, %v",legacy,err)
+ }
+ base.ArtifactVersion=2
+ base.ArtifactSHA256=artifactDigest(base.Artifact)
+ if err:=store.Save(context.Background(),base);err==nil || !strings.Contains(err.Error(),"unsupported research artifact version"){
+  t.Fatalf("unknown future version must not be accepted: %v",err)
+ }
+ base.ArtifactVersion=1
+ base.ArtifactSHA256=""
+ if err:=store.Save(context.Background(),base);err==nil || !strings.Contains(err.Error(),"checksum mismatch"){
+  t.Fatalf("new artifact without checksum accepted: %v",err)
+ }
+}
+
+func TestResearchFailedRunAndEventsPersistAfterRestart(t *testing.T){
+ store:=newStore(t)
+ ex:=&controlledRunExecutor{err:errors.New("sensitive provider details")}
+ manager:=newMgr(t,ex,store,1,2)
+ rec,err:=manager.Submit(context.Background(),runFixture("600519.SH"))
+ if err!=nil {t.Fatal(err)}
+ failed:=awaitRun(t,manager,rec.ID,RunFailed)
+ if failed.FailureCode!=FailureResearch || failed.ArtifactVersion!=0 || failed.ArtifactSHA256!="" || len(failed.Events)<3{
+  t.Fatalf("invalid failed record: %+v",failed)
+ }
+ manager.Close()
+ restarted:=newMgr(t,&controlledRunExecutor{},store,1,2)
+ recovered,err:=restarted.Get(context.Background(),rec.ID)
+ if err!=nil || recovered.FailureCode!=FailureResearch || recovered.State!=RunFailed || len(recovered.Events)!=len(failed.Events){
+  t.Fatalf("failed run metadata/events lost: %+v %v",recovered,err)
+ }
+ encoded,_:=json.Marshal(recovered)
+ if strings.Contains(string(encoded),"sensitive") || len(recovered.Artifact)!=0 {
+  t.Fatalf("failed run exposes secrets or fabricated artifact: %s",encoded)
+ }
 }
