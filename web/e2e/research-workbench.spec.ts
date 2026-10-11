@@ -157,3 +157,80 @@ test("Live structured report reads Go-shaped fixture fields without fabricated f
   await page.getByText("高级：查看后端原始 JSON 工件").click();
   await expect(page.getByText("完整 Typed Artifact")).toBeVisible();
 });
+
+
+test("completed Run creates a new study with durable origin metadata and no copied query", async ({ page }) => {
+  await signIn(page);
+  const first = await submit(page, "original research focus");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 20_000 });
+  await page.getByRole("button", { name: "再次研究该标的" }).click();
+  await expect(page.getByText("仅预填标的，不会复制旧的关注点", { exact: false })).toBeVisible();
+  await expect(page.getByLabel("股票代码")).toHaveValue("600519.SH");
+  await expect(page.getByLabel("研究关注点（可选）")).toHaveValue("");
+  await page.getByLabel("研究关注点（可选）").fill("independent follow-up analysis");
+  const nextRequest = page.waitForRequest(r => r.url().endsWith("/api/workbench/runs") && r.method() === "POST");
+  await page.getByRole("button", { name: "启动真实研究" }).click();
+  const payload = JSON.parse((await nextRequest).postData() || "{}");
+  expect(payload).toMatchObject({
+    symbol: "600519.SH", mode: "PORTFOLIO_REVIEW", rerun_of: first,
+    market_query: "independent follow-up analysis", portfolio: { state: "NOT_PROVIDED" },
+  });
+  const second = await page.locator(".live-run-fields code").innerText();
+  expect(second).toMatch(/^[a-f0-9]{32}$/);
+  expect(second).not.toBe(first);
+  await expect(page.locator(".live-run-fields")).toContainText("来源研究任务");
+  await expect(page.locator(".live-run-fields a.live-permalink").last()).toHaveAttribute("href", "/?run=" + first);
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(second);
+  await expect(page.locator(".live-run-fields")).toContainText(first);
+  await page.goto("/?run=" + first);
+  await expect(page.locator(".live-run-fields")).toContainText(first);
+  await expect(page.locator(".live-run-fields")).not.toContainText("来源研究任务");
+});
+
+test("failed and cancelled studies can be researched again without replaying old failure conditions", async ({ page }) => {
+  await signIn(page);
+  const failed = await submit(page, "fail provider fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await page.getByRole("button", { name: "再次研究该标的" }).click();
+  await expect(page.getByLabel("研究关注点（可选）")).toHaveValue("");
+  await page.getByRole("button", { name: "启动真实研究" }).click();
+  const retried = await page.locator(".live-run-fields code").innerText();
+  expect(retried).not.toBe(failed);
+  await expect(page.locator(".live-run-fields")).toContainText(failed);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.goto("/?run=" + failed);
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED");
+  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+
+  const held = await submit(page, "hold fixture");
+  await page.getByRole("button", { name: "请求取消" }).click();
+  await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
+  await page.getByRole("button", { name: "再次研究该标的" }).click();
+  await page.getByRole("button", { name: "启动真实研究" }).click();
+  const fresh = await page.locator(".live-run-fields code").innerText();
+  expect(fresh).not.toBe(held);
+  await expect(page.locator(".live-run-fields")).toContainText(held);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+});
+
+test("protocol refuses nonterminal, unknown and cross-symbol rerun provenance", async ({ page }) => {
+  await signIn(page);
+  const run = await submit(page, "hold fixture");
+  const post = async (symbol: string, rerun_of: string) => page.evaluate(async ({ symbol, rerun_of }) => {
+    const response = await fetch("/api/workbench/runs", {
+      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({
+        symbol, mode: "PORTFOLIO_REVIEW", portfolio: { state: "NOT_PROVIDED" }, rerun_of,
+      }),
+    });
+    return response.status;
+  }, { symbol, rerun_of });
+  expect(await post("600519.SH", run)).toBe(400);
+  expect(await post("600519.SH", "f".repeat(32))).toBe(400);
+  await page.getByRole("button", { name: "请求取消" }).click();
+  await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
+  expect(await post("000001.SZ", run)).toBe(400);
+  expect(await post("600519.SH", run)).toBe(202);
+});
