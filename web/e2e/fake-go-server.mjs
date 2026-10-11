@@ -42,7 +42,7 @@ function evolve(run) {
 }
 function metadata(run) {
   const { run_id, symbol, mode, requested_as_of, state, created_at, started_at, finished_at, failure_code, rerun_of, request_snapshot, model_provenance } = run;
-  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}), ...(request_snapshot ? { request_snapshot } : {}), ...(model_provenance ? { model_provenance } : {}) };
+  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}), ...(request_snapshot ? { request_snapshot } : {}), ...(state !== "PENDING" && model_provenance ? { model_provenance } : {}) };
 }
 function report(run) {
   // Synthetic protocol values only: verify UI maps Go JSON paths without
