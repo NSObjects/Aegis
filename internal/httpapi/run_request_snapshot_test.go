@@ -40,8 +40,11 @@ func TestPublicRunKeepsSafeInputProvenanceWithoutPrivatePayloads(t *testing.T) {
 	safe := publicRun(rec)
 	b, err := json.Marshal(safe)
 	if err != nil { t.Fatal(err) }
-	for _, forbidden := range []string{"provider_key", "DO_NOT_EXPOSE", "HIDDEN_DIGEST", "HIDDEN_FINGERPRINT", "\"events\""} {
+	for _, forbidden := range []string{"provider_key", "DO_NOT_EXPOSE", "HIDDEN_DIGEST", "HIDDEN_FINGERPRINT"} {
 		if strings.Contains(string(b), forbidden) { t.Fatalf("unsafe public Run: %s", b) }
+	}
+	if len(safe.Events) != 0 || len(safe.Artifact) != 0 {
+		t.Fatalf("public Run exposed internal stage events or raw Artifact: %s", b)
 	}
 	if safe.RequestSnapshot == nil ||
 		safe.RequestSnapshot.SchemaVersion != 1 ||
