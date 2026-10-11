@@ -1,9 +1,10 @@
 import ResearchWorkbench from "@/components/research-workbench";
 import LiveResearchWorkbench from "@/components/live-research-workbench";
+import { isDemoMode } from "@/lib/web-mode";
 
 export const dynamic = "force-dynamic";
 
 export default function HomePage() {
-  // Never mix synthetic market data with server-sourced artifacts on one page.
-  return process.env.AEGIS_WEB_MODE === "live" ? <LiveResearchWorkbench /> : <ResearchWorkbench />;
+  // Real workbench by default. Synthetic charts require explicit demo opt-in.
+  return isDemoMode(process.env.AEGIS_WEB_MODE) ? <ResearchWorkbench /> : <LiveResearchWorkbench />;
 }

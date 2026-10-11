@@ -21,7 +21,7 @@ export default defineConfig({
       env: { AEGIS_TEST_FIXTURE_LOCAL_DEV: "1" },
     },
     {
-      command: "npm run dev:live -- -p 3200",
+      command: "npm run dev -- -p 3200",
       url: baseURL,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

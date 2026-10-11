@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Aegis · AI Research Workspace",
-  description: "多 Agent 股票研究工作台 · 前端 Mock 演示",
+  description: "多 Agent 股票研究工作台 · Go Live Research",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
