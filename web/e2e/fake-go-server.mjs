@@ -7,6 +7,7 @@ const host = "127.0.0.1";
 const port = 18686;
 const secret = "ci-go-api-fixture-only-secret-32-characters";
 const runs = new Map();
+const requestKeys = new Map();
 const prefix = "/api/v1/research/runs";
 const providerSecrets = new Map();
 const providerNames = ["DEEPSEEK_API_KEY", "TUSHARE_TOKEN", "TAVILY_API_KEY"];
@@ -40,8 +41,8 @@ function evolve(run) {
   }
 }
 function metadata(run) {
-  const { run_id, symbol, mode, requested_as_of, state, created_at, started_at, finished_at, failure_code } = run;
-  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}) };
+  const { run_id, symbol, mode, requested_as_of, state, created_at, started_at, finished_at, failure_code, rerun_of } = run;
+  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}) };
 }
 function report(run) {
   // Synthetic protocol values only: verify UI maps Go JSON paths without
@@ -120,12 +121,29 @@ const server = createServer(async (req, res) => {
     let body;
     try { body = await readBody(req); } catch { return json(res, 400, { error: "bad JSON" }); }
     if (!/^[0-9]{6}\.(SH|SZ)$/.test(body.symbol ?? "") || body.mode !== "PORTFOLIO_REVIEW" || body.portfolio?.state !== "NOT_PROVIDED") return json(res, 400, { error: "invalid fixture request" });
+    const key = req.headers["idempotency-key"];
+    if (key && requestKeys.has(key)) {
+      const previous = requestKeys.get(key);
+      if (previous.body !== JSON.stringify(body)) return json(res, 409, { error: "idempotency conflict" });
+      return json(res, 202, metadata(runs.get(previous.run_id)));
+    }
+    let origin;
+    if (body.rerun_of !== undefined) {
+      if (typeof body.rerun_of !== "string" || !/^[a-f0-9]{32}$/.test(body.rerun_of))
+        return json(res, 400, { error: "invalid origin id" });
+      origin = runs.get(body.rerun_of);
+      if (!origin) return json(res, 400, { error: "origin not found" });
+      evolve(origin);
+      if (!["COMPLETED", "FAILED", "CANCELLED"].includes(origin.state) || origin.symbol !== body.symbol || origin.mode !== body.mode)
+        return json(res, 400, { error: "invalid rerun origin" });
+    }
     const run_id = randomBytes(16).toString("hex");
     const created_at = asOf();
     const scenario = body.market_query?.includes("hold") ? "hold" : body.market_query?.includes("fail") ? "fail" : "complete";
-    const run = { run_id, symbol: body.symbol, mode: body.mode, requested_as_of: created_at, created_at, createdMs: Date.now(), state: "PENDING", scenario, events: [] };
+    const run = { run_id, symbol: body.symbol, mode: body.mode, requested_as_of: created_at, created_at, createdMs: Date.now(), state: "PENDING", scenario, events: [], ...(origin ? { rerun_of: origin.run_id } : {}) };
     append(run, "Run", "PENDING");
     runs.set(run_id, run);
+    if (key) requestKeys.set(key, { body: JSON.stringify(body), run_id });
     res.setHeader("Location", `${prefix}/${run_id}`);
     return json(res, 202, metadata(run));
   }

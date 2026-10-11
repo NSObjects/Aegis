@@ -52,6 +52,7 @@ type RunRecord struct {
 	ID            string          `json:"run_id"`
 	Mode          ResearchMode    `json:"mode"`
 	Symbol        string          `json:"symbol"`
+	RerunOf       string          `json:"rerun_of,omitempty"`
 	RequestedAsOf time.Time       `json:"requested_as_of"`
 	State         RunState        `json:"state"`
 	CreatedAt     time.Time       `json:"created_at"`
@@ -81,6 +82,7 @@ var (
 	ErrRunCapacity      = errors.New("research queue is at capacity")
 	ErrRunManagerClosed = errors.New("research run manager closed")
 	ErrRunIdempotencyConflict = errors.New("idempotency key already used for a different research request")
+	ErrInvalidRerunSource = errors.New("invalid rerun source")
 )
 
 // ResearchExecutor is implemented by the existing ResearchService; a fake can
@@ -194,7 +196,7 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 		return RunRecord{}, err
 	}
 	now := m.now()
-	record := RunRecord{IdempotencyDigest:keyDigest, RequestFingerprint:requestFingerprint, ID: id, Mode: request.Mode, Symbol: strings.TrimSpace(request.Input.Symbol), RequestedAsOf: request.Input.RequestedAsOf, State: RunPending, CreatedAt: now, Events: []RunEvent{{Seq: 1, Stage: "Run", Status: string(RunPending), At: now}}}
+	record := RunRecord{IdempotencyDigest:keyDigest, RequestFingerprint:requestFingerprint, ID: id, Mode: request.Mode, Symbol: strings.TrimSpace(request.Input.Symbol), RerunOf: request.RerunOf, RequestedAsOf: request.Input.RequestedAsOf, State: RunPending, CreatedAt: now, Events: []RunEvent{{Seq: 1, Stage: "Run", Status: string(RunPending), At: now}}}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -204,6 +206,18 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 		if previous, exists := m.idempotency[keyDigest]; exists {
 			if previous.Fingerprint != requestFingerprint {return RunRecord{}, ErrRunIdempotencyConflict}
 			return m.store.Get(ctx, previous.RunID)
+		}
+	}
+	// A new study must reference an existing terminal run of the same security and
+	// mode. The previous request and account are never replayed from storage.
+	if request.RerunOf != "" {
+		parent, err := m.store.Get(ctx, request.RerunOf)
+		if err != nil {
+			if errors.Is(err, ErrRunNotFound) { return RunRecord{}, ErrInvalidRerunSource }
+			return RunRecord{}, err
+		}
+		if (parent.State != RunCompleted && parent.State != RunFailed && parent.State != RunCancelled) || parent.Symbol != record.Symbol || parent.Mode != record.Mode {
+			return RunRecord{}, ErrInvalidRerunSource
 		}
 	}
 	if len(m.active) >= m.maxActive {
@@ -258,6 +272,7 @@ func stableRequestFingerprint(request ResearchRequest) (string,error) {
 }
 
 func validateRunRequest(req ResearchRequest) error {
+	if req.RerunOf != "" && !validRunID(req.RerunOf) { return ErrInvalidRerunSource }
 	if req.Mode != ModeDecision && req.Mode != ModePortfolio {
 		return fmt.Errorf("invalid research mode %q", req.Mode)
 	}

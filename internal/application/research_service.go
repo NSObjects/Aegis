@@ -39,6 +39,8 @@ type ResearchRequest struct {
 	// IdempotencyKey belongs to the request adapter; never forward it to the LLM,
 	// serialize it in a provider payload, or include it in a workflow artifact.
 	IdempotencyKey string `json:"-"`
+	// RerunOf is optional audit provenance, not LLM context or a request to replay old inputs.
+	RerunOf string `json:"rerun_of,omitempty"`
 	Mode      ResearchMode
 	Input     research.Input
 	Portfolio *portfolio.Context

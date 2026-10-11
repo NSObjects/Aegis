@@ -449,3 +449,8 @@ svg { flex-shrink: 0; }
  .live-report-facts { margin:14px 16px; }
  .live-structured-entries { padding:0 16px 15px; }
 }
+
+/* A rerun is a separate paid study, never an implicit replay of old inputs. */
+.live-rerun-notice { margin:16px 0; padding:13px 15px; display:grid; gap:8px; border:1px solid #477669; border-radius:9px; color:#b8e8df; background:#17312f; font-size:11px; line-height:1.65; }
+.live-rerun-notice strong { color:#d4fff3; font-size:12px; }
+.live-rerun-notice button { width:fit-content; color:#9ad5cf; background:none; border:0; padding:0; text-decoration:underline; }
