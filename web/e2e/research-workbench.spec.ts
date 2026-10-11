@@ -23,6 +23,36 @@ async function submit(page: Page, query = "") {
   return id;
 }
 
+test("persisted request snapshot is readable across navigation without echoing the research query", async ({ page }) => {
+  await signIn(page);
+  const secretQuery = "PROVENANCE_QUERY_NOT_A_PUBLIC_HISTORY_FIELD";
+  const id = await submit(page, secretQuery);
+  const response = await page.request.get(`/api/workbench/runs/${id}`);
+  expect(response.status()).toBe(200);
+  const raw = await response.text();
+  expect(raw).not.toContain(secretQuery);
+  const record = JSON.parse(raw);
+  expect(record.request_snapshot).toMatchObject({
+    schema_version: 1,
+    market_query_provided: true,
+    event_pit_safe: true,
+    min_documents: 1,
+    min_independent_sources: 1,
+    portfolio_state: "NOT_PROVIDED",
+  });
+  expect(Date.parse(record.request_snapshot.event_window_start)).toBeLessThan(Date.parse(record.request_snapshot.event_window_end));
+  await page.locator(".live-request-snapshot summary").click();
+  await expect(page.locator(".live-request-snapshot")).toContainText("已提交（正文不保存）");
+  await expect(page.locator(".live-request-snapshot")).toContainText("PIT-safe");
+  await expect(page.locator(".live-request-snapshot")).toContainText("NOT_PROVIDED · 未知");
+  await page.reload();
+  await expect(page.locator(".live-run-fields")).toContainText(id);
+  await expect(page.locator(".live-request-snapshot summary")).toContainText("已记录");
+  await page.locator(".live-request-snapshot summary").click();
+  await expect(page.locator(".live-request-snapshot")).toContainText("已提交（正文不保存）");
+  expect(await page.locator("body").innerText()).not.toContain(secretQuery);
+});
+
 test("anonymous browser cannot read ResearchRun or bypass Web login", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();

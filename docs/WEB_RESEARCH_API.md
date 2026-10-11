@@ -172,3 +172,24 @@ settings and cannot be edited over the network.
 The Live Web settings page uses the existing HttpOnly session, same-origin
 checks and Next.js server-side Bearer proxy. Neither GET nor PUT replies
 include plaintext secrets. Secret entries are never persisted in localStorage.
+
+
+### R1-03 submitted request snapshot (v1)
+
+New ResearchRun records contain a durable `request_snapshot` in the usual
+GET/list run metadata. It is frozen **before** asynchronous execution and
+restored from the same private FileRunStore after restart. Fields are a
+strict allowlist: `schema_version: 1`, `market_query_provided` (boolean),
+`event_window_start/end`, `event_pit_safe`, requested
+`preferred_source_types`, `min_documents`, `min_independent_sources`,
+and optional explicit `portfolio_state` (e.g. `NOT_PROVIDED` = unknown).
+There is **no** raw market_query, portfolio snapshot, provider API key, or
+private model prompt in this projection. The request object is not persisted.
+
+This is a **submitted-input** snapshot, not a claim about what external
+sources were actually fetched or which model version was used at execution.
+Model/profile/provider execution provenance and source document indexing
+remain separate R1-03 work. Older records without `request_snapshot` are
+still readable and must be shown as missing historical metadata instead of
+being reconstructed from today's configuration. The Run artifact has its
+independent version/checksum; do not confuse it with this snapshot schema.
