@@ -39,6 +39,7 @@ describe("human-readable Live report projection (no regenerated claims)", () => 
     expect(readStatus("MONITOR")).toBe("继续跟踪 · MONITOR");
     expect(readStatus("INSUFFICIENT_CONTEXT")).toBe("研究上下文不足 · INSUFFICIENT_CONTEXT");
     expect(readStatus("UNKNOWN_FUTURE_CODE")).toBe("UNKNOWN_FUTURE_CODE");
+    expect(readStatus("__proto__")).toBe("__proto__");
     expect(readStatus("NO_DATA")).toBe("未取得数据 · NO_DATA");
     expect(readStatus("MIXED")).toBe("信号分化 · MIXED");
   });
