@@ -41,8 +41,8 @@ function evolve(run) {
   }
 }
 function metadata(run) {
-  const { run_id, symbol, mode, requested_as_of, state, created_at, started_at, finished_at, failure_code, rerun_of } = run;
-  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}) };
+  const { run_id, symbol, mode, requested_as_of, state, created_at, started_at, finished_at, failure_code, rerun_of, request_snapshot } = run;
+  return { run_id, symbol, mode, requested_as_of, state, created_at, ...(started_at ? { started_at } : {}), ...(finished_at ? { finished_at } : {}), ...(failure_code ? { failure_code } : {}), ...(rerun_of ? { rerun_of } : {}), ...(request_snapshot ? { request_snapshot } : {}) };
 }
 function report(run) {
   // Synthetic protocol values only: verify UI maps Go JSON paths without
@@ -140,7 +140,14 @@ const server = createServer(async (req, res) => {
     const run_id = randomBytes(16).toString("hex");
     const created_at = asOf();
     const scenario = body.market_query?.includes("hold") ? "hold" : body.market_query?.includes("fail") ? "fail" : "complete";
-    const run = { run_id, symbol: body.symbol, mode: body.mode, requested_as_of: created_at, created_at, createdMs: Date.now(), state: "PENDING", scenario, events: [], ...(origin ? { rerun_of: origin.run_id } : {}) };
+    const request_snapshot = {
+      schema_version: 1, market_query_provided: Boolean(body.market_query?.trim()),
+      event_window_start: new Date(Date.parse(created_at) - 7*24*3600*1000).toISOString(),
+      event_window_end: created_at, event_pit_safe: true,
+      preferred_source_types: ["OFFICIAL"], min_documents: 1,
+      min_independent_sources: 1, portfolio_state: body.portfolio.state,
+    };
+    const run = { run_id, symbol: body.symbol, mode: body.mode, requested_as_of: created_at, created_at, createdMs: Date.now(), state: "PENDING", scenario, events: [], request_snapshot, ...(origin ? { rerun_of: origin.run_id } : {}) };
     append(run, "Run", "PENDING");
     runs.set(run_id, run);
     if (key) requestKeys.set(key, { body: JSON.stringify(body), run_id });
