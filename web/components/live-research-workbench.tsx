@@ -264,6 +264,19 @@ export default function LiveResearchWorkbench() {
           {selected.request_snapshot.portfolio_state&&<div><small>提交时账户状态</small><strong>{selected.request_snapshot.portfolio_state==="NOT_PROVIDED"?"NOT_PROVIDED · 未知":selected.request_snapshot.portfolio_state}</strong></div>}
         </div>:<p>此任务创建时尚未保存请求配置快照；不会追溯推断过去的研究参数。</p>}
         <p>此处仅显示提交时已记录的请求约束，不代表实际命中的数据源，也不代表模型或 Provider 版本。未留存原始研究关注点及账户明细。</p>
+      </details>}{selected&&<details className="live-request-snapshot live-model-provenance">
+        <summary>本次运行模型配置 · {selected.model_provenance?.schema_version===1?"已记录":"未记录"}</summary>
+        {selected.model_provenance?.schema_version===1?<div>
+          <p>这是 Go 在本次成功构建研究流程后记录的模型配置身份；模型 ID 不是第三方 Provider 保证的固定版本号。</p>
+          <div className="live-model-provenance-rows">
+            {selected.model_provenance.bindings.map(binding=><div key={binding.role}>
+              <strong>{binding.role}</strong>
+              <span>{binding.profile}</span>
+              <code>{binding.provider} / {binding.model}</code>
+            </div>)}
+          </div>
+          <p>配置身份指纹（仅模型角色映射，不包含秘钥或端点）：<code>{selected.model_provenance.config_fingerprint}</code></p>
+        </div>:<p>此任务未保存模型构建身份。可能是旧运行记录，或模型流程尚未成功初始化；不能据当前配置推断该任务当时使用的模型。</p>}
       </details>}{selected&&<div className="live-cancel">{!isTerminal(selected.state)?<button type="button" className="btn danger" disabled={busy} onClick={()=>void cancelRun()}><Ban size={14}/>请求取消</button>:<button type="button" className="btn" disabled={busy} onClick={prepareRerun}><RotateCcw size={14}/>再次研究该标的</button>}{selected.state==="COMPLETED"&&<button type="button" className="btn" onClick={()=>openComparison(selected.run_id,null)}><ArrowLeftRight size={14}/>与历史研究对比</button>}</div>}</section>
       {selected?.state==="COMPLETED"&&artifact?<LiveResearchReport artifact={artifact} run={selected}/>:<section className="surface live-report-empty"><BookOpenText size={21}/><div><h2>研究结果</h2><p>{selected?.state==="COMPLETED"?"正在加载后端已完成工件…":selected?.state==="FAILED"||selected?.state==="CANCELLED"?"任务没有完成，研究报告不可用；不会显示上一次任务的结果。":"只有后端状态为 COMPLETED 才会展示真实报告。"}</p></div></section>}
     </div><aside className="right-stack"><LiveStageTrace run={selected} events={events} artifact={artifact} stream={streamState}/><section className="surface live-help"><div className="panel-head"><h2>研究安全边界</h2></div><p><Database size={14}/>结果仅来自 Go Typed Artifact</p><p><ShieldCheck size={14}/>账户未知不等于空仓或零现金</p><p><TerminalSquare size={14}/>无委托、资金划拨与自动交易</p></section></aside></div>}
