@@ -65,3 +65,19 @@ export function readResearchBrief(report: LiveReport): ResearchBrief {
     evidence, risks, unknowns,
   };
 }
+
+/** UI-only gloss; always keep the untouched backend enum visible in brackets. */
+const enumGloss: Record<string,string> = {
+  BALANCED:"多空观点相对均衡", INSUFFICIENT_EVIDENCE:"研究证据不足",
+  BULLISH:"偏多", BEARISH:"偏空", NEUTRAL:"中性",
+  WATCH:"继续观察", MONITOR:"持续监测", AVOID:"暂不参与",
+  REVIEW_REQUIRED:"需要人工复核", NO_ACTION:"不采取行动",
+  NOT_PROVIDED:"未提供", INSUFFICIENT_CONTEXT:"上下文不足",
+  NORMAL:"数据可用", NO_DATA:"没有有效数据", NO_EVENT:"未记录事件",
+  RISK_OFF:"风险偏好较低", RISK_ON:"风险偏好较高", MIXED:"市场分化",
+};
+/** Never silently translate unknown enums into a purported investment call. */
+export function readableResearchCode(value: string | null): string {
+  if (value === null) return "未提供";
+  return enumGloss[value] ? enumGloss[value] + "（" + value + "）" : value;
+}
