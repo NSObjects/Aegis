@@ -2,6 +2,7 @@ package event
 
 import (
 	"errors"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"sort"
@@ -80,4 +81,48 @@ func indexCitedDocumentSources(result *Context, docs []capevent.CanonicalDocumen
 	}
 	sort.Slice(resultSources,func(i,j int)bool{return resultSources[i].DocumentID<resultSources[j].DocumentID})
 	return resultSources,nil
+}
+
+func validateCitedDocumentSources(ctx *Context) error {
+	if len(ctx.CitedDocumentSources) == 0 { return nil }
+	if ctx.Status != StatusNormal { return errors.New("only NORMAL event context can cite documents") }
+	ids := make(map[string]struct{})
+	for _, event := range ctx.Events {
+		for _, id := range event.EvidenceDocumentIDs { ids[id] = struct{}{} }
+	}
+	if len(ids) != len(ctx.CitedDocumentSources) {
+		return errors.New("cited source index does not cover all event document identities")
+	}
+	var previous string
+	for _, item := range ctx.CitedDocumentSources {
+		if item.DocumentID == "" || (previous != "" && item.DocumentID <= previous) {
+			return errors.New("cited source identities must be unique and sorted")
+		}
+		if _, ok := ids[item.DocumentID]; !ok {
+			return errors.New("cited source has no referenced event")
+		}
+		if item.VersionID == "" || len(item.ContentSHA256) != 64 {
+			return errors.New("cited source missing canonical version or SHA256")
+		}
+		if _, err := hex.DecodeString(item.ContentSHA256); err != nil ||
+			strings.ToLower(item.ContentSHA256) != item.ContentSHA256 {
+			return errors.New("invalid cited source content digest")
+		}
+		if item.AvailableAt == nil || item.AvailableAt.IsZero() {
+			return errors.New("cited source missing observed availability")
+		}
+		if item.PublishedAt != nil && item.PublishedAt.After(*item.AvailableAt) {
+			return errors.New("cited source was published after recorded availability")
+		}
+		if item.URL != "" && safeEvidenceURL(item.URL) != item.URL {
+			return errors.New("unsafe cited source URL")
+		}
+		for _, value := range []string{item.DocumentID,item.VersionID,item.Publisher} {
+			if strings.ContainsAny(value,"\r\n\x00") || len(value)>512 {
+				return errors.New("invalid cited source identity or publisher")
+			}
+		}
+		previous=item.DocumentID
+	}
+	return nil
 }
