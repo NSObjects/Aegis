@@ -164,6 +164,8 @@ func sendJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 func publicRun(rec application.RunRecord) application.RunRecord {
+	rec.IdempotencyDigest = ""
+	rec.RequestFingerprint = ""
 	rec.Artifact = nil
 	rec.Events = nil
 	return rec
@@ -179,6 +181,16 @@ func lookupError(w http.ResponseWriter, err error) {
 }
 func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+	keys := r.Header.Values("Idempotency-Key")
+	if len(keys)>1 || (len(keys)==1 && keys[0]=="") {
+		http.Error(w,"invalid Idempotency-Key",http.StatusBadRequest)
+		return
+	}
+	key := r.Header.Get("Idempotency-Key")
+	if err:=application.ValidateIdempotencyKey(key);err!=nil {
+		http.Error(w,"invalid Idempotency-Key",http.StatusBadRequest)
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxCreateBytes+1))
 	if err != nil || len(body) > maxCreateBytes {
 		http.Error(w, "invalid or oversized request", http.StatusRequestEntityTooLarge)
@@ -236,9 +248,11 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid research input", http.StatusBadRequest)
 		return
 	}
-	rec, err := h.runs.Submit(r.Context(), application.ResearchRequest{Mode: payload.Mode, Input: input, Portfolio: payload.Portfolio})
+	rec, err := h.runs.Submit(r.Context(), application.ResearchRequest{IdempotencyKey:key, Mode: payload.Mode, Input: input, Portfolio: payload.Portfolio})
 	if err != nil {
 		switch {
+		case errors.Is(err, application.ErrRunIdempotencyConflict):
+			http.Error(w, "Idempotency-Key is already bound to different research parameters", http.StatusConflict)
 		case errors.Is(err, application.ErrRunCapacity):
 			http.Error(w, "research capacity reached", http.StatusTooManyRequests)
 		case errors.Is(err, application.ErrRunManagerClosed):
