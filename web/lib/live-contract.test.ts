@@ -8,3 +8,11 @@ describe("live Go contract (not demo)", () => {
   it("uses strictly increasing durable SSE seq and deduplicates replay", () => { expect(isLiveEvent(ev(1))).toBe(true); expect(mergeStageEvents([ev(1), ev(2)], [ev(2), ev(3)]).map(v => v.seq)).toEqual([1, 2, 3]); });
   it("never invents risk or account values from absent artifact", () => { expect(readReportSummary({}).sections).toEqual([]); expect(readReportSummary({ research_artifact: { synthesis: { summary: "真实研究结果" } }, final_risk_gate: { disposition: "REVIEW_REQUIRED" } }).sections.map(x => x.value)).toEqual(["真实研究结果", "REVIEW_REQUIRED"]); });
 });
+
+describe("rerun origin metadata", () => {
+  it("accepts an optional validated parent Run ID but rejects untrusted values", () => {
+    expect(isLiveRun({ ...run, rerun_of: "b".repeat(32) })).toBe(true);
+    expect(isLiveRun({ ...run, rerun_of: "../bad" })).toBe(false);
+    expect(isLiveRun({ ...run, rerun_of: "" })).toBe(false);
+  });
+});
