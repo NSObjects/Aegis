@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { readLiveReport } from "./live-report";
-import { readResearchBrief } from "./research-brief";
+import { readResearchBrief, readableResearchCode } from "./research-brief";
 
 describe("research brief is source-backed and safe", () => {
+ it("glosses only known research enums and keeps exact backend codes",()=>{
+   expect(readableResearchCode("BALANCED")).toBe("多空观点相对均衡（BALANCED）");
+   expect(readableResearchCode("REVIEW_REQUIRED")).toBe("需要人工复核（REVIEW_REQUIRED）");
+   expect(readableResearchCode("unknown")).toBe("unknown");
+   expect(readableResearchCode(null)).toBe("未提供");
+ });
  it("organizes the exact portfolio text and distinguishes risk from missing data", () => {
    const result=readResearchBrief(readLiveReport({
      research_artifact:{symbol:"600519.SH",synthesis:{summary:"多空观点仍有分歧",agreements:[{claim:"市场偏弱"}],risks:["外部事件未验证"]},
