@@ -348,3 +348,69 @@ test("NO_DATA never draws a synthetic OHLC candle", async ({ page }) => {
   await expect(chart).toContainText("NO_DATA");
   await expect(chart.locator("rect.technical-candle-body")).toHaveCount(0);
 });
+
+
+test("two completed research runs compare source-owned conclusion, market, technical, event and risk facts", async ({ page }) => {
+  await signIn(page);
+  const baseline = await submit(page, "technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const followup = await submit(page, "historical comparison fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const methods: string[] = [];
+  page.on("request", req => {
+    if (req.url().includes("/api/workbench/runs") && req.method() === "POST") methods.push("POST");
+  });
+  await page.getByRole("button", { name: "研究对比" }).click();
+  await expect(page.getByRole("heading", { name: "两次研究记录对比" })).toBeVisible();
+  await page.getByLabel("基准研究").selectOption(baseline);
+  await page.getByLabel("对比研究").selectOption(followup);
+  await expect(page).toHaveURL("/?view=compare&left=" + baseline + "&right=" + followup);
+  const chart = page.getByRole("region", { name: "历史研究对比" });
+  await expect(chart.getByRole("table", { name: "市场环境对比" })).toContainText("MIXED");
+  await expect(chart.getByRole("table", { name: "市场环境对比" })).toContainText("RISK_OFF");
+  await expect(chart.getByRole("table", { name: "技术分析对比" })).toContainText("1,512.65".replaceAll(",", ""));
+  await expect(chart.getByRole("table", { name: "技术分析对比" })).toContainText("1528.2");
+  await expect(chart.getByRole("table", { name: "风险门禁对比" })).toContainText("FIXTURE_NEW_RISK_REVIEW");
+  await expect(chart.getByText("fixture-comparison-event-1")).toBeVisible();
+  await expect(chart.getByText("仅一侧有数据").first()).toBeVisible();
+  await expect(chart.locator(".live-compare-heads code")).toContainText([baseline,followup]);
+  expect(methods).toEqual([]);
+  const reference = await page.request.get("/api/workbench/runs/" + followup + "/artifact");
+  expect(reference.status()).toBe(200);
+  const source = await reference.json();
+  expect(source.research_artifact.technical.snapshot.close).toBe(1528.2);
+  expect(source.research_artifact.market.regime).toBe("RISK_OFF");
+  await page.reload();
+  await expect(chart.getByRole("table", { name: "市场环境对比" })).toContainText("RISK_OFF");
+  await expect(page.getByLabel("基准研究")).toHaveValue(baseline);
+  await expect(page.getByLabel("对比研究")).toHaveValue(followup);
+  await chart.getByRole("link", { name: "查看原任务与报告" }).first().click();
+  await expect(page).toHaveURL("/?run=" + baseline);
+  await expect(page.locator(".live-run-fields")).toContainText(baseline);
+  await page.goBack();
+  await expect(chart.getByText("fixture-comparison-event-1")).toBeVisible();
+});
+
+test("comparison refuses identical, failed and mismatched-symbol Runs, without mixing artifacts", async ({ page }) => {
+  await signIn(page);
+  const original = await submit(page, "technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.goto("/?view=compare&left=" + original + "&right=" + original);
+  await expect(page.getByText("不能将同一 Run 与自己比较")).toBeVisible();
+  await expect(page.locator(".live-compare-table")).toHaveCount(0);
+  await page.goto("/?run=" + original);
+  const failed = await submit(page, "fail provider fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  await page.goto("/?view=compare&left=" + original + "&right=" + failed);
+  await expect(page.getByText("对比只支持已完成 Run", { exact: false })).toBeVisible();
+  await expect(page.locator(".live-compare-table")).toHaveCount(0);
+  await page.goto("/?view=compare&left=" + original + "&right=" + "f".repeat(32));
+  await expect(page.getByText("读取服务端历史记录失败", { exact: false })).toBeVisible();
+  await expect(page.locator(".live-compare-table")).toHaveCount(0);
+});
+
+test("anonymous comparison deep link never leaks run data before login", async ({ page }) => {
+  await page.goto("/?view=compare&left=" + "a".repeat(32) + "&right=" + "b".repeat(32));
+  await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "两次研究记录对比" })).toHaveCount(0);
+});
