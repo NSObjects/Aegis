@@ -89,8 +89,19 @@ func checkRunRecord(record RunRecord) error {
 		if record.FinishedAt == nil || len(record.Artifact) == 0 || !json.Valid(record.Artifact) || string(record.Artifact) == "null" || record.FailureCode != "" {
 			return errors.New("completed research must contain valid artifact")
 		}
-	} else if len(record.Artifact) != 0 {
-		return errors.New("unfinished research must not expose an artifact")
+		// Legacy completed runs (version=0 with no hash) remain readable.
+		// New completed runs must carry a verified checksum; never silently
+		// accept a corrupted or unknown-version artifact after restart.
+		if record.ArtifactVersion == 0 {
+			if record.ArtifactSHA256 != "" { return errors.New("legacy artifact must not declare a checksum without a version") }
+		} else {
+			if record.ArtifactVersion != 1 { return errors.New("unsupported research artifact version") }
+			if len(record.ArtifactSHA256) != 64 || record.ArtifactSHA256 != artifactDigest(record.Artifact) {
+				return errors.New("research artifact checksum mismatch")
+			}
+		}
+	} else if len(record.Artifact) != 0 || record.ArtifactVersion != 0 || record.ArtifactSHA256 != "" {
+		return errors.New("unfinished research must not expose an artifact or checksum")
 	}
 	if record.State == RunFailed || record.State == RunCancelled {
 		if record.FinishedAt == nil {
