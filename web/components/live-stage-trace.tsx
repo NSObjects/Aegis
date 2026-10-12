@@ -1,6 +1,8 @@
 "use client";
 
-import { Activity, Clock3, Wifi, WifiOff } from "lucide-react";
+import { Activity, Clock3, Copy, Wifi, WifiOff } from "lucide-react";
+import { useState } from "react";
+import { formatFailureDiagnostic } from "@/lib/failure-diagnostic";
 import type { LiveArtifact, LiveRun, LiveStageEvent } from "@/lib/live-contract";
 import { readLiveReport } from "@/lib/live-report";
 import { buildRunTrace, stageLabels, stageReportId, type StagePhase } from "@/lib/stage-trace";
@@ -45,6 +47,7 @@ export default function LiveStageTrace({
   artifact: LiveArtifact | null;
   stream: StreamStatus;
 }) {
+  const [copyStatus, setCopyStatus] = useState("");
   const trace = run ? buildRunTrace(run, events) : null;
   const terminal = run?.state === "COMPLETED" || run?.state === "FAILED" || run?.state === "CANCELLED";
   const reportIds = artifact && run?.state === "COMPLETED"
@@ -66,6 +69,14 @@ export default function LiveStageTrace({
       </div>
       {run.state === "FAILED" && <div className="live-trace-diagnostic" role="status" aria-label="任务失败诊断">
         <strong>失败诊断 · 来自本次 Run</strong>
+        <button type="button" className="btn" onClick={async () => {
+          try {
+            if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+            await navigator.clipboard.writeText(formatFailureDiagnostic(run, events));
+            setCopyStatus("诊断报告已复制");
+          } catch { setCopyStatus("复制失败，请检查浏览器剪贴板权限"); }
+        }}><Copy size={14}/>复制诊断报告</button>
+        {copyStatus && <p role="status">{copyStatus}</p>}
         <dl>
           <div><dt>错误代码</dt><dd><code>{run.failure_code ?? "后端未提供"}</code></dd></div>
           <div><dt>错误类别</dt><dd><code>{run.failure_category ?? "历史记录未提供"}</code></dd></div>
