@@ -564,3 +564,15 @@ func TestResearchFailedRunAndEventsPersistAfterRestart(t *testing.T){
   t.Fatalf("failed run exposes secrets or fabricated artifact: %s",encoded)
  }
 }
+
+func TestResearchErrorCategoryDoesNotLeakProviderText(t *testing.T) {
+	for _, tc := range []struct { err error; want string }{
+		{errors.New("generate research synthesis: upstream secret-message"), "SYNTHESIS_MODEL_GENERATE"},
+		{errors.New("decode research synthesis JSON: invalid character: secret-message"), "SYNTHESIS_JSON_DECODE"},
+		{errors.New("invalid research synthesis artifact: invalid references"), "SYNTHESIS_SCHEMA_VALIDATION"},
+		{errors.New("research narrative is not in simplified Chinese: summary"), "LANGUAGE_VALIDATION"},
+		{errors.New("provider secret-message"), "UNKNOWN"},
+	} {
+		if got := researchErrorCategory(tc.err); got != tc.want { t.Errorf("got %q, want %q",got,tc.want) }
+	}
+}
