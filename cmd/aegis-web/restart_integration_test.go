@@ -2,7 +2,6 @@ package main
 
 import (
  "bytes"
- "context"
  "encoding/json"
  "fmt"
  "net"
@@ -97,5 +96,4 @@ func TestRealServerProcessRestart(t *testing.T) {
  if err!=nil||history.StatusCode!=200 {t.Fatalf("history after restart: %d %v",history.StatusCode,err)}
  if !strings.Contains(fmt.Sprint(listed),created.RunID){t.Fatalf("persisted Run absent from history: %s",created.RunID)}
  // The second process was started with the same disk store but a new manager.
- _=context.Background()
 }
