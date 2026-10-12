@@ -40,3 +40,37 @@ func TestToolTraceEventsHTTPAndSSEReplay(t *testing.T) {
   t.Fatalf("SSE replay lost tool event or cursor handling: %d %s",stream.Code,stream.Body.String())
  }
 }
+
+// Regression: a replay cursor belongs to the requested Run; it must not
+// expose events for a different Run even if the cursor value matches.
+func TestSSEReplayDoesNotCrossRunBoundary(t *testing.T) {
+ first := testRecord()
+ second := testRecord()
+ second.ID = strings.Repeat("b", 32)
+ second.Symbol = "000001.SZ"
+ second.Events = []application.RunEvent{
+  {Seq:1, Stage:"Run", Status:"PENDING", At:first.CreatedAt},
+  {Seq:2, Stage:"Event", Status:"FAIL", At:first.CreatedAt},
+ }
+ first.Events = []application.RunEvent{
+  {Seq:1, Stage:"Run", Status:"PENDING", At:first.CreatedAt},
+  {Seq:2, Stage:"Market", Status:"DONE", At:first.CreatedAt},
+ }
+ for _, tc := range []struct{ rec application.RunRecord; own, other string }{
+  {first, "Market", "Event"}, {second, "Event", "Market"},
+ } {
+  h := mkHandler(t, &fakeRuns{rec:tc.rec}, application.ModeDecision)
+  path := "/api/v1/research/runs/" + tc.rec.ID + "/stream"
+  stream := apiRequest(t,h,http.MethodGet,path,"",true,map[string]string{"Last-Event-ID":"1"})
+  if stream.Code != http.StatusOK || !strings.Contains(stream.Body.String(),"id: 2\n") ||
+   !strings.Contains(stream.Body.String(),tc.own) || strings.Contains(stream.Body.String(),tc.other) {
+   t.Fatalf("wrong Run replay for %s: %d %s",tc.rec.ID,stream.Code,stream.Body.String())
+  }
+  otherID := first.ID
+  if tc.rec.ID == first.ID { otherID = second.ID }
+  missing := apiRequest(t,h,http.MethodGet,"/api/v1/research/runs/"+otherID+"/stream","",true,nil)
+  if missing.Code != http.StatusNotFound || strings.Contains(missing.Body.String(),tc.own) {
+   t.Fatalf("cross-Run stream leaked event data: %d %s",missing.Code,missing.Body.String())
+  }
+ }
+}
