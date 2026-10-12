@@ -96,7 +96,7 @@ func (a *Analyst) Review(
         }
         if langErr:=checkRiskLanguage(ctx,&result);langErr!=nil{
             if attempt==1{return nil,fmt.Errorf("risk narrative invalid after 2 attempts: %w",langErr)}
-            messages=append(messages,schema.UserAgenticMessage(researchlang.Correction))
+            messages[1]=schema.UserAgenticMessage(string(payload)+"\n\n"+researchlang.Correction)
             continue
         }
         return &result,nil
