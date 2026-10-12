@@ -813,3 +813,11 @@ svg { flex-shrink: 0; }
 .live-brief-chapter>.live-report-stack {padding:11px}
 @media(max-width:860px) {.live-brief-grid {grid-template-columns:1fr}.live-brief-metrics dl {grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px) {.live-brief-lead {padding:16px}.live-brief-lead h3 {font-size:19px}.live-brief-metrics dl {grid-template-columns:1fr 1fr}.live-brief-section {padding:14px}.live-brief-chapter>summary {padding:13px}}
+
+/* Research history filters: responsive, keyboard-friendly, loaded-records only. */
+.live-history-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:16px 0;padding:0 2px}
+.live-history-filters label{display:grid;gap:6px;min-width:180px;flex:1;color:#b8cad9;font-size:12px}
+.live-history-filters input,.live-history-filters select{width:100%;min-height:38px;padding:8px 10px;border:1px solid #486079;border-radius:7px;background:#142638;color:#e5f1f8;font:inherit}
+.live-history-filters input:focus-visible,.live-history-filters select:focus-visible{outline:2px solid #8ce8c9;outline-offset:2px}
+.live-history-filters button{min-height:38px}
+@media(max-width:640px){.live-history-filters{align-items:stretch;flex-direction:column}.live-history-filters label{min-width:0;width:100%}}
