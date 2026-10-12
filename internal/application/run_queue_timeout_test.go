@@ -2,6 +2,7 @@ package application
 
 import (
  "context"
+ "sync"
  "testing"
  "time"
 )
@@ -15,6 +16,9 @@ func TestQueuedRunDeadlineNeverStartsExecutor(t *testing.T) {
   release: make(chan struct{}),
   ignoreCancel: true,
  }
+ var releaseOnce sync.Once
+ release := func() { releaseOnce.Do(func(){ close(executor.release) }) }
+ t.Cleanup(release)
  manager := newMgr(t, executor, store, 1, 2)
  if err := manager.SetRunTimeout(120 * time.Millisecond); err != nil { t.Fatal(err) }
  first, err := manager.Submit(context.Background(), runFixture("600519.SH"))
@@ -34,7 +38,7 @@ func TestQueuedRunDeadlineNeverStartsExecutor(t *testing.T) {
  if got := executor.count(); got != 1 {
   t.Fatalf("queued Run invoked executor despite timeout: calls=%d", got)
  }
- close(executor.release)
+ release()
  _ = awaitRun(t, manager, first.ID, RunFailed)
  reopened, err := NewFileRunStore(store.dir)
  if err != nil { t.Fatal(err) }
