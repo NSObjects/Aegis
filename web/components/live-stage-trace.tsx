@@ -50,10 +50,11 @@ export default function LiveStageTrace({
         <strong>失败诊断 · 来自本次 Run</strong>
         <dl>
           <div><dt>错误代码</dt><dd><code>{run.failure_code ?? "后端未提供"}</code></dd></div>
-          <div><dt>失败阶段</dt><dd>{trace?.explicitFailure ? (stageLabels[trace.explicitFailure] ?? trace.explicitFailure) + "（" + trace.explicitFailure + "）" : "阶段事件未定位"}</dd></div>
+          <div><dt>错误类别</dt><dd><code>{run.failure_category ?? "历史记录未提供"}</code></dd></div>
+          <div><dt>失败阶段</dt><dd>{(run.failure_stage ?? trace?.explicitFailure) ? (stageLabels[run.failure_stage ?? trace!.explicitFailure!] ?? (run.failure_stage ?? trace!.explicitFailure!)) + "（" + (run.failure_stage ?? trace!.explicitFailure!) + "）" : "阶段事件未定位"}</dd></div>
           <div><dt>任务 ID</dt><dd><code>{run.run_id}</code></dd></div>
         </dl>
-        <p>可展开下方原始事件，按 Go seq 和时间核对实际执行过程。错误代码不等于根因；若无失败阶段记录，不推断出错的 Agent。</p>
+        <p>可展开下方原始事件，按 Go seq 和时间核对实际执行过程。类别为后端固定诊断标识，不是原始异常。缺少 FAIL 事件时不推断出错的 Agent；工具 DONE 不等于阶段成功。</p>
       </div>}
       {trace?.explicitFailure && <p role="status" className="live-trace-error">Go 阶段事件明确记录失败：{trace.explicitFailure}（{stageLabels[trace.explicitFailure] ?? "未命名阶段"}）</p>}
       {trace?.unlocatedFailure && <p role="status" className="live-trace-error">任务失败：{run.failure_code ?? "未提供失败代码"}。阶段事件未指明具体失败位置，不能推断哪个 Agent 出错。</p>}

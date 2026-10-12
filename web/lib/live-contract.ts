@@ -62,6 +62,10 @@ export interface LiveRun {
   started_at?: string;
   finished_at?: string;
   failure_code?: string;
+  /** Explicit Go stage FAIL only; absent means location unknown. */
+  failure_stage?: string;
+  /** Fixed safe diagnostic category persisted by Go; no raw model/provider errors. */
+  failure_category?: string;
   /** Server-validated terminal Run this new study was deliberately started from. */
   rerun_of?: string;
   request_snapshot?: RunRequestSnapshot;
