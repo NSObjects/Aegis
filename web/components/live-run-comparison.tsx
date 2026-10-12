@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeftRight, ArrowUpRight, ClipboardList } from "lucide-react";
+import { ArrowLeftRight, ArrowUpRight, ClipboardList, RefreshCcw } from "lucide-react";
 import { isLiveRun, type LiveArtifact, type LiveRun } from "@/lib/live-contract";
 import { compareResearchRuns, type ResearchComparison } from "@/lib/run-comparison";
 import { workbenchHref } from "@/lib/workbench-location";
@@ -41,6 +41,7 @@ export default function LiveRunComparison({
   const { leftId, rightId } = pair;
   const key = (leftId ?? "") + ":" + (rightId ?? "");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [retry, setRetry] = useState(0);
   const [state, setState] = useState<{ key: string; loading: boolean; error: string }>({ key: "", loading: false, error: "" });
   const completed = useMemo(() => runs.filter(run => run.state === "COMPLETED"), [runs]);
   const baseline = completed.find(run => run.run_id === leftId);
@@ -65,7 +66,7 @@ export default function LiveRunComparison({
       if (!cancelled) setState({ key: activeKey, loading: false, error: (err as Error).message });
     });
     return () => { cancelled = true; };
-  }, [leftId, rightId]);
+  }, [leftId, rightId, retry]);
 
   const shown = loaded?.key === key && state.key === key && !state.loading && !state.error ? loaded : null;
   const loading = leftId !== null && rightId !== null && leftId !== rightId &&
@@ -112,7 +113,7 @@ export default function LiveRunComparison({
     {(!leftId || !rightId) && <div className="live-compare-empty"><ClipboardList size={23}/><p>请选择两次已完成研究。相同标的、相同研究模式才能比较；仅有一条历史记录时请先完成另一轮研究。</p></div>}
     {invalidSame && <p className="live-compare-error" role="alert">不能将同一 Run 与自己比较，请选择两条不同的研究记录。</p>}
     {loading && <p className="live-compare-empty" role="status">正在读取两次历史 Run 与各自的原始工件…</p>}
-    {leftId && rightId && state.key === key && state.error && <p className="live-compare-error" role="alert">{state.error}</p>}
+    {leftId && rightId && state.key === key && state.error && <p className="live-compare-error" role="alert">{state.error} <button type="button" className="btn" onClick={() => setRetry(value => value + 1)}><RefreshCcw size={14}/>重新读取</button></p>}
     {shown && <>
       <div className="live-compare-heads">
         <div><small>基准研究 · Source A</small><strong>{shown.left.symbol}</strong><span>PIT {time(shown.left.requested_as_of)}</span>
