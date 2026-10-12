@@ -29,6 +29,10 @@ func TestNonCooperativeExecutorMustNotLeaveRunRunningAfterDeadline(t *testing.T)
  _, capacityErr := manager.Submit(context.Background(), runFixture("000001.SZ"))
  close(ex.release)
  if !errors.Is(capacityErr, ErrRunCapacity) { t.Fatalf("blocked executor prematurely released capacity: %v", capacityErr) }
+ if observed.FinishedAt == nil || observed.FailureCategory != "TIMEOUT" {
+  close(ex.release)
+  t.Fatalf("timeout must have timestamp and safe category: %+v", observed)
+ }
  if observed.State != RunFailed || observed.FailureCode != FailureTimeout {
   t.Fatalf("deadline did not finalize non-cooperative run: state=%s code=%s", observed.State, observed.FailureCode)
  }
