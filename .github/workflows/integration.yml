@@ -596,6 +596,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Web dependencies and Chromium (before paid request)
+        shell: bash
+        run: |
+          cd web
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
       - name: Verify repository credentials
         shell: bash
         run: |
@@ -648,3 +657,7 @@ jobs:
             grep 'AEGIS_RUN_DIAGNOSTIC' "$data_dir/server.log" || echo "::warning::No sanitized run diagnostic found"
             exit 1
           fi
+          # Reuse the same paid Run. The Web browser test is READ-ONLY and
+          # must never create a second provider request.
+          cd web
+          npx playwright test --config playwright.hosted.config.ts
