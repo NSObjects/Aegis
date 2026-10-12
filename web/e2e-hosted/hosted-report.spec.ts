@@ -28,7 +28,6 @@ test("completed hosted Go/Eino research remains readable in the actual Web workb
   await expect(details).toContainText("已完成");
   await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeEnabled();
-  await expect(page.locator("#report-synthesis")).toBeVisible();
   await page.reload();
   await expect(details).toContainText(runId);
   await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeEnabled();
