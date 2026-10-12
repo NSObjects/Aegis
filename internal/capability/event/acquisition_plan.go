@@ -167,6 +167,7 @@ func (r AcquisitionPlanRunner) Run(
         if runErr != nil || run.Attempt.Status != AcquisitionSucceeded { resultStatus = "FAIL" }
         reportRetrieval(ctx, RetrievalObservation{
             RetrieverID: step.Retriever.ID(), Status: resultStatus,
+            Outcome: retrievalOutcome(run.Attempt.Status, runErr),
             At: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds(),
         })
 		stepOutput := AcquisitionStepOutput{
