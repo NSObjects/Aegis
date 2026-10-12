@@ -1,12 +1,24 @@
 package debate
 
-import ("strings";"testing")
+import (
+ "strings"
+ "testing"
+)
 
 func TestResearchDebateRequiresChineseNarrative(t *testing.T) {
- for name,prompt:=range map[string]string{"bull":bullInstruction,"bear":bearInstruction}{
-  if !strings.Contains(prompt,"简体中文") {t.Fatalf("%s debate narrative must be simplified Chinese",name)}
-  for _,literal:=range []string{`"side": "BULL"`,`"side": "BEAR"`}{
-   if strings.Contains(prompt,literal) {break}
+ cases:=[]struct{name,prompt,side string}{
+  {"bull",bullInstruction,`"side": "BULL"`},
+  {"bear",bearInstruction,`"side": "BEAR"`},
+ }
+ for _,tc:=range cases {
+  if !strings.Contains(tc.prompt,"简体中文") {
+   t.Errorf("%s debate thesis, claims and rebuttals must be Chinese",tc.name)
+  }
+  if !strings.Contains(tc.prompt,tc.side) {
+   t.Errorf("%s must retain exact typed side enum",tc.name)
+  }
+  if !strings.Contains(tc.prompt,"event_id") {
+   t.Errorf("%s must preserve typed event citations",tc.name)
   }
  }
 }
