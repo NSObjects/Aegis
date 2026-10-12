@@ -144,7 +144,7 @@ func (w *FullPortfolioWorkflow) Run(
 			// scenario. Do not even compute an indicative projection.
 			scenarioReview = portfolio.BuildNotApplicableScenario(
 				w.Scenario, w.Limits,
-				fmt.Sprintf("research trade intent is %s, not CANDIDATE; no post-trade projection evaluated",
+				fmt.Sprintf("研究意向为 %s，并非 CANDIDATE，因此没有计算交易后的敞口预测",
 					result.TradeIntent.Status))
 		} else {
 			scenarioReview, err = portfolio.EvaluateTradeScenario(
