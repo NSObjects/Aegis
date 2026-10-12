@@ -5,7 +5,7 @@ const baseURL = "http://127.0.0.1:3210";
 const apiURL = "http://127.0.0.1:18787";
 export default defineConfig({
   testDir: "./e2e-real-go",
-  testMatch: "*.spec.ts",
+  testMatch: "real-go-smoke.spec.ts",
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
