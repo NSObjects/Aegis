@@ -1,6 +1,7 @@
 package research
 
 import (
+ "sync"
 	eventagent "Aegis/internal/agent/event"
 	"Aegis/internal/agent/fundamental"
 	"Aegis/internal/agent/market"
@@ -187,11 +188,10 @@ func NewArtifact(
 					query,
 				)
 			if err != nil {
-				return nil, fmt.Errorf(
-					"market research: %w",
-					err,
-				)
-			}
+                wrapped := fmt.Errorf("market research: %w", err)
+                recordResearchFailure(ctx, wrapped)
+                return nil, wrapped
+            }
 			if err := market.Validate(
 				marketContext,
 			); err != nil {
@@ -234,11 +234,10 @@ func NewArtifact(
 					input.EventInput,
 				)
 			if err != nil {
-				return nil, fmt.Errorf(
-					"event research: %w",
-					err,
-				)
-			}
+                wrapped := fmt.Errorf("event research: %w", err)
+                recordResearchFailure(ctx, wrapped)
+                return nil, wrapped
+            }
 			if err := eventagent.Validate(
 				eventContext,
 			); err != nil {
@@ -463,6 +462,27 @@ func NewArtifact(
 
 // RunArtifact returns validated research facts from the real upstream graph
 // without invoking Trading, Debate, Risk or Portfolio roles.
+// failFastResearch coordinates only nodes belonging to one invocation.
+// A stage error cancels sibling model calls, while retaining the first cause.
+type failFastResearch struct {
+ mu sync.Mutex
+ first error
+ cancel context.CancelFunc
+}
+type failFastResearchKey struct{}
+func recordResearchFailure(ctx context.Context, err error) {
+ if err == nil { return }
+ state, ok := ctx.Value(failFastResearchKey{}).(*failFastResearch)
+ if !ok || state == nil { return }
+ state.mu.Lock()
+ if state.first == nil { state.first = err; state.cancel() }
+ state.mu.Unlock()
+}
+func (f *failFastResearch) cause() error {
+ f.mu.Lock(); defer f.mu.Unlock()
+ return f.first
+}
+
 func (w *Workflow) RunArtifact(
 	ctx context.Context,
 	input Input,
@@ -474,7 +494,12 @@ func (w *Workflow) RunArtifact(
 	if err != nil {
 		return nil, err
 	}
-	artifact, err := w.artifactRunnable.Invoke(ctx, normalized)
+	runCtx, cancel := context.WithCancel(ctx)
+    defer cancel()
+    failure := &failFastResearch{cancel: cancel}
+    runCtx = context.WithValue(runCtx, failFastResearchKey{}, failure)
+    artifact, err := w.artifactRunnable.Invoke(runCtx, normalized)
+    if first := failure.cause(); first != nil { return nil, fmt.Errorf("run research artifact workflow: %w", first) }
 	if err != nil {
 		return nil, fmt.Errorf("run research artifact workflow: %w", err)
 	}
