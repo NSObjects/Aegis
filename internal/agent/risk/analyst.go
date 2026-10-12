@@ -42,10 +42,10 @@ func (a *Analyst) Review(
 		result := &riskctx.Context{
 			Symbol:     intent.Symbol,
 			Assessment: riskctx.AssessmentInsufficientContext,
-			Summary:    "portfolio context was not provided, so portfolio-level risk cannot be assessed",
+			Summary:    "未提供组合账户信息，因此无法评估组合层面的风险",
 			Unresolved: []riskctx.Item{
 				{
-					Claim: "portfolio-level exposure and position interaction cannot be assessed from the supplied inputs",
+					Claim: "根据已提供信息，无法评估组合敞口及持仓之间的相互影响",
 					References: []riskctx.Reference{
 						{Domain: riskctx.ReferenceTradeIntent, Symbol: intent.Symbol},
 					},
