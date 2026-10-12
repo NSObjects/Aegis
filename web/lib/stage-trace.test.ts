@@ -63,6 +63,18 @@ describe("evidence-grounded Go stage timeline", () => {
     expect(trace.stages[1].phase).toBe("RUNNING");
   });
 
+  it("keeps observed tool events out of agent phase transitions", () => {
+    const trace = buildRunTrace(run("COMPLETED"), [
+      event(1, "Event", "START"),
+      { ...event(2, "Event", "FAIL"), kind: "TOOL", tool: "news_search" },
+      { ...event(3, "Event", "DONE"), kind: "TOOL", tool: "news_search" },
+      event(4, "Event", "DONE", 120),
+    ]);
+    expect(trace.stages).toHaveLength(1);
+    expect(trace.stages[0]).toMatchObject({ stage: "Event", phase: "DONE", lastSeq: 4, durationMS: 120 });
+    expect(trace.explicitFailure).toBeNull();
+  });
+
   it("links only known report cards and not arbitrary stage names", () => {
     expect(stageReportId.Market).toBe("market");
     expect(stageReportId.FinalRiskGate).toBe("portfolio");
