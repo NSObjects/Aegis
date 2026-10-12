@@ -35,6 +35,7 @@ const (
 	FailureInterrupted   = "PROCESS_INTERRUPTED"
 	FailureInvalidResult = "INVALID_RESULT"
 	FailurePersistence   = "PERSISTENCE_FAILED"
+	FailureTimeout       = "RESEARCH_TIMEOUT"
 )
 
 // RunEvent is a persisted, replayable, non-sensitive execution event.
@@ -166,6 +167,7 @@ type RunManager struct {
 	cancel    context.CancelFunc
 	slots     chan struct{}
 	maxActive int
+	runTimeout time.Duration
 	wg        sync.WaitGroup
 	now       func() time.Time
 }
@@ -209,7 +211,7 @@ func NewRunManager(executor ResearchExecutor, store RunStore, maxParallel, maxAc
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &RunManager{executor: executor, store: store, active: make(map[string]context.CancelFunc), idempotency: index, ctx: ctx, cancel: cancel, slots: make(chan struct{}, maxParallel), maxActive: maxActive, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &RunManager{executor: executor, store: store, active: make(map[string]context.CancelFunc), idempotency: index, ctx: ctx, cancel: cancel, slots: make(chan struct{}, maxParallel), maxActive: maxActive, runTimeout: 20*time.Minute, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRecord, error) {
@@ -287,7 +289,7 @@ func (m *RunManager) Submit(ctx context.Context, request ResearchRequest) (RunRe
 	if err := m.store.Save(ctx, record); err != nil {
 		return RunRecord{}, fmt.Errorf("persist new research run: %w", err)
 	}
-	runCtx, cancel := context.WithCancel(m.ctx)
+	runCtx, cancel := context.WithTimeout(m.ctx, m.runTimeout)
 	if keyDigest != "" {m.idempotency[keyDigest] = runKeyIndexEntry{RunID:id, Fingerprint:requestFingerprint}}
 	m.active[id] = cancel
 	m.wg.Add(1)
@@ -415,6 +417,7 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 			record.FailureStage = explicitFailedStage(record.Events)
 			switch code {
 			case FailurePersistence: record.FailureCategory = "PERSISTENCE"
+			case FailureTimeout: record.FailureCategory = "TIMEOUT"
 			case FailureInvalidResult: record.FailureCategory = "INVALID_RESULT"
 			case FailureInterrupted: record.FailureCategory = "PROCESS_INTERRUPTED"
 			default: if record.FailureCategory == "" { record.FailureCategory = "UNKNOWN" }
@@ -429,11 +432,11 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 	case m.slots <- struct{}{}:
 		defer func() { <-m.slots }()
 	case <-ctx.Done():
-		terminal(RunCancelled, "", nil)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) { terminal(RunFailed, FailureTimeout, nil) } else { terminal(RunCancelled, "", nil) }
 		return
 	}
 	if ctx.Err() != nil {
-		terminal(RunCancelled, "", nil)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) { terminal(RunFailed, FailureTimeout, nil) } else { terminal(RunCancelled, "", nil) }
 		return
 	}
 	mu.Lock()
@@ -534,7 +537,7 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		return
 	}
 	if ctx.Err() != nil {
-		terminal(RunCancelled, "", nil)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) { terminal(RunFailed, FailureTimeout, nil) } else { terminal(RunCancelled, "", nil) }
 		return
 	}
 	if err != nil {
@@ -679,4 +682,15 @@ func explicitFailedStage(events []RunEvent) string {
 		}
 	}
 	return ""
+}
+
+// SetRunTimeout configures the deadline for future submissions. Call once
+// during initialization, before concurrent Submit calls; zero is not allowed.
+func (m *RunManager) SetRunTimeout(timeout time.Duration) error {
+ if m == nil || timeout <= 0 { return errors.New("research timeout must be positive") }
+ m.mu.Lock()
+ defer m.mu.Unlock()
+ if len(m.active) != 0 { return errors.New("cannot change timeout while research is active") }
+ m.runTimeout = timeout
+ return nil
 }
