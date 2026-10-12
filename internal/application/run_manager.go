@@ -536,7 +536,12 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 	go func() {
 		select {
 		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			mu.Lock()
+			persistFailed := eventPersistError
+			mu.Unlock()
+			if persistFailed {
+				terminal(RunFailed, FailurePersistence, nil)
+			} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				terminal(RunFailed, FailureTimeout, nil)
 			} else {
 				terminal(RunCancelled, "", nil)
