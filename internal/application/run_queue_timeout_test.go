@@ -18,7 +18,7 @@ func TestQueuedRunDeadlineNeverStartsExecutor(t *testing.T) {
  }
  var releaseOnce sync.Once
  release := func() { releaseOnce.Do(func(){ close(executor.release) }) }
- t.Cleanup(release)
+ defer release()
  manager := newMgr(t, executor, store, 1, 2)
  if err := manager.SetRunTimeout(120 * time.Millisecond); err != nil { t.Fatal(err) }
  first, err := manager.Submit(context.Background(), runFixture("600519.SH"))
