@@ -30,7 +30,6 @@ func TestNonCooperativeExecutorMustNotLeaveRunRunningAfterDeadline(t *testing.T)
  close(ex.release)
  if !errors.Is(capacityErr, ErrRunCapacity) { t.Fatalf("blocked executor prematurely released capacity: %v", capacityErr) }
  if observed.FinishedAt == nil || observed.FailureCategory != "TIMEOUT" {
-  close(ex.release)
   t.Fatalf("timeout must have timestamp and safe category: %+v", observed)
  }
  if observed.State != RunFailed || observed.FailureCode != FailureTimeout {
