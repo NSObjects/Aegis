@@ -38,10 +38,10 @@ func (r *HTTPResearcher) Research(ctx context.Context,req Request)(map[string]an
  factors:=map[string]float64{};for _,x:=range adj{factors[str(x["trade_date"])]=num(x["adj_factor"])}
  bars:=make([]bar,0,len(daily));for _,x:=range daily{date:=str(x["trade_date"]);af,ok:=factors[date];if !ok||af==0{continue};bars=append(bars,bar{Date:date,Open:num(x["open"]),High:num(x["high"]),Low:num(x["low"]),Close:num(x["close"]),PreClose:num(x["pre_close"]),Pct:num(x["pct_chg"]),Vol:num(x["vol"])*100,Amount:num(x["amount"])*1000,Adj:af})}
  sort.Slice(bars,func(i,j int)bool{return bars[i].Date<bars[j].Date});if len(bars)==0{return statusMap(symbol,asof,"NO_DATA","","daily and adjustment factor series do not overlap"),nil}
- history,historyErr:=observedHistoricalBars(bars);if historyErr!=nil{return nil,fmt.Errorf("invalid historical daily data: %w",historyErr)}
+ history,historyErr:=observedHistoricalBars(bars)
  latest:=bars[len(bars)-1];anchor:=latest.Adj;q:=make([]float64,len(bars));for i,b:=range bars{q[i]=b.Close*b.Adj/anchor}
  db,_:=r.api.query(ctx,"daily_basic",map[string]any{"ts_code":symbol,"trade_date":latest.Date},"turnover_rate");var turnover any=nil;if len(db)>0{turnover=num(db[0]["turnover_rate"])}
- warns:=[]string{};if fallback!=""{warns=append(warns,fallback)};if len(bars)<requiredBars{warns=append(warns,fmt.Sprintf("insufficient_history: %d trading bars available; %d required",len(bars),requiredBars))}
+ warns:=[]string{};if historyErr!=nil{warns=append(warns,"historical_ohlcv_unavailable: invalid or duplicate observed trading dates");history=nil};if fallback!=""{warns=append(warns,fallback)};if len(bars)<requiredBars{warns=append(warns,fmt.Sprintf("insufficient_history: %d trading bars available; %d required",len(bars),requiredBars))}
  return map[string]any{"symbol":symbol,"requested_as_of":asof,"effective_as_of":latest.Date,"last_trade_date":latest.Date,"status":"NORMAL",
   "price_basis":map[string]any{"snapshot":"RAW","technical":"PIT_QFQ","pit_anchor":latest.Date,"anchor_adj_factor":round(anchor,6)},
   "historical_ohlcv":map[string]any{"version":1,"price_basis":"RAW","bars":history},
