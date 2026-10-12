@@ -12,7 +12,7 @@ describe("Markdown report export", () => {
     expect(result).toContain("600519.SH");
     expect(result).toContain("2026-10-12T00:00:00Z");
     expect(result).toContain("E-42");
-    expect(result).toContain("NOT_PROVIDED");
+    expect(result).toContain(String.raw`NOT\_PROVIDED`);
     expect(result).not.toContain("secret-input-not-for-export");
     expect(result).toContain("不构成交易指令");
   });
@@ -26,4 +26,19 @@ describe("Markdown report export", () => {
     expect(result).toContain("谨慎观察");
     expect(result).not.toContain("组合决策");
   });
+  it("keeps model-provided Markdown syntax as plain report content", () => {
+    const result = renderResearchMarkdown({
+      symbol: "600519.SH",
+      market_view: "## 伪造的报告章节 [外部链接](https://example.invalid) **保证收益**",
+      action: "WATCH",
+      evidence: ["ordinary evidence"],
+    }, { ...run, mode: "DECISION" });
+    expect(result).toContain("# Aegis 研究报告");
+    expect(result).toContain("## 研究结论");
+    expect(result).not.toContain("\n## 伪造的报告章节");
+    expect(result).not.toContain("[外部链接](https://example.invalid)");
+    expect(result).not.toContain("**保证收益**");
+    expect(result).toContain("\\#\\# 伪造的报告章节");
+  });
+
 });
