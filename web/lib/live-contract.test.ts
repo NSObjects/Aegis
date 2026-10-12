@@ -18,7 +18,7 @@ describe("rerun origin metadata", () => {
 });
 
 describe("observed tool event validation", () => {
-  const tool = { seq: 8, stage: "Event", status: "FAIL", kind: "TOOL", tool: "snapshot_official", at: "2026-10-10T12:00:00Z" };
+  const tool = { seq: 8, stage: "Event", status: "FAIL", kind: "TOOL" as const, tool: "snapshot_official", at: "2026-10-10T12:00:00Z" };
   it("accepts only sanitized observed tool metadata", () => {
     expect(isLiveEvent(tool)).toBe(true);
     expect(isLiveEvent({ ...tool, tool: "api_key=secret" })).toBe(false);
