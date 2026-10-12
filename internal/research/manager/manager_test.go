@@ -91,7 +91,7 @@ func TestResearchManagerOmitsInvalidOptionalDebateLinksAfterRetry(t *testing.T) 
 	if len(plan.AcceptedArgumentIDs)!=1 || plan.AcceptedArgumentIDs[0]!="bull-r1-a1" || len(plan.Opportunities[0].ArgumentIDs)!=0 {
 		t.Fatalf("invalid IDs must not survive repair: %+v",plan)
 	}
-	if len(plan.TradingConstraints)==0 || !strings.Contains(plan.TradingConstraints[len(plan.TradingConstraints)-1],"omitted") {
+	if len(plan.TradingConstraints)==0 || !strings.Contains(plan.TradingConstraints[len(plan.TradingConstraints)-1],"已移除") {
 		t.Fatalf("provenance loss must be disclosed: %+v",plan)
 	}
 	if err:=Validate(plan,managerArtifact(),managerDebate());err!=nil {t.Fatalf("corrected plan invalid: %v",err)}
