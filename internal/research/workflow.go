@@ -1,6 +1,7 @@
 package research
 
 import (
+ "sync"
 	eventagent "Aegis/internal/agent/event"
 	"Aegis/internal/agent/fundamental"
 	"Aegis/internal/agent/market"
@@ -174,6 +175,7 @@ func NewArtifact(
 			input Input,
 		) (out *marketResult, runErr error) {
             defer startProgress(ctx, "Market")(&runErr)
+            defer func() { recordResearchFailure(ctx, runErr) }()
 			query := strings.TrimSpace(
 				input.MarketQuery,
 			)
@@ -228,6 +230,7 @@ func NewArtifact(
 			input Input,
 		) (out *eventResult, runErr error) {
             defer startProgress(ctx, "Event")(&runErr)
+            defer func() { recordResearchFailure(ctx, runErr) }()
 			eventContext, err :=
 				cfg.EventAgent.Analyze(
 					ctx,
@@ -461,6 +464,26 @@ func NewArtifact(
 	}, nil
 }
 
+// failFastResearch cancels cooperative siblings and preserves the first stage error.
+type failFastResearch struct {
+ mu sync.Mutex
+ first error
+ cancel context.CancelFunc
+}
+type failFastResearchKey struct{}
+func recordResearchFailure(ctx context.Context, err error) {
+ if err == nil { return }
+ state, ok := ctx.Value(failFastResearchKey{}).(*failFastResearch)
+ if !ok || state == nil { return }
+ state.mu.Lock()
+ if state.first == nil { state.first = err; state.cancel() }
+ state.mu.Unlock()
+}
+func (f *failFastResearch) cause() error {
+ f.mu.Lock(); defer f.mu.Unlock()
+ return f.first
+}
+
 // RunArtifact returns validated research facts from the real upstream graph
 // without invoking Trading, Debate, Risk or Portfolio roles.
 func (w *Workflow) RunArtifact(
@@ -474,7 +497,12 @@ func (w *Workflow) RunArtifact(
 	if err != nil {
 		return nil, err
 	}
-	artifact, err := w.artifactRunnable.Invoke(ctx, normalized)
+	runCtx, cancel := context.WithCancel(ctx)
+    defer cancel()
+    failure := &failFastResearch{cancel: cancel}
+    runCtx = context.WithValue(runCtx, failFastResearchKey{}, failure)
+    artifact, err := w.artifactRunnable.Invoke(runCtx, normalized)
+    if first := failure.cause(); first != nil { return nil, fmt.Errorf("run research artifact workflow: %w", first) }
 	if err != nil {
 		return nil, fmt.Errorf("run research artifact workflow: %w", err)
 	}
