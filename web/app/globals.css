@@ -838,3 +838,11 @@ svg { flex-shrink: 0; }
 .live-trace-diagnostic dd{margin:0;overflow-wrap:anywhere;font-size:12px}
 .live-trace-diagnostic code{white-space:normal;overflow-wrap:anywhere}
 .live-trace-diagnostic p{font-size:11px;line-height:1.7;margin:11px 0 0;color:#dbc0c5}
+
+/* Report chapter directory: visible keyboard-focusable anchors, no backend changes. */
+.live-chapter-index { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border, #334155); border-radius: 12px; }
+.live-chapter-index > strong { display: block; margin-bottom: .65rem; }
+.live-chapter-index-links { display: flex; flex-wrap: wrap; gap: .5rem; }
+.live-chapter-index-links a { display: inline-block; padding: .4rem .7rem; border: 1px solid currentColor; border-radius: 8px; text-decoration: none; font-size: .9rem; }
+.live-chapter-index-links a:hover { text-decoration: underline; }
+.live-chapter-index-links a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
