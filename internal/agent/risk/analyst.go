@@ -3,6 +3,7 @@ package risk
 import (
 	"Aegis/internal/portfolio"
 	riskctx "Aegis/internal/risk"
+	"Aegis/internal/researchlang"
 	"Aegis/internal/tradeintent"
 	"context"
 	"encoding/json"
@@ -78,26 +79,38 @@ func (a *Analyst) Review(
 		return nil, fmt.Errorf("encode risk analyst input: %w", err)
 	}
 
-	response, err := a.Model.Generate(ctx, []*schema.AgenticMessage{
-		schema.SystemAgenticMessage(instruction),
-		schema.UserAgenticMessage(string(payload)),
-	}, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("generate risk context: %w", err)
-	}
+	messages:=[]*schema.AgenticMessage{
+        schema.SystemAgenticMessage(instruction),
+        schema.UserAgenticMessage(string(payload)),
+    }
+    for attempt:=0;attempt<2;attempt++{
+        if err:=ctx.Err();err!=nil{return nil,err}
+        response,err:=a.Model.Generate(ctx,messages,opts...)
+        if err!=nil{return nil,fmt.Errorf("generate risk context: %w",err)}
+        raw:=strings.TrimSpace(assistantText(response))
+        if raw=="" {return nil,errors.New("risk analyst returned empty output")}
+        result,err:=decodeContext(raw)
+        if err!=nil{return nil,err}
+        if err:=riskctx.Validate(&result,intent,portfolioCtx);err!=nil{
+            return nil,fmt.Errorf("invalid risk context: %w",err)
+        }
+        if langErr:=checkRiskLanguage(ctx,&result);langErr!=nil{
+            if attempt==1{return nil,fmt.Errorf("risk narrative invalid after 2 attempts: %w",langErr)}
+            messages[1]=schema.UserAgenticMessage(string(payload)+"\n\n"+researchlang.Correction)
+            continue
+        }
+        return &result,nil
+    }
+    return nil,errors.New("risk narrative attempts exhausted")
+}
 
-	raw := strings.TrimSpace(assistantText(response))
-	if raw == "" {
-		return nil, errors.New("risk analyst returned empty output")
-	}
-	result, err := decodeContext(raw)
-	if err != nil {
-		return nil, err
-	}
-	if err := riskctx.Validate(&result, intent, portfolioCtx); err != nil {
-		return nil, fmt.Errorf("invalid risk context: %w", err)
-	}
-	return &result, nil
+func checkRiskLanguage(ctx context.Context,result *riskctx.Context) error {
+    if result==nil{return errors.New("risk context is nil")}
+    fields:=[]researchlang.Field{{Name:"risk.summary",Text:result.Summary}}
+    for _,item:=range result.Findings{fields=append(fields,researchlang.Field{Name:"risk.findings.claim",Text:item.Claim})}
+    for _,item:=range result.Constraints{fields=append(fields,researchlang.Field{Name:"risk.constraints.claim",Text:item.Claim})}
+    for _,item:=range result.Unresolved{fields=append(fields,researchlang.Field{Name:"risk.unresolved.claim",Text:item.Claim})}
+    return researchlang.Check(ctx,fields...)
 }
 
 func decodeContext(raw string) (riskctx.Context, error) {

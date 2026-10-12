@@ -349,7 +349,7 @@ func TestAgenticSynthesizerOmitsUnsupportedSameDomainAfterRepair(t *testing.T) {
  if len(result.Synthesis.Conflicts)!=1 || result.Synthesis.Conflicts[0].Description!="valid cross-domain disagreement" {
   t.Fatalf("valid cross-domain conflict must survive, got %+v",result.Synthesis.Conflicts)
  }
- if len(result.Synthesis.Risks)!=2 || result.Synthesis.Risks[0]!="original risk" || !strings.Contains(result.Synthesis.Risks[1],"omitted") {
+ if len(result.Synthesis.Risks)!=2 || result.Synthesis.Risks[0]!="original risk" || !strings.Contains(result.Synthesis.Risks[1],"已经移除") {
   t.Fatalf("omission must be visible as an explicit limitation, risks=%v",result.Synthesis.Risks)
  }
  if result.Market!=input.Market || result.Technical!=input.Technical || result.Event!=input.Event {

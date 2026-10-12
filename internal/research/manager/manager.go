@@ -3,6 +3,7 @@ package manager
 import (
 	"Aegis/internal/research/debate"
 	"Aegis/internal/research/synthesis"
+	"Aegis/internal/researchlang"
 	"context"
 	"encoding/json"
 	"errors"
@@ -55,8 +56,10 @@ func (m *ResearchManager) BuildPlan(ctx context.Context, artifact *synthesis.Art
 		if raw == "" { lastErr = errors.New("research manager returned empty output") } else {
 			plan, decodeErr := decodeResearchPlan(raw)
 			if decodeErr != nil { lastErr = decodeErr } else if validationErr := Validate(&plan, artifact, state); validationErr == nil {
-				return &plan, nil
-			} else {
+                if languageErr := checkPlanLanguage(ctx, &plan); languageErr == nil {
+                    return &plan, nil
+                } else { lastErr = languageErr }
+            } else {
 				lastErr = fmt.Errorf("invalid research plan: %w", validationErr)
 				// Model correction was exhausted. Unknown IDs are unsupported
 				// provenance links, not evidence. Remove just those links, retain
@@ -64,20 +67,29 @@ func (m *ResearchManager) BuildPlan(ctx context.Context, artifact *synthesis.Art
 				// Other schema and reference failures must remain fatal.
 				if attempt == 1 && ValidateForTrading(&plan, artifact) == nil {
 					corrected, removed := omitUnknownManagerLinks(plan, known)
-					if removed > 0 && Validate(&corrected, artifact, state) == nil {
-						return &corrected, nil
-					}
+					if removed > 0 && Validate(&corrected, artifact, state) == nil && checkPlanLanguage(ctx, &corrected) == nil {
+                        return &corrected, nil
+                    }
 				}
 			}
 		}
 		if attempt == 0 {
 			allowed, _ := json.Marshal(known)
 			messages = append(messages, response, schema.UserAgenticMessage(
-				fmt.Sprintf("Your previous result failed validation: %v. Return the FULL corrected ResearchPlan JSON. These are the ONLY permitted debate argument IDs: %s. Preserve the input facts. For any unknown or uncertain link, OMIT its ID rather than inventing a replacement. Do not add IDs unsupported by the debate.", lastErr, allowed),
+				fmt.Sprintf("Your previous result failed validation: %v. Return the FULL corrected ResearchPlan JSON. These are the ONLY permitted debate argument IDs: %s. Preserve the input facts. For any unknown or uncertain link, OMIT its ID rather than inventing a replacement. Do not add IDs unsupported by the debate. %s", lastErr, allowed, researchlang.Correction),
 			))
 		}
 	}
 	return nil, lastErr
+}
+
+func checkPlanLanguage(ctx context.Context, plan *ResearchPlan) error {
+    if plan == nil { return errors.New("research plan is nil") }
+    fields := []researchlang.Field{{Name:"research_plan.summary",Text:plan.Summary}}
+    for _,item:=range plan.Opportunities { fields=append(fields,researchlang.Field{Name:"research_plan.opportunities.claim",Text:item.Claim}) }
+    for _,item:=range plan.Risks { fields=append(fields,researchlang.Field{Name:"research_plan.risks.claim",Text:item.Claim}) }
+    for _,line:=range plan.TradingConstraints {fields=append(fields,researchlang.Field{Name:"research_plan.trading_constraints",Text:line})}
+    return researchlang.Check(ctx,fields...)
 }
 
 // debateArgumentIDs enumerates the only IDs that can be attributed to the
@@ -90,7 +102,7 @@ func debateArgumentIDs(state *debate.State) []string {
 	return ids
 }
 
-const missingManagerArgumentProvenance = "Research Manager omitted invalid debate argument ID references; the removed links are unverified and must not be relied upon."
+const missingManagerArgumentProvenance = "研究经理已移除无效的辩论论点 ID 引用，这些关联未经验证，不得作为可靠依据。"
 
 // This is a last-resort provenance reduction, not a substitute for validation.
 // It never creates debate arguments, new references or substantive claims.

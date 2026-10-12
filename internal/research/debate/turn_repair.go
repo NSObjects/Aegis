@@ -2,6 +2,7 @@ package debate
 
 import (
 	"Aegis/internal/research/synthesis"
+	"Aegis/internal/researchlang"
 	"context"
 	"errors"
 	"fmt"
@@ -46,8 +47,9 @@ func generateValidatedTurn(
 		}
 		turn, validationErr := parseValidatedTurn(response, artifact, state, round, expectedSide)
 		if validationErr == nil {
-			return turn, nil
-		}
+            validationErr=checkTurnLanguage(ctx,turn)
+            if validationErr==nil{return turn,nil}
+        }
 		if attempt == maxDebateTurnAttempts {
 			return Turn{}, fmt.Errorf("invalid %s researcher turn after %d attempts: %w",
 				strings.ToLower(string(expectedSide)), attempt, validationErr)
@@ -64,11 +66,18 @@ func generateValidatedTurn(
 				"when an opposing argument exists in debate_state, rebuttals MUST target at least one real prior opposing argument ID. "+
 				"Other rebuttals may refer only to argument IDs already in the supplied debate_state. "+
 				"Do not invent facts, references, events or prior argument IDs. "+
-				"Return only the complete corrected JSON object.",
-			validationErr, expectedSide, round,
+				"Return only the complete corrected JSON object. %s",
+            validationErr, expectedSide, round,researchlang.Correction,
 		)))
 	}
 	return Turn{}, errors.New("debate turn validation exhausted")
+}
+
+func checkTurnLanguage(ctx context.Context,turn Turn) error {
+    fields:=[]researchlang.Field{{Name:"debate.thesis",Text:turn.Thesis}}
+    for _,a:=range turn.Arguments{fields=append(fields,researchlang.Field{Name:"debate.arguments.claim",Text:a.Claim})}
+    for _,r:=range turn.Rebuttals{fields=append(fields,researchlang.Field{Name:"debate.rebuttals.claim",Text:r.Claim})}
+    return researchlang.Check(ctx,fields...)
 }
 
 func parseValidatedTurn(

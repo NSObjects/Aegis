@@ -6,6 +6,7 @@ import (
 	"Aegis/internal/decision"
 	"Aegis/internal/research/synthesis"
 	"Aegis/internal/research/manager"
+	"Aegis/internal/researchlang"
 	"Aegis/internal/tradeintent"
 	"context"
 	"encoding/json"
@@ -340,18 +341,16 @@ func runDecision(
 		}
 
 		var syntaxErr *json.SyntaxError
-		if !errors.As(err, &syntaxErr) || attempt == maxTradingDecisionJSONAttempts {
-			return nil, fmt.Errorf(
-				"trading decision attempt %d/%d: %w",
-				attempt, maxTradingDecisionJSONAttempts, err,
-			)
-		}
-		// JSON mode is a generation constraint, not a guarantee. Re-run the
-		// original validated research prompt; never repair the response by
-		// inserting or deleting characters in the model's decision.
-		query += "\n\n上一轮输出包含 JSON 语法错误。请基于同一份上游研究材料重新生成完整的合法 JSON object。" +
-			" 确保 evidence 和 risk 都是正确闭合的字符串数组，不要输出 Markdown 或额外文字。" +
-			" 严格遵守相同的 Decision 字段与证据约束，不允许新增上游未提供的事实。"
+        languageErr:=errors.Is(err,researchlang.ErrLanguage)
+        if (!errors.As(err,&syntaxErr) && !languageErr) || attempt==maxTradingDecisionJSONAttempts {
+            return nil,fmt.Errorf("trading decision attempt %d/%d: %w",attempt,maxTradingDecisionJSONAttempts,err)
+        }
+        // Regenerate using the identical evidence. Never patch JSON facts or citations.
+        if languageErr {
+            query+="\n\n"+researchlang.Correction
+        } else {
+            query+="\n\n上一轮输出包含 JSON 语法错误。请基于同一份上游研究材料重新生成完整的合法 JSON object。确保 evidence 和 risk 是有效字符串数组，不新增事实。"
+        }
 	}
 	return nil, errors.New("trading decision retry exhausted")
 }
@@ -399,7 +398,11 @@ func runDecisionOnce(
 			result.Symbol, symbol,
 		)
 	}
-	return result, nil
+	fields:=[]researchlang.Field{{Name:"decision.market_view",Text:result.MarketView}}
+    for _,line:=range result.Evidence{fields=append(fields,researchlang.Field{Name:"decision.evidence",Text:line})}
+    for _,line:=range result.Risk{fields=append(fields,researchlang.Field{Name:"decision.risk",Text:line})}
+    if err:=researchlang.Check(ctx,fields...);err!=nil{return nil,err}
+    return result,nil
 }
 
 func parseDecision(
