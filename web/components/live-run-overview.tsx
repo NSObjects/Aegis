@@ -46,7 +46,7 @@ export default function LiveRunOverview({
     <div className="run-overview-sync" role="status">
       <span className={syncError ? "run-overview-sync-error" : ""}>
         <Activity size={14}/>
-        {!syncedAt ? "尚未获取服务端任务列表" : syncError ?
+        {!syncedAt && syncError ? "首次同步失败 · 暂无可靠任务数据" : !syncedAt ? "尚未获取服务端任务列表" : syncError ?
           "最近一次同步失败 · 数据可能已过期" : "最近一次浏览器同步：" + ts(syncedAt)}
       </span>
       <button type="button" className="run-overview-refresh" onClick={onRefresh}><RefreshCcw size={13}/>立即刷新</button>
