@@ -627,3 +627,22 @@ test("completed research defaults to a readable brief with expandable source cha
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(overview.getByText("研究结论 · 源自 Go 工件")).toBeVisible();
 });
+
+test("research history filters loaded runs without hiding source data or inventing pagination", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.getByRole("button", { name: "研究历史" }).click();
+  const rows = page.locator(".live-history-row");
+  await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
+  await page.getByLabel("按股票代码筛选").fill("000000");
+  await expect(rows).toHaveCount(0);
+  await expect(page.getByText("已加载记录中没有符合筛选条件的任务", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "清除筛选" }).click();
+  await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
+  await page.getByLabel("按任务状态筛选").selectOption("FAILED");
+  await expect(rows.filter({ hasText: id.slice(0, 12) })).toHaveCount(0);
+  await page.getByLabel("按任务状态筛选").selectOption("COMPLETED");
+  await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
+  await expect(page.locator(".live-history")).toContainText("已加载");
+});
