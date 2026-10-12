@@ -511,3 +511,15 @@ func applyEvidenceSelection(
 
 	return selected, nil
 }
+
+ 
+// retrievalOutcome projects the actual acquisition result without provider text.
+func retrievalOutcome(status AcquisitionStatus, runErr error) string {
+ if runErr != nil { return "FAILED" }
+ switch status {
+ case AcquisitionSucceeded: return "SUCCEEDED"
+ case AcquisitionPartial: return "PARTIAL"
+ case AcquisitionTimeout: return "TIMEOUT"
+ default: return "FAILED"
+ }
+}
