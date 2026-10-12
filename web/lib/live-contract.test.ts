@@ -16,3 +16,19 @@ describe("rerun origin metadata", () => {
     expect(isLiveRun({ ...run, rerun_of: "" })).toBe(false);
   });
 });
+
+describe("observed tool event validation", () => {
+  const tool = { seq: 8, stage: "Event", status: "FAIL", kind: "TOOL", tool: "snapshot_official", at: "2026-10-10T12:00:00Z" };
+  it("accepts only sanitized observed tool metadata", () => {
+    expect(isLiveEvent(tool)).toBe(true);
+    expect(isLiveEvent({ ...tool, tool: "api_key=secret" })).toBe(false);
+    expect(isLiveEvent({ ...tool, status: "SUCCESS" })).toBe(false);
+    expect(isLiveEvent({ ...tool, kind: "TRACE" })).toBe(false);
+    expect(isLiveEvent({ ...tool, tool: "a".repeat(65) })).toBe(false);
+    expect(isLiveEvent({ ...tool, kind: undefined })).toBe(false);
+  });
+  it("deduplicates retriever events by durable sequence", () => {
+    const merged = mergeStageEvents([], [tool, tool, { ...tool, seq: 9, status: "DONE" }]);
+    expect(merged.map(x => x.seq)).toEqual([8, 9]);
+  });
+});
