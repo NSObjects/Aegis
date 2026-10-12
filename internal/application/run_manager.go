@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -470,6 +471,9 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		return
 	}
 	if err != nil {
+		// A diagnostic category is safe for hosted CI. Never log err.Error():
+		// provider failures can embed prompts, response bodies or credentials.
+		log.Printf("AEGIS_RUN_DIAGNOSTIC run=%s stage=%s category=%s", record.ID, lastResearchStage(record.Events), researchErrorCategory(err))
 		terminal(RunFailed, FailureResearch, nil)
 		return
 	}
@@ -538,4 +542,36 @@ func (m *RunManager) Close() {
 	}
 	m.mu.Unlock()
 	m.wg.Wait()
+}
+
+
+// researchErrorCategory deliberately emits only fixed identifiers. Unknown
+// errors remain UNKNOWN rather than publishing LLM output or provider details.
+func researchErrorCategory(err error) string {
+	if err == nil { return "NONE" }
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "research narrative is not in simplified chinese"):
+		return "LANGUAGE_VALIDATION"
+	case strings.Contains(msg, "decode research synthesis json"):
+		return "SYNTHESIS_JSON_DECODE"
+	case strings.Contains(msg, "invalid research synthesis artifact"):
+		return "SYNTHESIS_SCHEMA_VALIDATION"
+	case strings.Contains(msg, "generate research synthesis"):
+		return "SYNTHESIS_MODEL_GENERATE"
+	case strings.Contains(msg, "research synthesis model returned empty"):
+		return "SYNTHESIS_EMPTY_OUTPUT"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func lastResearchStage(events []RunEvent) string {
+	for i := len(events)-1; i>=0; i-- {
+		switch events[i].Stage {
+		case "Market", "Technical", "Event", "Synthesis", "Debate", "Manager", "Trading", "Risk", "Portfolio":
+			return events[i].Stage
+		}
+	}
+	return "UNKNOWN"
 }
