@@ -11,6 +11,7 @@ import {
   type LiveArtifact, type LiveRun, type LiveSession, type LiveStageEvent,
 } from "@/lib/live-contract";
 import { cn } from "@/lib/utils";
+import { renderResearchMarkdown } from "@/lib/research-markdown";
 import ProviderSettings from "@/components/provider-settings";
 import LiveResearchReport from "@/components/live-research-report";
 import LiveStageTrace from "@/components/live-stage-trace";
@@ -269,6 +270,14 @@ export default function LiveResearchWorkbench() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
+  function downloadMarkdown() {
+    if (!artifact || !selected || selected.state !== "COMPLETED") return;
+    const report = renderResearchMarkdown(artifact, selected);
+    const url = URL.createObjectURL(new Blob([report], { type: "text/markdown;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `aegis-${selected.run_id}-report.md`; a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
   if (!session) return <div className="live-gate"><Radar size={36} /><h1>AEGIS · Live Research</h1><p>正在验证本机研究工作台配置…</p>{error && <p role="alert">{error}</p>}</div>;
   if (!session.configured) return <div className="live-gate"><TriangleAlert size={34}/><h1>真实研究模式尚未配置</h1><p>请在 Next.js 服务端配置 Go API URL、API Token、Web 访问口令与会话密钥。不会自动切换为 Mock 数据。</p><p>参见 web/README.md</p></div>;
   if (!session.authenticated) return <div className="live-gate"><span className="brand-mark"><Radar size={24}/></span><div className="eyebrow">Research intelligence / secure access</div><h1>AEGIS · 研究工作台</h1><p>真实 Go/Eino 工作流 · 当前仅支持单操作者的受保护本地服务</p><form onSubmit={signIn} className="live-login"><label htmlFor="password">工作台访问口令</label><input id="password" autoComplete="current-password" type="password" minLength={16} value={password} onChange={e=>setPassword(e.target.value)} placeholder="输入服务端配置的访问口令" required/><button className="btn primary" disabled={busy} type="submit"><LockKeyhole size={15}/>{busy?"验证中…":"解锁研究工作台"}</button></form>{error && <div className="live-alert" role="alert">{error}</div>}<small>页面不会接收 Go API Token。访问口令仅提交给本站服务端建立 HttpOnly 会话。</small></div>;
@@ -281,7 +290,7 @@ export default function LiveResearchWorkbench() {
       <div className="sidebar-bottom"><div className="terminal-note"><ShieldCheck size={18}/><span><strong>Go Agent 已连接</strong><br/>任务和模型运行均由服务端负责</span></div><button type="button" className="live-signout" onClick={()=>void signOut()}><LogOut size={15}/>退出会话</button></div>
     </aside>
     <main className="main-area"><header className="topbar"><div className="breadcrumb"><span>Research workspace</span><ChevronRight size={13}/><strong>{view==="overview"?"研究概览":view==="history"?"研究历史":view==="compare"?"研究对比":view==="settings"?"凭证设置":"实时研究"}</strong></div><div className="topbar-spacer"/><span className="badge green"><CircleDot size={12}/> LIVE · GO API</span><button className="icon-button" aria-label="刷新" type="button" onClick={()=>void refresh().catch(e=>{setListSyncError((e as Error).message);setError((e as Error).message);})}><RefreshCcw size={16}/></button></header>
-    <div className="content live-content"><div className="page-heading"><div><div className="eyebrow">Multi-agent research / production source</div><h1>{view==="overview"?"研究任务概览":view==="history"?"研究历史":view==="compare"?"研究历史对比":view==="settings"?"数据源与模型凭证":"实时研究工作台"}</h1><p>{view==="settings"?"凭证加密保存在 Go 服务端；输入后立即清空表单，不回显密钥":"真实 Go 后端 · 严格数据时点 · Agent 执行过程可追踪"}</p></div><div className="heading-right"><button className="btn" type="button" disabled={!artifact||selected?.state!=="COMPLETED"} onClick={downloadArtifact}><Download size={14}/>导出真实 JSON</button></div></div>
+    <div className="content live-content"><div className="page-heading"><div><div className="eyebrow">Multi-agent research / production source</div><h1>{view==="overview"?"研究任务概览":view==="history"?"研究历史":view==="compare"?"研究历史对比":view==="settings"?"数据源与模型凭证":"实时研究工作台"}</h1><p>{view==="settings"?"凭证加密保存在 Go 服务端；输入后立即清空表单，不回显密钥":"真实 Go 后端 · 严格数据时点 · Agent 执行过程可追踪"}</p></div><div className="heading-right"><button className="btn" type="button" disabled={!artifact||selected?.state!=="COMPLETED"} onClick={downloadArtifact}><Download size={14}/>导出真实 JSON</button><button className="btn" type="button" disabled={!artifact||selected?.state!=="COMPLETED"} onClick={downloadMarkdown}><Download size={14}/>导出 Markdown</button></div></div>
     <div className="live-scope-banner"><ShieldCheck size={16}/><span>当前为真实研究连接。仅使用 Go 返回的 Run、阶段事件和工件；未接入真实行情视图时不绘制假价格图。组合账户默认显式标记 NOT_PROVIDED（未知），不执行交易。</span></div>
     {error&&<div role="alert" className="live-alert"><TriangleAlert size={15}/>{error}<button onClick={()=>setError("")} type="button">关闭</button></div>}
     {info&&<div role="status" className="live-info">{info}</div>}
