@@ -38,3 +38,28 @@ test("real Go run fails closed without provider credentials and remains inspecta
   await expect(page.locator(".live-run-fields")).toContainText("失败", { timeout: 15_000 });
   await expect(page.locator(".live-run-fields")).toContainText(runId!);
 });
+
+test("two real Go failed Runs retain distinct identities and no cross-Run artifact", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible({ timeout: 30_000 });
+  const ids: string[] = [];
+  for (const symbol of ["600519.SH", "000001.SZ"]) {
+    await page.getByLabel("股票代码").fill(symbol);
+    await page.getByRole("button", { name: "启动真实研究" }).click();
+    await expect(page.locator(".live-run-fields")).toContainText("失败", { timeout: 30_000 });
+    const link = await page.locator(".live-run-fields a.live-permalink").first().getAttribute("href");
+    const id = new URL(link!, "http://localhost").searchParams.get("run");
+    expect(id).toMatch(/^[a-f0-9]{32}$/);
+    ids.push(id!);
+  }
+  expect(ids[0]).not.toBe(ids[1]);
+  for (const [i, symbol] of ["600519.SH", "000001.SZ"].entries()) {
+    await page.goto("/?run=" + ids[i]);
+    await expect(page.locator(".live-run-fields")).toContainText(symbol, { timeout: 15_000 });
+    await expect(page.locator(".live-run-fields")).toContainText(ids[i]);
+    await expect(page.locator(".live-run-fields")).toContainText("失败");
+    await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
+    const artifact = await page.request.get("/api/workbench/runs/" + ids[i] + "/artifact");
+    expect(artifact.status()).not.toBe(200);
+  }
+});
