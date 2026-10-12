@@ -145,6 +145,8 @@ test("real browser submits a run, receives stage SSE, reads artifact, and restor
   const id = await submit(page);
   await expect(page.locator(".live-event-item").filter({ hasText: "Market" }).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".live-brief-lead")).toContainText("FIXTURE_ONLY_MANAGER_NO_RESEARCH", { timeout: 25_000 });
+  await expect(page.locator(".live-report-overview")).toContainText("已完成研究 · 只读原始工件");
+  await expect(page.locator(".live-report-overview .badge")).toContainText("组合研究 · PORTFOLIO_REVIEW");
   await page.locator("#chapter-synthesis summary").click();
   await expect(page.locator("#report-synthesis")).toContainText("PROTOCOL_FIXTURE_ONLY");
   await page.locator("#chapter-portfolio summary").click();
