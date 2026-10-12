@@ -8,6 +8,12 @@ import { buildRunTrace, stageLabels, stageReportId, type StagePhase } from "@/li
 type StreamStatus = "connected" | "disconnected" | "idle";
 
 const failureDescriptions: Record<string, string> = {
+  TECHNICAL_MODEL_EMPTY: "技术分析 Agent 没有返回可解析的内容",
+  TECHNICAL_JSON_DECODE: "技术分析上下文 JSON 解析失败",
+  TECHNICAL_CONTEXT_VALIDATION: "技术分析的标的、研究日期或结构校验失败",
+  MARKET_MODEL_EMPTY: "市场分析 Agent 没有返回可解析的内容",
+  MARKET_JSON_DECODE: "市场分析上下文 JSON 解析失败",
+  MARKET_CONTEXT_VALIDATION: "市场分析结果未通过上下文校验",
   EVENT_JSON_DECODE: "事件分析模型输出无法解析为符合要求的 JSON",
   EVENT_MODEL_GENERATE: "事件分析模型生成调用失败",
   EVENT_MODEL_EMPTY: "事件分析模型返回空内容",

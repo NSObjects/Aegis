@@ -632,6 +632,18 @@ func researchErrorCategory(err error) string {
 		return "EVENT_CONTEXT_VALIDATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "normalize event analyst synthesis"):
 		return "EVENT_SYNTHESIS_VALIDATION"
+	case strings.Contains(msg, "technical agent returned empty output") || strings.Contains(msg, "technical context output is empty"):
+		return "TECHNICAL_MODEL_EMPTY"
+	case strings.Contains(msg, "invalid technical context json"):
+		return "TECHNICAL_JSON_DECODE"
+	case strings.Contains(msg, "invalid technical context:") || strings.Contains(msg, "technical context symbol") || strings.Contains(msg, "technical context requested_as_of"):
+		return "TECHNICAL_CONTEXT_VALIDATION"
+	case strings.Contains(msg, "market agent returned empty output") || strings.Contains(msg, "market context output is empty"):
+		return "MARKET_MODEL_EMPTY"
+	case strings.Contains(msg, "invalid market context json"):
+		return "MARKET_JSON_DECODE"
+	case strings.Contains(msg, "invalid market context after one correction") || strings.Contains(msg, "invalid market context:"):
+		return "MARKET_CONTEXT_VALIDATION"
 	case strings.Contains(msg, "research narrative is not in simplified chinese"):
 		return "LANGUAGE_VALIDATION"
 	case strings.Contains(msg, "decode research synthesis json"):
