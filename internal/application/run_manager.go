@@ -528,6 +528,23 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 			cancel()
 		}
 	})
+	// A non-cooperative provider may ignore ctx and never return. Persist the
+	// deadline/cancellation independently while retaining the execution slot
+	// until the provider actually exits. Late callbacks/results are rejected
+	// because terminal() switches the authoritative Run state under mu.
+	watchdogDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				terminal(RunFailed, FailureTimeout, nil)
+			} else {
+				terminal(RunCancelled, "", nil)
+			}
+		case <-watchdogDone:
+		}
+	}()
+	defer close(watchdogDone)
 	response, err := m.executor.Run(ctx, request)
 	mu.Lock()
 	persistFailed := eventPersistError
