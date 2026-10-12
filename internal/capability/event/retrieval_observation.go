@@ -10,6 +10,7 @@ import (
 type RetrievalObservation struct {
  RetrieverID string
  Status string
+ Outcome string // SUCCEEDED, PARTIAL, TIMEOUT, FAILED or empty for START
  At time.Time
  DurationMS int64
 }
