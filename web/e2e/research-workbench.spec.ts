@@ -642,14 +642,29 @@ test("research history filters loaded runs without hiding source data or inventi
   await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
   await page.getByLabel("按股票代码筛选").fill("000000");
   await expect(rows).toHaveCount(0);
-  await expect(page.getByText("已加载记录中没有符合筛选条件的任务", { exact: false })).toBeVisible();
+  await expect(page.getByText("没有符合条件的研究记录。")).toBeVisible();
   await page.getByRole("button", { name: "清除筛选" }).click();
   await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
   await page.getByLabel("按任务状态筛选").selectOption("FAILED");
   await expect(rows.filter({ hasText: id.slice(0, 12) })).toHaveCount(0);
   await page.getByLabel("按任务状态筛选").selectOption("COMPLETED");
   await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
-  await expect(page.locator(".live-history")).toContainText("已加载");
+  await expect(page.locator(".live-history")).toContainText("匹配记录");
+});
+
+test("history uses server paging and keeps a selected Run separate from the listing", async ({ page }) => {
+  await signIn(page);
+  const id = await submit(page);
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.getByRole("button", { name: "研究历史" }).click();
+  await expect(page.getByRole("button", { name: "上一页" })).toBeDisabled();
+  // The fixture persists runs created by earlier tests, so additional pages may exist.
+  await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) })).toBeVisible();
+  await page.getByLabel("按股票代码筛选").fill("000001");
+  await expect(page.locator(".live-history-row")).toHaveCount(0);
+  await expect(page.getByText("没有符合条件的研究记录。")).toBeVisible();
+  await page.getByLabel("按股票代码筛选").fill("600519");
+  await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) })).toBeVisible();
 });
 
 test("research history displays the persisted failure code for the correct run", async ({ page }) => {

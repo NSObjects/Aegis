@@ -45,7 +45,21 @@ async function proxy(req: NextRequest, ctx: Context, method: "GET" | "POST") {
     if (lastID && /^\d{1,20}$/.test(lastID)) headers.set("Last-Event-ID", lastID);
   }
   try {
-    const upstream = await fetch(`${config.baseURL}${path}`, { method, body, headers, cache: "no-store", redirect: "manual", signal: req.signal });
+    // Forward only bounded history filters on the list route; never arbitrary query parameters.
+    let target = path;
+    if (method === "GET" && segments.length === 0) {
+      const params = new URLSearchParams();
+      for (const key of ["limit", "offset", "symbol", "state"]) {
+        const values = req.nextUrl.searchParams.getAll(key);
+        if (values.length > 1) return NextResponse.json({ error: "duplicate history filter" }, { status: 400, headers: defaultHeaders });
+        if (values.length === 1) params.set(key, values[0]);
+      }
+      if ([...req.nextUrl.searchParams.keys()].some(key => !["limit", "offset", "symbol", "state"].includes(key))) {
+        return NextResponse.json({ error: "unsupported history filter" }, { status: 400, headers: defaultHeaders });
+      }
+      if (params.size > 0) target += "?" + params.toString();
+    }
+    const upstream = await fetch(`${config.baseURL}${target}`, { method, body, headers, cache: "no-store", redirect: "manual", signal: req.signal });
     if (upstream.status >= 300 && upstream.status < 400) return NextResponse.json({ error: "unexpected backend redirect" }, { status: 502, headers: defaultHeaders });
     const contentType = upstream.headers.get("Content-Type") ?? "";
     if (path.endsWith("/stream") && upstream.ok && contentType.includes("text/event-stream") && upstream.body) {
