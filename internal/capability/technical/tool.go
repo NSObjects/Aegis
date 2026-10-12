@@ -30,6 +30,7 @@ func NewTool(
             started := time.Now()
             reportTool(ctx, ToolObservation{Status: "START", At: started.UTC()})
             result, err := researcher.Research(ctx, req)
+            if err == nil { if obsErr := reportHistoricalObservation(ctx, req, result); obsErr != nil { err = obsErr } }
             status := "DONE"
             if err != nil { status = "FAIL" }
             reportTool(ctx, ToolObservation{
