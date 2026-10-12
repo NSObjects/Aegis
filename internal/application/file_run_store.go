@@ -139,6 +139,22 @@ func checkRunRecord(record RunRecord) error {
 	if err := checkRunEvidenceIndex(record); err != nil {
 		return err
 	}
+	// Diagnosis fields are fixed identifiers only; never allow raw errors into the store.
+	if record.State != RunFailed && (record.FailureStage != "" || record.FailureCategory != "") {
+		return errors.New("non-failed run cannot carry failure diagnostics")
+	}
+	if record.FailureStage != "" {
+		switch record.FailureStage {
+		case "Market", "Technical", "Event", "Fundamental", "Synthesis", "Debate", "ResearchManager", "Trading", "Risk", "Portfolio", "FinalRiskGate":
+		default: return errors.New("invalid failure stage")
+		}
+	}
+	if record.FailureCategory != "" {
+		switch record.FailureCategory {
+		case "PERSISTENCE", "INVALID_RESULT", "PROCESS_INTERRUPTED", "LANGUAGE_VALIDATION", "SYNTHESIS_JSON_DECODE", "SYNTHESIS_SCHEMA_VALIDATION", "SYNTHESIS_MODEL_GENERATE", "SYNTHESIS_EMPTY_OUTPUT", "UNKNOWN":
+		default: return errors.New("invalid failure category")
+		}
+	}
 	if record.State == RunFailed || record.State == RunCancelled {
 		if record.FinishedAt == nil {
 			return errors.New("terminal run requires completion time")
