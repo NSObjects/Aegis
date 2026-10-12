@@ -24,6 +24,7 @@ export interface RunTrace {
 /** Only stages actually reported by Go may appear; absence never means SKIPPED. */
 export function buildRunTrace(run: LiveRun, events: LiveStageEvent[]): RunTrace {
   const ordered = [...events]
+    .filter(ev => ev.kind !== "TOOL")
     .filter(ev => Number.isSafeInteger(ev.seq) && ev.seq > 0 &&
       typeof ev.stage === "string" && ev.stage.length > 0 &&
       typeof ev.status === "string" && Number.isFinite(Date.parse(ev.at)))
