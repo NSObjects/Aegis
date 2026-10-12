@@ -5,6 +5,7 @@ import (
  "encoding/json"
  "path/filepath"
  "strings"
+ "time"
  "testing"
 )
 
@@ -54,4 +55,39 @@ func TestRunManagerFreshDiskStoreReopenCompletedAndFailed(t *testing.T) {
  if len(history)!=2 || history[0].ID!=failedSubmit.ID && history[1].ID!=failedSubmit.ID {t.Fatalf("reopened list lost failed run: %#v",history)}
  encoded,_:=json.Marshal(history)
  if strings.Contains(string(encoded),"deadline exceeded") {t.Fatal("raw provider error leaked into stored run")}
+}
+
+// Validate provenance through a fresh disk-backed store, not just a reused in-memory store.
+func TestFileRunStoreRestartKeepsSafeRequestProvenance(t *testing.T) {
+ dir := filepath.Join(t.TempDir(), "runs")
+ store, err := NewFileRunStore(dir)
+ if err != nil { t.Fatal(err) }
+ manager := newMgr(t, &controlledRunExecutor{}, store, 1, 2)
+ cutoff := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+ const secretQuery = "PRIVATE_MARKET_QUERY_MUST_NOT_PERSIST"
+ input, err := NewLiveResearchInput("600519.SH", secretQuery, cutoff, 7*24*time.Hour)
+ if err != nil { t.Fatal(err) }
+ submitted, err := manager.Submit(context.Background(), ResearchRequest{Mode: ModeDecision, Input: input})
+ if err != nil { t.Fatal(err) }
+ completed := awaitRun(t, manager, submitted.ID, RunCompleted)
+ if completed.RequestSnapshot == nil { t.Fatal("missing request snapshot") }
+ manager.Close()
+
+ reopened, err := NewFileRunStore(dir)
+ if err != nil { t.Fatal(err) }
+ reader := newMgr(t, &controlledRunExecutor{}, reopened, 1, 2)
+ defer reader.Close()
+ got, err := reader.Get(context.Background(), submitted.ID)
+ if err != nil { t.Fatal(err) }
+ if got.State != RunCompleted || got.RequestSnapshot == nil ||
+  got.RequestSnapshot.SchemaVersion != 1 ||
+  got.RequestSnapshot.EventWindowEnd == nil ||
+  !got.RequestSnapshot.EventWindowEnd.Equal(cutoff) ||
+  !got.RequestSnapshot.MarketQueryProvided ||
+  got.ArtifactSHA256 != completed.ArtifactSHA256 {
+  t.Fatalf("reopened persisted provenance differs: %#v", got)
+ }
+ recordJSON, err := json.Marshal(got)
+ if err != nil { t.Fatal(err) }
+ if strings.Contains(string(recordJSON), secretQuery) { t.Fatal("private query appeared in restarted record") }
 }
