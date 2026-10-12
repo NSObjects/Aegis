@@ -47,19 +47,30 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
       chapter.open = expanded;
     });
   };
-  // Stage trace and evidence links retain their existing #report-... targets.
-  // Expand the actual chapter before the browser navigates to the anchor.
+  // Direct links, browser history and stage trace must all reveal collapsed chapters.
+  // Query only this report so switching runs never expands another report.
   useEffect(() => {
-    const openLinkedChapter = (event: MouseEvent) => {
+    const openTarget = (hash: string) => {
+      const match = /^#report-([a-z-]+)$/.exec(hash);
+      if (!match) return;
+      const chapter = reportRoot.current?.querySelector<HTMLDetailsElement>(
+        "#chapter-" + match[1],
+      );
+      if (chapter) chapter.open = true;
+    };
+    const onAnchorClick = (event: MouseEvent) => {
       if (!(event.target instanceof Element)) return;
       const anchor = event.target.closest('a[href^="#report-"]');
-      const target = anchor?.getAttribute("href");
-      if (!target || !/^#report-[a-z-]+$/.test(target)) return;
-      const section = document.getElementById("chapter-" + target.slice("#report-".length));
-      if (section instanceof HTMLDetailsElement) section.open = true;
+      if (anchor) openTarget(anchor.getAttribute("href") ?? "");
     };
-    document.addEventListener("click", openLinkedChapter, true);
-    return () => document.removeEventListener("click", openLinkedChapter, true);
+    const onHashChange = () => openTarget(window.location.hash);
+    onHashChange(); // Handles initial loads and run switches with an existing hash.
+    document.addEventListener("click", onAnchorClick, true);
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      document.removeEventListener("click", onAnchorClick, true);
+      window.removeEventListener("hashchange", onHashChange);
+    };
   }, [run.run_id]);
 
   return <div ref={reportRoot} className="live-report-stack live-structured-report">
