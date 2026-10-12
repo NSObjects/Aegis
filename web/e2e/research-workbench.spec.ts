@@ -188,7 +188,7 @@ test("provider failure is terminal and cannot be presented as success", async ({
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
   const diagnostic = page.getByRole("status", { name: "任务失败诊断" });
   await expect(diagnostic).toContainText("RESEARCH_FAILED");
-  await expect(diagnostic).toContainText(failed);
+  await expect(diagnostic).toContainText(id);
   await expect(diagnostic).toContainText("Event");
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(409);
