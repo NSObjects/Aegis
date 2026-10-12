@@ -646,3 +646,15 @@ test("research history filters loaded runs without hiding source data or inventi
   await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
   await expect(page.locator(".live-history")).toContainText("已加载");
 });
+
+test("research history displays the persisted failure code for the correct run", async ({ page }) => {
+  await signIn(page);
+  const failedId = await submit(page, "fail provider fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  await page.getByRole("button", { name: "研究历史" }).click();
+  const failedRow = page.locator(".live-history-row").filter({ hasText: failedId.slice(0, 12) });
+  await expect(failedRow).toContainText("失败");
+  await expect(failedRow.locator(".live-history-failure")).toContainText("RESEARCH_FAILED");
+  await failedRow.click();
+  await expect(page.locator(".live-run-fields")).toContainText(failedId);
+});

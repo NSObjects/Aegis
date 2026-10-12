@@ -821,3 +821,7 @@ svg { flex-shrink: 0; }
 .live-history-filters input:focus-visible,.live-history-filters select:focus-visible{outline:2px solid #8ce8c9;outline-offset:2px}
 .live-history-filters button{min-height:38px}
 @media(max-width:640px){.live-history-filters{align-items:stretch;flex-direction:column}.live-history-filters label{min-width:0;width:100%}}
+
+/* Research history failure codes come from the persisted Go Run. */
+.live-history-failure{max-width:240px;overflow-wrap:anywhere;color:#efb4ba;font-size:11px;line-height:1.5}
+@media(max-width:720px){.live-history-failure{max-width:100%;font-size:11px}}
