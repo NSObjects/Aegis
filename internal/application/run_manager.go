@@ -636,6 +636,14 @@ func researchErrorCategory(err error) string {
 		return "EVENT_CONTEXT_VALIDATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "normalize event analyst synthesis"):
 		return "EVENT_SYNTHESIS_VALIDATION"
+	case strings.Contains(msg, "event research:") && (strings.Contains(msg, "run event evidence research loop:") || strings.Contains(msg, "create event evidence research loop:") || strings.Contains(msg, "event evidence research loop completed without") || strings.Contains(msg, "event evidence research returned task")):
+		return "EVENT_EVIDENCE_LOOP"
+	case strings.Contains(msg, "event research:") && (strings.Contains(msg, "capture live event evidence:") || strings.Contains(msg, "live event capture completed without")):
+		return "EVENT_CAPTURE"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:"):
+		return "EVENT_ANALYSIS"
+	case strings.Contains(msg, "event research:") && (strings.Contains(msg, "index cited event sources:") || strings.Contains(msg, "validate cited event sources:")):
+		return "EVENT_SOURCE_VALIDATION"
 	case strings.Contains(msg, "technical agent returned empty output") || strings.Contains(msg, "technical context output is empty"):
 		return "TECHNICAL_MODEL_EMPTY"
 	case strings.Contains(msg, "invalid technical context json"):
