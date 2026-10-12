@@ -186,6 +186,10 @@ test("provider failure is terminal and cannot be presented as success", async ({
   await signIn(page);
   const id = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  const diagnostic = page.getByRole("status", { name: "任务失败诊断" });
+  await expect(diagnostic).toContainText("RESEARCH_FAILED");
+  await expect(diagnostic).toContainText(failed);
+  await expect(diagnostic).toContainText("阶段事件未定位");
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(409);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
