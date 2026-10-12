@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"Aegis/internal/decision"
+ eventcap "Aegis/internal/capability/event"
 	"Aegis/internal/portfolio"
 	"Aegis/internal/research"
 )
@@ -575,4 +576,60 @@ func TestResearchErrorCategoryDoesNotLeakProviderText(t *testing.T) {
 	} {
 		if got := researchErrorCategory(tc.err); got != tc.want { t.Errorf("got %q, want %q",got,tc.want) }
 	}
+}
+
+type observedFixtureRetriever struct { fail bool }
+func (r observedFixtureRetriever) ID() string { return "snapshot_official" }
+func (r observedFixtureRetriever) Method() eventcap.AcquisitionMethod { return eventcap.AcquisitionAPI }
+func (r observedFixtureRetriever) Retrieve(context.Context, eventcap.ResearchTask) ([]eventcap.RawDocument,error) {
+ if r.fail { return nil, errors.New("SENSITIVE_PROVIDER_RESPONSE") }
+ return nil,nil
+}
+type observedFixtureExecutor struct { fail bool }
+func (e observedFixtureExecutor) Run(ctx context.Context, req ResearchRequest) (*ResearchResponse,error) {
+ _,err := (eventcap.AcquisitionPlanRunner{}).Run(ctx,
+  eventcap.ResearchTask{ID:"research-test",Symbol:req.Input.Symbol,Objective:"inspect evidence"},
+  eventcap.AcquisitionPlan{Steps:[]eventcap.AcquisitionStep{{
+   ID:"official",Scope:eventcap.AcquisitionScopeDirect,Retriever:observedFixtureRetriever{fail:e.fail},
+  }}},
+ )
+ if err != nil { return nil,err }
+ return &ResearchResponse{Mode:req.Mode,Decision:&decision.Decision{
+  Symbol:req.Input.Symbol,Action:decision.ActionWatch,MarketView:"fixture",Evidence:[]string{"fixture"},
+ }},nil
+}
+func TestRunManagerPersistsActualToolEventsAcrossRestart(t *testing.T) {
+ for _,tc:=range []struct{name string; fail bool; terminal string}{
+  {"success",false,"DONE"},{"retriever_failure",true,"FAIL"},
+ } {
+  t.Run(tc.name,func(t *testing.T){
+   store:=newStore(t)
+   mgr:=newMgr(t,observedFixtureExecutor{fail:tc.fail},store,1,2)
+   submitted,err:=mgr.Submit(context.Background(),runFixture("600519.SH"))
+   if err!=nil {t.Fatal(err)}
+   completed:=awaitRun(t,mgr,submitted.ID,RunCompleted)
+   var toolEvents []RunEvent
+   for i,e:=range completed.Events {
+    if e.Seq!=uint64(i+1) { t.Fatalf("noncontiguous sequence: %+v",completed.Events) }
+    if e.Kind=="TOOL" {toolEvents=append(toolEvents,e)}
+   }
+   if len(toolEvents)!=2 || toolEvents[0].Status!="START" || toolEvents[1].Status!=tc.terminal {
+    t.Fatalf("unexpected persisted observations: %+v",completed.Events)
+   }
+   for _,ev:=range toolEvents {
+    if ev.Stage!="Event" || ev.Tool!="snapshot_official" {t.Fatalf("wrong tool association: %+v",ev)}
+   }
+   encoded,_:=json.Marshal(completed.Events)
+   if strings.Contains(string(encoded),"SENSITIVE_PROVIDER_RESPONSE") {t.Fatal("secret provider error persisted")}
+   mgr.Close()
+   restarted:=newMgr(t,&controlledRunExecutor{},store,1,2)
+   recovered,err:=restarted.Get(context.Background(),submitted.ID)
+   if err!=nil || len(recovered.Events)!=len(completed.Events) {t.Fatalf("restart lost tool events: %v %+v",err,recovered)}
+   for i:=range recovered.Events {
+    if recovered.Events[i].Seq!=completed.Events[i].Seq ||
+      recovered.Events[i].Kind!=completed.Events[i].Kind ||
+      recovered.Events[i].Status!=completed.Events[i].Status {t.Fatalf("replay changed events: %+v",recovered.Events)}
+   }
+  })
+ }
 }
