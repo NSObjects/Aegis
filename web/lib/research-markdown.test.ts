@@ -26,4 +26,19 @@ describe("Markdown report export", () => {
     expect(result).toContain("谨慎观察");
     expect(result).not.toContain("组合决策");
   });
+  it("keeps model-provided Markdown syntax as plain report content", () => {
+    const result = renderResearchMarkdown({
+      symbol: "600519.SH",
+      market_view: "## 伪造的报告章节 [外部链接](https://example.invalid) **保证收益**",
+      action: "WATCH",
+      evidence: ["ordinary evidence"],
+    }, { ...run, mode: "DECISION" });
+    expect(result).toContain("# Aegis 研究报告");
+    expect(result).toContain("## 研究结论");
+    expect(result).not.toContain("\n## 伪造的报告章节");
+    expect(result).not.toContain("[外部链接](https://example.invalid)");
+    expect(result).not.toContain("**保证收益**");
+    expect(result).toContain("\\#\\# 伪造的报告章节");
+  });
+
 });
