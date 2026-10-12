@@ -43,6 +43,7 @@ type RunEvent struct {
 	// Kind is omitted for historical stage events; TOOL means observed invocation metadata.
 	Kind string `json:"kind,omitempty"`
 	Tool string `json:"tool,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
 	Seq        uint64    `json:"seq"`
 	Stage      string    `json:"stage"`
 	Status     string    `json:"status"`
@@ -474,7 +475,7 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		// A tool event belongs to its real stage, but is not a stage transition.
 		record.Events = append(record.Events, RunEvent{
 			Seq: uint64(len(record.Events) + 1), Kind: "TOOL",
-			Stage: ev.Stage, Tool: ev.Tool, Status: ev.Status,
+			Stage: ev.Stage, Tool: ev.Tool, Status: ev.Status, Outcome: ev.Outcome,
 			At: ev.At, DurationMS: ev.DurationMS,
 		})
 		if err := m.store.Save(context.Background(), record); err != nil {
@@ -508,7 +509,7 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
     })
     ctx = eventcap.WithRetrievalObserver(ctx, func(ev eventcap.RetrievalObservation) {
         research.ReportToolObservation(ctx, research.ToolObservation{
-            Stage: "Event", Tool: ev.RetrieverID, Status: ev.Status,
+            Stage: "Event", Tool: ev.RetrieverID, Status: ev.Status, Outcome: ev.Outcome,
             At: ev.At, DurationMS: ev.DurationMS,
         })
     })

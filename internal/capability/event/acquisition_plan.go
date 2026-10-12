@@ -167,6 +167,7 @@ func (r AcquisitionPlanRunner) Run(
         if runErr != nil || run.Attempt.Status != AcquisitionSucceeded { resultStatus = "FAIL" }
         reportRetrieval(ctx, RetrievalObservation{
             RetrieverID: step.Retriever.ID(), Status: resultStatus,
+            Outcome: retrievalOutcome(run.Attempt.Status, runErr),
             At: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds(),
         })
 		stepOutput := AcquisitionStepOutput{
@@ -509,4 +510,16 @@ func applyEvidenceSelection(
 	}
 
 	return selected, nil
+}
+
+ 
+// retrievalOutcome projects the actual acquisition result without provider text.
+func retrievalOutcome(status AcquisitionStatus, runErr error) string {
+ if runErr != nil { return "FAILED" }
+ switch status {
+ case AcquisitionSucceeded: return "SUCCEEDED"
+ case AcquisitionPartial: return "PARTIAL"
+ case AcquisitionTimeout: return "TIMEOUT"
+ default: return "FAILED"
+ }
 }
