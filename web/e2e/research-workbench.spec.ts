@@ -282,9 +282,9 @@ test("narrow viewport retains Run deep-link isolation across history and browser
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
   await page.getByRole("button", { name: "研究历史" }).click();
-  await expect(page).toHaveURL(/\\?view=history$/);
+  await expect(page).toHaveURL(/view=history$/);
   await page.goBack();
-  await expect(page).toHaveURL(new RegExp("\\?run=" + unknown + "$"));
+  await expect(page).toHaveURL(new RegExp("run=" + unknown + "$"));
   await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
   await page.goto("/?run=" + known);
   await expect(page.locator(".live-run-fields")).toContainText(known);
