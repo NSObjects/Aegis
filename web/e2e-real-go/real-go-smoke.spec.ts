@@ -74,6 +74,6 @@ test("unknown Run deep link never renders another Run or exposes artifact", asyn
   expect(missing.status()).toBe(404);
   const artifact = await page.request.get("/api/workbench/runs/" + unknown + "/artifact");
   expect(artifact.status()).not.toBe(200);
-  await expect(page.getByRole("button", { name: "导出 Markdown" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
 });
