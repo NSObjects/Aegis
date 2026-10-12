@@ -3,6 +3,7 @@ package technical
 import (
 	"context"
 	"errors"
+ "time"
 
 	"github.com/cloudwego/eino/components/tool"
 	toolutils "github.com/cloudwego/eino/components/tool/utils"
@@ -26,10 +27,15 @@ func NewTool(
 			ctx context.Context,
 			req Request,
 		) (map[string]any, error) {
-			return researcher.Research(
-				ctx,
-				req,
-			)
+            started := time.Now()
+            reportTool(ctx, ToolObservation{Status: "START", At: started.UTC()})
+            result, err := researcher.Research(ctx, req)
+            status := "DONE"
+            if err != nil { status = "FAIL" }
+            reportTool(ctx, ToolObservation{
+                Status: status, At: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds(),
+            })
+            return result, err
 		},
 	)
 }
