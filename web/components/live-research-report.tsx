@@ -109,6 +109,12 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
     </section>
     {report.cards.length > 0 ? <section className="live-brief-appendix" aria-label="完整研究章节">
       <div className="live-brief-appendix-heading"><BookOpen size={18}/><div><h2>完整研究章节</h2><p>按需展开数据、分析过程、论点与引用。以上简报仅是原始报告的阅读索引。</p></div></div>
+      <nav className="live-chapter-index" aria-label="研究报告章节目录">
+        <strong>快速跳转至章节</strong>
+        <div className="live-chapter-index-links">
+          {report.cards.map(card => <a key={card.id} href={"#report-" + card.id}>{card.title}</a>)}
+        </div>
+      </nav>
       <div className="live-chapter-controls" role="group" aria-label="研究章节批量操作">
         <button type="button" onClick={() => setAllChapters(true)}>展开所有章节</button>
         <button type="button" onClick={() => setAllChapters(false)}>收起所有章节</button>
