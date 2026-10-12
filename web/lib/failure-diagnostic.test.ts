@@ -20,6 +20,16 @@ describe("failure diagnostic export", () => {
     expect(output.indexOf("#1")).toBeLessThan(output.indexOf("#2"));
     expect(formatFailureDiagnostic(run, [...events, { seq: 3, stage: "Event", status: "FAIL", at }])).toContain("失败阶段: Event");
   });
+  it("exports recognized Event post-retrieval categories without raw errors", () => {
+    for (const category of ["EVENT_EVIDENCE_LOOP", "EVENT_CAPTURE", "EVENT_ANALYSIS", "EVENT_SOURCE_VALIDATION"]) {
+      const output = formatFailureDiagnostic({ ...run, failure_category: category }, [
+        { seq: 1, kind: "TOOL", tool: "snapshot_breaking_news", stage: "Event", status: "DONE", at },
+        { seq: 2, stage: "Event", status: "FAIL", at },
+      ]);
+      expect(output).toContain(`错误类别: ${category}`);
+      expect(output).toContain("失败阶段: Event");
+    }
+  });
   it("omits untrusted text and unknown diagnostic categories", () => {
     const hostile = { ...run, failure_category: "SECRET_KEY=123", failure_stage: "bad\nsecret" };
     const events: LiveStageEvent[] = [
