@@ -822,6 +822,9 @@ svg { flex-shrink: 0; }
 .live-history-filters button{min-height:38px}
 @media(max-width:640px){.live-history-filters{align-items:stretch;flex-direction:column}.live-history-filters label{min-width:0;width:100%}}
 
+.live-history-pagination{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:12px;padding:18px 6px;color:#b5cad9;font-size:12px}
+.live-history-pagination button:disabled{opacity:.45;cursor:not-allowed}
+
 /* Research history failure codes come from the persisted Go Run. */
 .live-history-failure{max-width:240px;overflow-wrap:anywhere;color:#efb4ba;font-size:11px;line-height:1.5}
 @media(max-width:720px){.live-history-failure{max-width:100%;font-size:11px}}
