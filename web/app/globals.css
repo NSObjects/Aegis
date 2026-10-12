@@ -846,3 +846,19 @@ svg { flex-shrink: 0; }
 .live-chapter-index-links a { display: inline-block; padding: .4rem .7rem; border: 1px solid currentColor; border-radius: 8px; text-decoration: none; font-size: .9rem; }
 .live-chapter-index-links a:hover { text-decoration: underline; }
 .live-chapter-index-links a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+
+/* Mobile report readability: long provider codes and decisions must wrap, never widen the viewport. */
+@media (max-width: 520px) {
+  .live-report-overview,
+  .live-brief-lead,
+  .live-brief-section,
+  .live-brief-appendix,
+  .live-brief-chapter { min-width: 0; max-width: 100%; }
+  .live-report-overview-top > div { min-width: 0; }
+  .live-report-overview-top .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .live-brief-gate { display: flex; width: fit-content; max-width: 100%; flex-wrap: wrap; overflow-wrap: anywhere; line-height: 1.6; }
+  .live-brief-metrics dl { grid-template-columns: minmax(0, 1fr); }
+  .live-brief-chapter > summary { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
+  .live-brief-chapter > summary span { white-space: normal; }
+  .live-chapter-index-links a { max-width: 100%; overflow-wrap: anywhere; }
+}
