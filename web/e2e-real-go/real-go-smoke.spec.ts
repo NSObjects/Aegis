@@ -105,3 +105,33 @@ test("transient API outage preserves Run selection and recovers on manual refres
   await expect(fields).toContainText(runId!, { timeout: 15_000 });
   await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
 });
+
+test("real Go browser rerun creates a distinct failed Run with provenance and no artifact", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel("股票代码").fill("600519.SH");
+  await page.getByRole("button", { name: "启动真实研究" }).click();
+  const fields = page.locator(".live-run-fields");
+  await expect(fields).toContainText("失败", { timeout: 30_000 });
+  const parentHref = await fields.locator("a.live-permalink").first().getAttribute("href");
+  const parent = new URL(parentHref!, "http://localhost").searchParams.get("run");
+  expect(parent).toMatch(/^[a-f0-9]{32}$/);
+
+  await page.getByRole("button", { name: "再次研究该标的" }).click();
+  await expect(page.locator(".live-rerun-notice")).toContainText("再次研究");
+  await page.getByRole("button", { name: "启动真实研究" }).click();
+  await expect(fields).toContainText("失败", { timeout: 30_000 });
+  const childHref = await fields.locator("a.live-permalink").first().getAttribute("href");
+  const child = new URL(childHref!, "http://localhost").searchParams.get("run");
+  expect(child).toMatch(/^[a-f0-9]{32}$/);
+  expect(child).not.toBe(parent);
+  const result = await page.request.get("/api/workbench/runs/" + child);
+  expect(result.status()).toBe(200);
+  const run = await result.json();
+  expect(run.rerun_of).toBe(parent);
+  expect(run.symbol).toBe("600519.SH");
+  expect(run.state).toBe("FAILED");
+  const artifact = await page.request.get("/api/workbench/runs/" + child + "/artifact");
+  expect(artifact.status()).not.toBe(200);
+  await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
+});
