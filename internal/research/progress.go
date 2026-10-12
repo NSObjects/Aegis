@@ -22,6 +22,7 @@ type ToolObservation struct {
   Stage string
   Tool string
   Status string
+  Outcome string // optional fixed execution outcome; no provider error details
   At time.Time
   DurationMS int64
 }
@@ -44,6 +45,7 @@ func ReportToolObservation(ctx context.Context, ev ToolObservation) {
   for _, ch := range ev.Tool {
     if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-') { return }
   }
+  if ev.Outcome != "" && ev.Outcome != "SUCCEEDED" && ev.Outcome != "PARTIAL" && ev.Outcome != "TIMEOUT" && ev.Outcome != "FAILED" { return }
   if ev.At.IsZero() { ev.At = time.Now().UTC() }
   if cb, ok := ctx.Value(toolCallbackKey{}).(func(ToolObservation)); ok && cb != nil { cb(ev) }
 }
