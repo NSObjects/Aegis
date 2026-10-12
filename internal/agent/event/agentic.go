@@ -681,7 +681,7 @@ func agenticMessageText(
 	return builder.String()
 }
 
-const factExtractionInstruction = "You are the factual extraction stage of an investment research event analyst.\n\n" +
+const factExtractionInstruction = "- Write headline, summary, and other newly authored explanatory prose in Simplified Chinese. Keep evidence_quotes.quote VERBATIM in its original source language; never translate or alter a quoted evidence span. Preserve original entity names and IDs.\n" + "You are the factual extraction stage of an investment research event analyst.\n\n" +
 	"Extract only facts explicitly supported by the supplied canonical evidence.\n\n" +
 	"Rules:\n" +
 	"- Return JSON only.\n" +
@@ -701,7 +701,7 @@ const factExtractionInstruction = "You are the factual extraction stage of an in
 	"- fact summary must state what happened, not why the stock should rise or fall.\n\n" +
 	"Output: {\"facts\":[{\"type\":\"CONTRACT\",\"occurred_at\":\"2026-09-29T10:00:00+08:00\",\"headline\":\"string\",\"summary\":\"string\",\"entities\":[\"string\"],\"evidence_quotes\":[{\"document_id\":\"doc_x\",\"quote\":\"verbatim supporting text\"}],\"confidence\":0.0}],\"confidence\":0.0}"
 
-const eventClusteringInstruction = "You are the event clustering stage of an investment research system.\n\n" +
+const eventClusteringInstruction = "- Use Simplified Chinese for any human-readable descriptions if present. Preserve fact IDs and all protocol enums exactly.\n" + "You are the event clustering stage of an investment research system.\n\n" +
 	"Group extracted facts that describe the same underlying real-world event.\n\n" +
 	"Rules:\n" +
 	"- Return JSON only.\n" +
@@ -713,7 +713,7 @@ const eventClusteringInstruction = "You are the event clustering stage of an inv
 	"- Duplicate reports of the same underlying event should be grouped together.\n\n" +
 	"Output: {\"clusters\":[{\"fact_ids\":[\"fact_x\",\"fact_y\"]}]}"
 
-const contradictionDetectionInstruction = "You are the claim contradiction detection stage of an investment research event analyst.\n\n" +
+const contradictionDetectionInstruction = "- Write the rationale in Simplified Chinese. Keep all fact IDs, kind enums and exact evidence untouched.\n" + "You are the claim contradiction detection stage of an investment research event analyst.\n\n" +
 	"The supplied facts have already been grounded to exact evidence spans and clustered as the same underlying real-world event. Identify only factual claims that cannot both be true under the same relevant subject, event, time, and measurement scope.\n\n" +
 	"Rules:\n" +
 	"- Return JSON only.\n" +
@@ -728,7 +728,7 @@ const contradictionDetectionInstruction = "You are the claim contradiction detec
 	"- If there is no explicit contradiction, return an empty contradictions array.\n\n" +
 	"Output: {\"contradictions\":[{\"left_fact_id\":\"fact_a\",\"right_fact_id\":\"fact_b\",\"kind\":\"VALUE\",\"rationale\":\"string\"}]}"
 
-const factEvolutionInstruction = "You are the fact temporal evolution stage of an investment research event analyst.\n\n" +
+const factEvolutionInstruction = "- Write rationale in Simplified Chinese. Preserve all relation types, fact IDs, dates and supported facts.\n" + "You are the fact temporal evolution stage of an investment research event analyst.\n\n" +
 	"The supplied grounded facts belong to the same event cluster. Identify only defensible directional evolution relationships between claims.\n\n" +
 	"Rules:\n" +
 	"- Return JSON only.\n" +
@@ -746,7 +746,7 @@ const factEvolutionInstruction = "You are the fact temporal evolution stage of a
 	"- If no defensible relation exists, return an empty relations array.\n\n" +
 	"Output: {\"relations\":[{\"type\":\"UPDATES\",\"from_fact_id\":\"fact_new\",\"to_fact_id\":\"fact_old\",\"rationale\":\"string\"}]}"
 
-const impactMechanismInstruction = "You are the causal impact-mechanism stage of an investment research event analyst.\n\n" +
+const impactMechanismInstruction = "- Write rationale and uncertainty in Simplified Chinese; preserve channel/direction enums, fact IDs and unaltered grounded facts.\n" + "You are the causal impact-mechanism stage of an investment research event analyst.\n\n" +
 	"Explain only defensible business/economic transmission channels from the supplied grounded event facts.\n\n" +
 	"Rules:\n" +
 	"- Return JSON only. Use only supplied fact IDs.\n" +
@@ -764,7 +764,7 @@ const impactMechanismInstruction = "You are the causal impact-mechanism stage of
 	"- If the supplied facts do not support a defensible mechanism, return an empty mechanisms array.\n\n" +
 	"Output: {\"mechanisms\":[{\"channel\":\"REVENUE\",\"direction\":\"POSITIVE\",\"supporting_fact_ids\":[\"fact_a\"],\"rationale\":\"string\",\"uncertainty\":\"string\"}]}"
 
-const synthesisInstruction = "You are the final synthesis stage of a News/Event investment research analyst.\n\n" +
+const synthesisInstruction = "- Write all newly generated narrative summaries, risk explanations and analyst conclusions in Simplified Chinese; preserve exact event IDs and enum values.\n" + "You are the final synthesis stage of a News/Event investment research analyst.\n\n" +
 	"Summarize only the supplied already-validated event objects. Do not add facts, evidence, causal steps, or outside knowledge.\n\n" +
 	"Rules:\n" +
 	"- Return JSON only.\n" +
@@ -779,7 +779,7 @@ const synthesisInstruction = "You are the final synthesis stage of a News/Event 
 	"- confidence is epistemic confidence in this synthesis, between 0 and 1; it is not a probability of price movement.\n\n" +
 	"Output: {\"summary\":\"string\",\"overall_materiality\":\"MEDIUM\",\"overall_direction\":\"UNCERTAIN\",\"dominant_impact_channels\":[\"REVENUE\"],\"key_event_ids\":[\"event_id\"],\"key_risks\":[\"string\"],\"confidence\":0.7}"
 
-const materialityInstruction = "You are the interpretation stage of an investment research event analyst.\n\n" +
+const materialityInstruction = "- Write all narrative risks, explanations and uncertainty descriptions in Simplified Chinese. Preserve all enum values, event/fact IDs, factual quotes and evidence references.\n" + "You are the interpretation stage of an investment research event analyst.\n\n" +
 	"Assess the potential materiality of exactly one already-extracted factual event cluster.\n\n" +
 	"Rules:\n" +
 	"- Return JSON only.\n" +

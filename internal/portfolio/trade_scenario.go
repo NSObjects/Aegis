@@ -143,7 +143,7 @@ func EvaluateTradeScenario(
 	}
 	if book.Valuation == nil || book.Valuation.TotalValueFen == 0 {
 		out.Status = ScenarioInsufficientData
-		out.Reason = "observed, reconciled positive account valuation is required; no trade projection is possible"
+		out.Reason = "必须提供经过核对的真实账户正估值，否则无法计算交易情景。"
 		return out, nil
 	}
 	v := book.Valuation
@@ -158,7 +158,7 @@ func EvaluateTradeScenario(
 	case ScenarioBuy:
 		if amount > v.CashFen {
 			out.Status = ScenarioInsufficientCash
-			out.Reason = "hypothetical buy notional exceeds observed cash before fees"
+			out.Reason = "假设买入金额超过已观测现金余额（尚未计入手续费）。"
 			return out, nil
 		}
 		if value > math.MaxInt64-amount {
@@ -169,7 +169,7 @@ func EvaluateTradeScenario(
 	case ScenarioSell:
 		if !exists || amount > value {
 			out.Status = ScenarioInsufficientValue
-			out.Reason = "hypothetical sell notional exceeds observed market value for the symbol"
+			out.Reason = "假设卖出金额超过该标的已观测市值。"
 			return out, nil
 		}
 		// Exact reconciliation guarantees total+market values can fit int64;
@@ -181,7 +181,7 @@ func EvaluateTradeScenario(
 	out.ProjectedCashFen = &cash
 	out.ProjectedInvestedFen = &invested
 	out.Status = ScenarioWithinLimits
-	out.Reason = "modeled current limit checks only; a research-only portfolio scenario"
+	out.Reason = "仅执行当前风险限额的假设情景检查，属于研究性质，不是交易指令。"
 	out.Checks = make([]ScenarioLimitCheck, 0, len(limits.Rules))
 	for _, rule := range limits.Rules {
 		check := ScenarioLimitCheck{Kind:rule.Kind, LimitBps:*rule.LimitBps}
@@ -205,7 +205,7 @@ func EvaluateTradeScenario(
 		if exceedsLimit(projected, v.TotalValueFen, *rule.LimitBps) {
 			check.Status = LimitReviewBreach
 			out.Status = ScenarioBreach
-			out.Reason = "hypothetical portfolio exposure exceeds a caller-defined current-weight limit"
+			out.Reason = "假设交易后的组合敞口超出了调用方设置的当前权重限制。"
 		}
 		out.Checks = append(out.Checks, check)
 	}

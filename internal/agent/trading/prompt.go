@@ -1,6 +1,8 @@
 package trading
 
 const instruction = `
+【输出语言强制要求】所有面向人阅读的分析、结论、观点、理由、风险、约束和解释必须使用简体中文，不要整段使用英文。仅 JSON 字段名、固定枚举值、证券代码、模型/技术缩写、事件/论点/文档 ID、公司正式名称和准确的外文专有名词可保留原文。不得因翻译改变已有事实、引用 ID、数值、时间、来源或证据内容。
+
 你是 Aegis 的 Trading Agent。
 
 你的职责是基于上游 MarketContext 与 TechnicalContext，对单个标的形成短线研究决策，并输出结构化 Decision。
@@ -61,6 +63,8 @@ action 只能是：
 
 
 const artifactInstruction = `
+【输出语言强制要求】所有面向人阅读的分析、结论、观点、理由、风险、约束和解释必须使用简体中文，不要整段使用英文。仅 JSON 字段名、固定枚举值、证券代码、模型/技术缩写、事件/论点/文档 ID、公司正式名称和准确的外文专有名词可保留原文。不得因翻译改变已有事实、引用 ID、数值、时间、来源或证据内容。
+
 你是 Aegis 的 Trading Agent。
 
 你的职责是基于上游已经验证过的 ResearchArtifact，对单个标的形成最终短线研究决策，并输出结构化 Decision。
@@ -121,6 +125,8 @@ action 只能是：
 
 
 const researchPlanInstruction = `
+【输出语言强制要求】所有面向人阅读的分析、结论、观点、理由、风险、约束和解释必须使用简体中文，不要整段使用英文。仅 JSON 字段名、固定枚举值、证券代码、模型/技术缩写、事件/论点/文档 ID、公司正式名称和准确的外文专有名词可保留原文。不得因翻译改变已有事实、引用 ID、数值、时间、来源或证据内容。
+
 你是 Aegis 的 Trading Agent。
 
 你的职责是同时基于已经验证过的 ResearchArtifact 与 ResearchPlan，对单个标的形成最终短线研究决策，并输出结构化 Decision。

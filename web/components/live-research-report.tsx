@@ -22,7 +22,7 @@ function ReportCardView({ card }: { card: ReportCard }) {
     </header>
     {card.fields.length > 0 && <dl className="live-report-facts">
       {card.fields.map((field, i) => <div key={field.label + i}>
-        <dt>{field.label}</dt><dd>{field.value}</dd>
+        <dt>{field.label}</dt><dd>{readableResearchCode(field.value)}</dd>
       </div>)}
     </dl>}
     {card.entries.length > 0 && <div className="live-structured-entries">
@@ -60,7 +60,7 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
       <div className="eyebrow">Verified Run · read-only research artifact</div>
       <div className="live-report-overview-top">
         <div><h2>结构化研究报告</h2><p>标的 {run.symbol} · 研究截止 {new Date(run.requested_as_of).toLocaleString("zh-CN", { hour12: false })}</p></div>
-        <span className="badge blue">{report.mode}</span>
+        <span className="badge blue">{report.mode === "PORTFOLIO_REVIEW" ? "组合研究" : report.mode === "DECISION" ? "单标的研究" : "研究类型未知"}</span>
       </div>
       <div className="live-brief-lead">
         <span className="live-brief-eyebrow">研究结论 · 源自 Go 工件</span>
@@ -69,7 +69,7 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
         {brief.posture && <div className="live-brief-gate"><ShieldAlert size={15}/>风险门禁：<strong>{readableResearchCode(brief.posture)}</strong></div>}
       </div>
       {report.overview.length > 0 && <dl className="live-report-overview-facts">
-        {report.overview.map((item, i) => <div key={item.label + i}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}
+        {report.overview.map((item, i) => <div key={item.label + i}><dt>{item.label}</dt><dd>{readableResearchCode(item.value)}</dd></div>)}
       </dl>}
       <div className="live-brief-grid">
         <section className="live-brief-section" aria-label="研究关键依据"><h3><ListChecks size={17}/>关键依据</h3>
