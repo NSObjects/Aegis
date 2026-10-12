@@ -57,10 +57,10 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
 
   return <div className="live-report-stack live-structured-report">
     <section className="surface live-report-overview" aria-label="研究报告概览">
-      <div className="eyebrow">Verified Run · read-only research artifact</div>
+      <div className="eyebrow">已完成研究 · 只读原始工件</div>
       <div className="live-report-overview-top">
         <div><h2>结构化研究报告</h2><p>标的 {run.symbol} · 研究截止 {new Date(run.requested_as_of).toLocaleString("zh-CN", { hour12: false })}</p></div>
-        <span className="badge blue">{report.mode}</span>
+        <span className="badge blue">{report.mode === "PORTFOLIO_REVIEW" ? "组合研究" : report.mode === "DECISION" ? "研究决策" : "研究模式"} · {report.mode}</span>
       </div>
       <div className="live-brief-lead">
         <span className="live-brief-eyebrow">研究结论 · 源自 Go 工件</span>
@@ -69,7 +69,7 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
         {brief.posture && <div className="live-brief-gate"><ShieldAlert size={15}/>风险门禁：<strong>{readableResearchCode(brief.posture)}</strong></div>}
       </div>
       {report.overview.length > 0 && <dl className="live-report-overview-facts">
-        {report.overview.map((item, i) => <div key={item.label + i}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}
+        {report.overview.map((item, i) => <div key={item.label + i}><dt>{item.label}</dt><dd>{readableResearchCode(item.value)}</dd></div>)}
       </dl>}
       <div className="live-brief-grid">
         <section className="live-brief-section" aria-label="研究关键依据"><h3><ListChecks size={17}/>关键依据</h3>
@@ -84,7 +84,7 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
       </div>
       {(brief.market.length > 0 || brief.technical.length > 0) && <section className="live-brief-metrics" aria-label="研究时点关键数据">
         <h3><BarChart3 size={16}/>研究时点关键数据（非实时）</h3>
-        <dl>{[...brief.market, ...brief.technical].map((f,i)=><div key={f.label+i}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>
+        <dl>{[...brief.market, ...brief.technical].map((f,i)=><div key={f.label+i}><dt>{f.label}</dt><dd>{readableResearchCode(f.value)}</dd></div>)}</dl>
       </section>}
       <p className="live-report-notice">以下字段逐项取自同一 Run 的 Go Typed Artifact。研究日期不是实时报价时间；缺失字段不会被补成零。所有交易意向均仅供研究，不包含任何下单功能。</p>
     </section>
