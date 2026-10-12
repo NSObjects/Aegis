@@ -69,6 +69,9 @@ export function readResearchBrief(report: LiveReport): ResearchBrief {
 /** UI-only gloss; always keep the untouched backend enum visible in brackets. */
 const enumGloss: Record<string,string> = {
   BALANCED:"多空观点相对均衡", INSUFFICIENT_EVIDENCE:"研究证据不足",
+  BULL_LEAN:"研究偏多", BEAR_LEAN:"研究偏空", CANDIDATE:"进入候选观察名单",
+  REJECTED:"研究意向已否决", BLOCKED:"风险门禁阻止",
+  CAUTION:"需要谨慎", HIGH_RISK:"高风险", ACCEPTABLE:"风险审查未识别重大问题",
   BULLISH:"偏多", BEARISH:"偏空", NEUTRAL:"中性",
   WATCH:"继续观察", MONITOR:"持续监测", AVOID:"暂不参与",
   REVIEW_REQUIRED:"需要人工复核", NO_ACTION:"不采取行动",

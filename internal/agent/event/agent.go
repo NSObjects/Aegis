@@ -283,7 +283,7 @@ func eventPlannerQuery(
 		)
 	}
 
-	return "Plan the next evidence-acquisition round for this typed News/Event research task. The task itself is authoritative and must not be rewritten:\n" +
+	return "请为下列结构化新闻与事件研究任务规划下一轮证据获取；任务本身为权威输入，不得改写，所有面向阅读者的解释必须使用简体中文：\n" +
 		string(payload), nil
 }
 

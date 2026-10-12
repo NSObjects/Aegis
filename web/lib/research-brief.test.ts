@@ -6,6 +6,9 @@ describe("research brief is source-backed and safe", () => {
  it("glosses only known research enums and keeps exact backend codes",()=>{
    expect(readableResearchCode("BALANCED")).toBe("多空观点相对均衡（BALANCED）");
    expect(readableResearchCode("REVIEW_REQUIRED")).toBe("需要人工复核（REVIEW_REQUIRED）");
+   expect(readableResearchCode("BULL_LEAN")).toBe("研究偏多（BULL_LEAN）");
+   expect(readableResearchCode("HIGH_RISK")).toBe("高风险（HIGH_RISK）");
+   expect(readableResearchCode("CANDIDATE")).toBe("进入候选观察名单（CANDIDATE）");
    expect(readableResearchCode("unknown")).toBe("unknown");
    expect(readableResearchCode(null)).toBe("未提供");
  });

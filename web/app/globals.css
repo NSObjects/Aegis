@@ -813,3 +813,25 @@ svg { flex-shrink: 0; }
 .live-brief-chapter>.live-report-stack {padding:11px}
 @media(max-width:860px) {.live-brief-grid {grid-template-columns:1fr}.live-brief-metrics dl {grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px) {.live-brief-lead {padding:16px}.live-brief-lead h3 {font-size:19px}.live-brief-metrics dl {grid-template-columns:1fr 1fr}.live-brief-section {padding:14px}.live-brief-chapter>summary {padding:13px}}
+
+/* Research history filters: responsive, keyboard-friendly, loaded-records only. */
+.live-history-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:16px 0;padding:0 2px}
+.live-history-filters label{display:grid;gap:6px;min-width:180px;flex:1;color:#b8cad9;font-size:12px}
+.live-history-filters input,.live-history-filters select{width:100%;min-height:38px;padding:8px 10px;border:1px solid #486079;border-radius:7px;background:#142638;color:#e5f1f8;font:inherit}
+.live-history-filters input:focus-visible,.live-history-filters select:focus-visible{outline:2px solid #8ce8c9;outline-offset:2px}
+.live-history-filters button{min-height:38px}
+@media(max-width:640px){.live-history-filters{align-items:stretch;flex-direction:column}.live-history-filters label{min-width:0;width:100%}}
+
+/* Research history failure codes come from the persisted Go Run. */
+.live-history-failure{max-width:240px;overflow-wrap:anywhere;color:#efb4ba;font-size:11px;line-height:1.5}
+@media(max-width:720px){.live-history-failure{max-width:100%;font-size:11px}}
+
+/* Failure diagnostics use only persisted Run metadata and observed stage events. */
+.live-trace-diagnostic{margin:14px 0;padding:14px;border:1px solid #805a61;border-radius:9px;background:#35262f;color:#f0d7d9}
+.live-trace-diagnostic>strong{display:block;font-size:13px;margin-bottom:10px}
+.live-trace-diagnostic dl{display:grid;gap:9px;margin:0}
+.live-trace-diagnostic dl>div{display:grid;gap:4px}
+.live-trace-diagnostic dt{font-size:11px;color:#d4b3b8}
+.live-trace-diagnostic dd{margin:0;overflow-wrap:anywhere;font-size:12px}
+.live-trace-diagnostic code{white-space:normal;overflow-wrap:anywhere}
+.live-trace-diagnostic p{font-size:11px;line-height:1.7;margin:11px 0 0;color:#dbc0c5}

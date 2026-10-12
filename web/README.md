@@ -391,3 +391,13 @@ Live Run 完成后，默认先显示**研究结论、Go 研究经理原文摘要
 完整原始 Market/Technical/Event/Fundamental/Bull-Bear/Manager/Intent/Risk/Portfolio/EvidenceLedger 仍可在「完整研究章节」逐节展开；原始 Typed Artifact JSON 导出、事件引用导航和 Agent 阶段事件不变。
 
 可读层仅从同一 Run 已投影的源字段中选取文字并归类，**没有新的 LLM 总结**，不承诺源模型判断正确，也不把缺失账户、缺行情当作零持仓或安全信号。长段落、移动端和标识码放入第二层审计视图，以结论→依据→风险→源数据的顺序阅读。
+
+## 研究报告语言规范（zh-CN）
+
+自本次更新起，Live 模式下**新生成**的研究报告采用简体中文作为统一阅读语言：
+
+- Market、Technical、Trading / Decision、Event、Fundamental、Research Synthesis、Bull/Bear Debate、Research Manager、Risk Analyst、可选 Semantic Review 的自然语言摘要、观点、风险、解释与论证，均在 Go 生成阶段明确要求简体中文，而非让浏览器对证据二次猜译。
+- Go 风险 Analyst 在账户 `NOT_PROVIDED` 时产生的确定性摘要、组合政策 Decision 的 `summary` 和研究情景的固定文案改为中文。
+- UI 的报告章节名称、模式标注与已知研究/门禁枚举均提供中文解释；`BULL_LEAN`、`HIGH_RISK` 等原始枚举仍保留用于精确审计。
+- **不会翻译** JSON 字段名、状态与领域枚举、证券代码、模型名称、源事件/引用 ID、工具 ID、指标缩写以及原始外部引用 `evidence_quotes.quote`，否则会破坏类型校验或证据溯源。正式外文专有名词也允许原样保留。
+- **旧 Run 的历史英文原文不自动翻译/覆盖**；原始 Typed Artifact 导出仍为原始记录。仅修改提示词不等于已经验证每一次 Hosted LLM 输出都会严格遵守语言要求，部署时还需要真实模型端到端测试检查违例和补充修复策略。

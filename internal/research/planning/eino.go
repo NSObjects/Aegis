@@ -48,7 +48,7 @@ var ResearchPlanToolInfo = schema.ToolInfo{
 						"reason": {
 							Type:     schema.String,
 							Required: false,
-							Desc:     "Why this evidence channel is necessary for the objective or a known research gap.",
+							Desc:     "用简体中文说明此证据渠道为何必要；保留所有字段名、类型值及 ID 原文。",
 						},
 					},
 				},
@@ -123,6 +123,7 @@ func researchPlannerInput(
 			`You are the research planning layer for Aegis.
 
 Create exactly one structured ResearchPlan for the next evidence-acquisition round.
+Use Simplified Chinese for any generated human-readable task explanations or plan reasoning; keep tool field names, evidence scopes, IDs and enum strings intact.
 
 Rules:
 - Plan complementary evidence needs, not fallback providers.

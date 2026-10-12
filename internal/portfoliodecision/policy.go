@@ -86,28 +86,28 @@ func classify(status tradeintent.Status, assessment risk.Assessment, hasObserved
 	switch status {
 	case tradeintent.StatusMonitor:
 		return policyResult{DispositionNoAction, ReasonMonitorOnly,
-			"Trade intent is MONITOR; no portfolio action is requested."}, nil
+			"研究意向为 MONITOR（持续观察）；不发起任何组合操作。"}, nil
 	case tradeintent.StatusRejected:
 		return policyResult{DispositionNoAction, ReasonRejectedUpstream,
-			"Trade intent was rejected upstream; no portfolio action is requested."}, nil
+			"研究意向已在上游被拒绝；不发起任何组合操作。"}, nil
 	case tradeintent.StatusCandidate:
 		switch assessment {
 		case risk.AssessmentHighRisk:
 			return policyResult{DispositionBlocked, ReasonHighRisk,
-				"Risk review found HIGH_RISK; candidate is blocked from further approval."}, nil
+				"风险审查判定为 HIGH_RISK（高风险），候选研究被阻止进入后续批准流程。"}, nil
 		case risk.AssessmentInsufficientContext:
 			return policyResult{DispositionReviewRequired, ReasonRiskUncertain,
-				"Risk inputs are insufficient; manual review and missing facts are required."}, nil
+				"风险输入信息不足；必须补齐缺失事实并进行人工复核。"}, nil
 		case risk.AssessmentCaution:
 			return policyResult{DispositionReviewRequired, ReasonRiskCaution,
-				"Risk review requires caution; a further review is required."}, nil
+				"风险审查要求谨慎处理，须进一步复核。"}, nil
 		case risk.AssessmentAcceptable:
 			if hasObservedValuation {
 				return policyResult{DispositionReviewRequired, ReasonResearchReviewRequired,
-					"Observed portfolio monetary exposure is available, but the research conclusion still requires human assessment."}, nil
+					"已经取得账户实际货币敞口数据，但研究结论仍需人工评估，不自动执行。"}, nil
 			}
 			return policyResult{DispositionReviewRequired, ReasonAccountDataAbsent,
-				"Risk review found no established concern, but portfolio cash and monetary exposure are not provided; execution is not authorized."}, nil
+				"风险审查未发现已证实的问题，但未提供账户现金和货币敞口信息；不授权执行。"}, nil
 		}
 	}
 	return policyResult{}, fmt.Errorf("unsupported intent status %q or risk assessment %q", status, assessment)

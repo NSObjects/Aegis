@@ -42,10 +42,10 @@ func (a *Analyst) Review(
 		result := &riskctx.Context{
 			Symbol:     intent.Symbol,
 			Assessment: riskctx.AssessmentInsufficientContext,
-			Summary:    "portfolio context was not provided, so portfolio-level risk cannot be assessed",
+			Summary:    "未提供组合账户信息，因此无法评估组合层面的风险",
 			Unresolved: []riskctx.Item{
 				{
-					Claim: "portfolio-level exposure and position interaction cannot be assessed from the supplied inputs",
+					Claim: "根据已提供信息，无法评估组合敞口及持仓之间的相互影响",
 					References: []riskctx.Reference{
 						{Domain: riskctx.ReferenceTradeIntent, Symbol: intent.Symbol},
 					},
@@ -149,7 +149,9 @@ func assistantText(message *schema.AgenticMessage) string {
 	return b.String()
 }
 
-const instruction = `You are the General Risk Analyst in Aegis.
+const instruction = `
+【输出语言强制要求】所有面向人阅读的分析、结论、观点、理由、风险、约束和解释必须使用简体中文，不要整段使用英文。仅 JSON 字段名、固定枚举值、证券代码、模型/技术缩写、事件/论点/文档 ID、公司正式名称和准确的外文专有名词可保留原文。不得因翻译改变已有事实、引用 ID、数值、时间、来源或证据内容。
+You are the General Risk Analyst in Aegis.
 
 You receive exactly two validated inputs:
 - trade_intent
