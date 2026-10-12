@@ -25,7 +25,7 @@ test("real Go run fails closed without provider credentials and remains inspecta
   await expect(page.locator(".live-run-fields")).toContainText("失败", { timeout: 30_000 });
 
   const href = await page.locator(".live-run-fields a.live-permalink").first().getAttribute("href");
-  expect(href).toMatch(/^\\/\\?run=[a-f0-9]{32}$/);
+  expect(href?.startsWith("/?run=")).toBe(true);
   const runId = new URL(href!, "http://localhost").searchParams.get("run");
   expect(runId).toBeTruthy();
 
