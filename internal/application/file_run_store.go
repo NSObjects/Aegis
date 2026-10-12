@@ -143,10 +143,28 @@ func checkRunRecord(record RunRecord) error {
 			return errors.New("terminal run requires completion time")
 		}
 	}
+    if len(record.Events) > 20000 { return errors.New("research event limit exceeded") }
 	for i, ev := range record.Events {
 		if ev.Seq != uint64(i+1) || ev.Stage == "" || ev.Status == "" || ev.At.IsZero() || ev.DurationMS < 0 {
 			return errors.New("invalid research event sequence")
 		}
+        if ev.Kind == "" {
+            if ev.Tool != "" { return errors.New("stage event cannot contain a tool") }
+            continue // historical stage event compatibility
+        }
+        if ev.Kind != "TOOL" || (ev.Status != "START" && ev.Status != "DONE" && ev.Status != "FAIL") {
+            return errors.New("invalid research tool event kind or status")
+        }
+        switch ev.Stage {
+        case "Market", "Technical", "Event", "Fundamental", "Synthesis", "Debate", "ResearchManager", "Trading", "Risk", "Portfolio":
+        default: return errors.New("invalid research tool event stage")
+        }
+        if len(ev.Tool) == 0 || len(ev.Tool) > 64 { return errors.New("invalid tool event name") }
+        for _, ch := range ev.Tool {
+            if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-') {
+                return errors.New("unsafe tool event name")
+            }
+        }
 	}
 	if record.State == RunPending && (record.StartedAt != nil || record.FinishedAt != nil) {
 		return errors.New("pending run cannot have execution times")
