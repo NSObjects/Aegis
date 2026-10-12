@@ -18,7 +18,7 @@ func TestAcquisitionRunnerObservesExecutedRetrieversOnly(t *testing.T) {
   }}})
  if err != nil { t.Fatalf("retriever failure should be reported through task output, got %v",err) }
  if calls != 1 { t.Fatalf("retriever calls = %d, want 1",calls) }
- if len(got) != 2 || got[0].Status != "START" || got[1].Status != "DONE" {
+ if len(got) != 2 || got[0].Status != "START" || got[1].Status != "FAIL" {
   t.Fatalf("observations = %+v",got)
  }
  for _, observation := range got {
