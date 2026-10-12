@@ -108,6 +108,10 @@ type RunRecord struct {
 	StartedAt     *time.Time      `json:"started_at,omitempty"`
 	FinishedAt    *time.Time      `json:"finished_at,omitempty"`
 	FailureCode   string          `json:"failure_code,omitempty"`
+	// FailureStage is set only when a Go stage emitted an explicit FAIL event.
+	FailureStage string `json:"failure_stage,omitempty"`
+	// FailureCategory is a safe, fixed identifier, never a raw provider error.
+	FailureCategory string `json:"failure_category,omitempty"`
 	Artifact      json.RawMessage `json:"artifact,omitempty"`
 	// ArtifactVersion is the version of Aegis's persisted result envelope,
 	// not a claim about the provider's model version.
@@ -196,6 +200,7 @@ func NewRunManager(executor ResearchExecutor, store RunStore, maxParallel, maxAc
 		record.State = RunFailed
 		record.FinishedAt = &now
 		record.FailureCode = FailureInterrupted
+		record.FailureCategory = "PROCESS_INTERRUPTED"
 		record.Artifact = nil
 		record.Events = append(record.Events, RunEvent{Seq: uint64(len(record.Events) + 1), Stage: "Run", Status: string(RunFailed), At: now})
 		if err := store.Save(context.Background(), record); err != nil {
@@ -405,6 +410,15 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 			record.ArtifactSHA256 = ""
 		}
 		record.FailureCode = code
+		if state == RunFailed {
+			record.FailureStage = explicitFailedStage(record.Events)
+			switch code {
+			case FailurePersistence: record.FailureCategory = "PERSISTENCE"
+			case FailureInvalidResult: record.FailureCategory = "INVALID_RESULT"
+			case FailureInterrupted: record.FailureCategory = "PROCESS_INTERRUPTED"
+			default: if record.FailureCategory == "" { record.FailureCategory = "UNKNOWN" }
+			}
+		}
         if state != RunCompleted { record.HistoricalOHLCV = nil }
 		// The store is authoritative. A failed disk write leaves prior state
 		// for process-interrupted recovery and cannot claim completion.
@@ -526,6 +540,9 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 		// A diagnostic category is safe for hosted CI. Never log err.Error():
 		// provider failures can embed prompts, response bodies or credentials.
 		log.Printf("AEGIS_RUN_DIAGNOSTIC run=%s stage=%s category=%s", record.ID, lastResearchStage(record.Events), researchErrorCategory(err))
+		mu.Lock()
+		record.FailureCategory = researchErrorCategory(err)
+		mu.Unlock()
 		terminal(RunFailed, FailureResearch, nil)
 		return
 	}
@@ -626,4 +643,15 @@ func lastResearchStage(events []RunEvent) string {
 		}
 	}
 	return "UNKNOWN"
+}
+
+// explicitFailedStage never infers a failure from a START without FAIL or a tool event.
+func explicitFailedStage(events []RunEvent) string {
+	for i := len(events)-1; i >= 0; i-- {
+		ev := events[i]
+		if ev.Kind == "" && ev.Status == "FAIL" && ev.Stage != "Run" {
+			return ev.Stage
+		}
+	}
+	return ""
 }
