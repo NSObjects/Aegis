@@ -189,7 +189,7 @@ test("provider failure is terminal and cannot be presented as success", async ({
   const diagnostic = page.getByRole("status", { name: "任务失败诊断" });
   await expect(diagnostic).toContainText("RESEARCH_FAILED");
   await expect(diagnostic).toContainText(id);
-  await expect(diagnostic).toContainText("Event");
+  // A failed Run alone does not prove that Event emitted an explicit stage FAIL.\n  await expect(diagnostic).toContainText("阶段事件未定位");
 
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(409);
