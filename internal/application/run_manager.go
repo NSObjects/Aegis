@@ -114,6 +114,7 @@ type RunRecord struct {
 	// Zero identifies pre-R1-03 legacy run records.
 	ArtifactVersion int `json:"artifact_version,omitempty"`
 	ArtifactSHA256 string `json:"artifact_sha256,omitempty"`
+	HistoricalOHLCV *technicalcap.HistoricalObservation `json:"historical_ohlcv,omitempty"`
 	Events        []RunEvent      `json:"events,omitempty"`
 }
 
@@ -404,6 +405,7 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 			record.ArtifactSHA256 = ""
 		}
 		record.FailureCode = code
+        if state != RunCompleted { record.HistoricalOHLCV = nil }
 		// The store is authoritative. A failed disk write leaves prior state
 		// for process-interrupted recovery and cannot claim completion.
 		_ = appendEvent("Run", string(state), done, 0)
@@ -468,6 +470,22 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 	})
     // Only actual calls observed by the acquisition runner produce events.
     // The common sink enforces identifier allowlisting before durable storage.
+    ctx = technicalcap.WithHistoricalObserver(ctx, func(obs technicalcap.HistoricalObservation) {
+        mu.Lock()
+        defer mu.Unlock()
+        if record.State != RunRunning || eventPersistError { return }
+        if err := validateHistoricalObservation(record, &obs); err != nil { return }
+        // An existing observation is immutable: retries may not silently replace it.
+        if record.HistoricalOHLCV != nil { return }
+        cloned := obs
+        cloned.Bars = append([]technicalcap.HistoricalBar(nil), obs.Bars...)
+        record.HistoricalOHLCV = &cloned
+        if err := m.store.Save(context.Background(), record); err != nil {
+            record.HistoricalOHLCV = nil
+            eventPersistError = true
+            cancel()
+        }
+    })
     ctx = technicalcap.WithToolObserver(ctx, func(ev technicalcap.ToolObservation) {
         research.ReportToolObservation(ctx, research.ToolObservation{
             Stage: "Technical", Tool: technicalcap.ToolName, Status: ev.Status,
