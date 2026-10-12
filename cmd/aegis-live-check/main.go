@@ -20,7 +20,7 @@ import (
  "time"
 )
 
-type options struct {url, symbol, mode, token string}
+type options struct {url, symbol, mode, token string; requireToolEvents bool}
 var runID = regexp.MustCompile("^[0-9a-f]{32}$")
 var symbolID = regexp.MustCompile("^[0-9]{6}\\.(SH|SZ)$")
 
@@ -31,6 +31,7 @@ func main() {
  flag.StringVar(&o.symbol,"symbol","600519.SH","A-share stock code")
  flag.StringVar(&o.mode,"mode","PORTFOLIO_REVIEW","research mode")
  flag.DurationVar(&deadline,"timeout",25*time.Minute,"maximum time for one live run")
+ flag.BoolVar(&o.requireToolEvents,"require-tool-events",false,"require observed real Technical and Event tool lifecycle events")
  flag.Parse()
  if deadline<=0 {fmt.Fprintln(os.Stderr,"timeout must be positive");os.Exit(2)}
  o.token=os.Getenv("AEGIS_WEB_API_TOKEN")
@@ -84,7 +85,7 @@ func verify(ctx context.Context,c *http.Client,o options,out io.Writer)error{
  }
  fmt.Fprintf(out,"Submitted run %s (%s)\n",id,o.mode)
  sse,err:=request(ctx,"GET",root+"/"+id+"/stream",o.token,nil);if err!=nil{return err}
- stages,err:=readStages(c,sse,out);if err!=nil{return fmt.Errorf("SSE stages: %w",err)}
+ stages,err:=readStages(c,sse,out,o.requireToolEvents);if err!=nil{return fmt.Errorf("SSE stages: %w",err)}
  get,err:=request(ctx,"GET",root+"/"+id,o.token,nil);if err!=nil{return err}
  final,err:=getJSON(c,get,200);if err!=nil{return fmt.Errorf("run status: %w",err)}
  if getText(final,"run_id")!=id{return errors.New("run ID mismatch")}
@@ -102,13 +103,15 @@ func verify(ctx context.Context,c *http.Client,o options,out io.Writer)error{
  fmt.Fprintf(out,"PASS: real ResearchRun %s completed; stage events and typed artifact verified.\n",id)
  return nil
 }
-func readStages(c *http.Client,r *http.Request,out io.Writer)(map[string]bool,error){
+func readStages(c *http.Client,r *http.Request,out io.Writer,requireTools bool)(map[string]bool,error){
  response,err:=c.Do(r);if err!=nil{return nil,err}
  defer response.Body.Close()
  if response.StatusCode!=200{return nil,fmt.Errorf("HTTP %d",response.StatusCode)}
  if !strings.Contains(response.Header.Get("Content-Type"),"text/event-stream"){return nil,errors.New("missing SSE content type")}
  scanner:=bufio.NewScanner(response.Body);scanner.Buffer(make([]byte,4096),2<<20)
  done:=map[string]bool{}
+ toolsStarted:=map[string]bool{}
+ toolsFinished:=map[string]bool{}
  var last,id uint64
  var kind,data string
  terminal:=false
@@ -121,10 +124,28 @@ func readStages(c *http.Client,r *http.Request,out io.Writer)(map[string]bool,er
   if !ok||uint64(seq)!=id||id!=last+1||seq<1||seq!=float64(uint64(seq)){return errors.New("stage SSE sequence mismatch")}
   name,status:=getText(ev,"stage"),getText(ev,"status")
   if name==""||status==""||len(name)>100{return errors.New("invalid stage metadata")}
+  if getText(ev,"kind")=="TOOL" {
+   toolName:=getText(ev,"tool")
+   if toolName=="" || len(toolName)>64 || !regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(toolName) ||
+     (name!="Technical" && name!="Event") ||
+     (status!="START" && status!="DONE" && status!="FAIL") {
+    return errors.New("invalid observed tool metadata")
+   }
+   key:=name+":"+toolName
+   if status=="START" {toolsStarted[key]=true}
+   if status=="DONE" || status=="FAIL" {
+    if !toolsStarted[key] {return errors.New("tool terminal without observed start")}
+    toolsFinished[key]=true
+   }
+  } else if getText(ev,"kind")!="" || getText(ev,"tool")!="" {
+   return errors.New("unexpected tool metadata in stage event")
+  }
   last=id
-  if status=="DONE"{done[name]=true}
+  if getText(ev,"kind")=="" && status=="DONE"{done[name]=true}
   if name=="Run"&&(status=="COMPLETED"||status=="FAILED"||status=="CANCELLED"){terminal=true}
-  fmt.Fprintf(out,"[%d] %s: %s\n",id,name,status)
+  if getText(ev,"kind")=="TOOL" {
+   fmt.Fprintf(out,"[%d] %s TOOL: %s\n",id,name,status) // never print provider name, inputs or response
+  } else {fmt.Fprintf(out,"[%d] %s: %s\n",id,name,status)}
   return nil
  }
  for scanner.Scan(){
@@ -138,6 +159,14 @@ func readStages(c *http.Client,r *http.Request,out io.Writer)(map[string]bool,er
  if err:=scanner.Err();err!=nil{return nil,err}
  if kind!=""||data!=""{if err:=flush();err!=nil{return nil,err}}
  if !terminal||last<2{return nil,errors.New("SSE stream stopped before a terminal Run event")}
+ if requireTools {
+  hasTechnical,hasEvent:=false,false
+  for key:=range toolsFinished {
+   if strings.HasPrefix(key,"Technical:"){hasTechnical=true}
+   if strings.HasPrefix(key,"Event:"){hasEvent=true}
+  }
+  if !hasTechnical || !hasEvent {return nil,fmt.Errorf("missing observed tool lifecycle: Technical=%t Event=%t",hasTechnical,hasEvent)}
+ }
  return done,nil
 }
 func validateArtifact(a map[string]any,mode,symbol string)error{

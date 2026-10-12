@@ -643,7 +643,7 @@ jobs:
           # Do not automatically retry potentially paid requests.
           if ! "$RUNNER_TEMP/aegis-live-check" \
             -url http://127.0.0.1:18686 \
-            -symbol 600519.SH -mode PORTFOLIO_REVIEW -timeout 25m; then
+            -symbol 600519.SH -mode PORTFOLIO_REVIEW -timeout 25m -require-tool-events; then
             # Only allowlisted metadata: never dump raw provider or model logs.
             grep 'AEGIS_RUN_DIAGNOSTIC' "$data_dir/server.log" || echo "::warning::No sanitized run diagnostic found"
             exit 1

@@ -13,6 +13,9 @@ import (
 
 const fakeID="11223344556677889900aabbccddeeff"
 func fakeServer(t *testing.T,mode,state string,wrongAccount,brokenSequence bool)(*httptest.Server,*int){
+ return fakeServerWithToolEvents(t,mode,state,wrongAccount,brokenSequence,false)
+}
+func fakeServerWithToolEvents(t *testing.T,mode,state string,wrongAccount,brokenSequence,withTools bool)(*httptest.Server,*int){
  t.Helper()
  downloads:=new(int)
  h:=http.NewServeMux()
@@ -38,6 +41,14 @@ func fakeServer(t *testing.T,mode,state string,wrongAccount,brokenSequence bool)
    fmt.Fprintf(w,"id: %d\nevent: research_stage\ndata: {\"seq\":%d,\"stage\":%q,\"status\":%q}\n\n",seq,seq,name,status)
   }
   seq:=len(names)+1
+  if withTools {
+   for _,tool:=range []struct{stage,name string}{{"Technical","stock_technical_research"},{"Event","snapshot_official"}} {
+    for _,status:=range []string{"START","DONE"} {
+     fmt.Fprintf(w,"id: %d\nevent: research_stage\ndata: {\"seq\":%d,\"kind\":\"TOOL\",\"stage\":%q,\"tool\":%q,\"status\":%q}\n\n",seq,seq,tool.stage,tool.name,status)
+     seq++
+    }
+   }
+  }
   fmt.Fprintf(w,"id: %d\nevent: research_stage\ndata: {\"seq\":%d,\"stage\":\"Run\",\"status\":%q}\n\n",seq,seq,state)
  })
  h.HandleFunc(root+"/"+fakeID,func(w http.ResponseWriter,r *http.Request){
@@ -76,4 +87,19 @@ func TestLiveCheckRejectsMissingSSEEvent(t *testing.T){
 func TestLiveCheckRequiresLoopback(t *testing.T){
  err:=verify(context.Background(),&http.Client{},options{url:"http://public.example:8686",symbol:"600519.SH",mode:"DECISION"},&bytes.Buffer{})
  if err==nil{t.Fatal("accepted public endpoint")}
+}
+
+func TestLiveCheckStrictObservedToolsRequired(t *testing.T) {
+ without,_:=fakeServer(t,"PORTFOLIO_REVIEW","COMPLETED",false,false)
+ defer without.Close()
+ opts:=options{url:without.URL,symbol:"600519.SH",mode:"PORTFOLIO_REVIEW",requireToolEvents:true}
+ if err:=verify(context.Background(),without.Client(),opts,&bytes.Buffer{});err==nil || !strings.Contains(err.Error(),"missing observed tool lifecycle") {
+  t.Fatalf("stage-only hosted run must not pass tool acceptance: %v",err)
+ }
+ with,_:=fakeServerWithToolEvents(t,"PORTFOLIO_REVIEW","COMPLETED",false,false,true)
+ defer with.Close()
+ opts.url=with.URL
+ if err:=verify(context.Background(),with.Client(),opts,&bytes.Buffer{});err!=nil {
+  t.Fatalf("real-event-shaped fixture must pass strict transport validation: %v",err)
+ }
 }
