@@ -3,7 +3,7 @@ import { readLiveReport } from "./live-report";
 type RunForExport = { run_id: string; symbol: string; requested_as_of: string; mode: string };
 const escapeCell = (value: string) => value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 const clean = (value: string) => value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
-const safeText = (value: string) => clean(value).replace(/([\\`*_{}\[\]()#+.!>|~\-])/g, "\\$1");
+const safeText = (value: string) => clean(value).replace(/([\\`*_{}\[\]()#+!>|~])/g, "\\$1");
 const safeId = (value: string) => /^[a-f0-9]{32}$/.test(value) ? value : "未提供";
 
 export function renderResearchMarkdown(artifact: unknown, run: RunForExport): string {
