@@ -11,6 +11,7 @@ import (
 	"Aegis/internal/decision"
 	"Aegis/internal/portfolio"
 	"Aegis/internal/research"
+	"Aegis/internal/researchlang"
 )
 
 // ResearchMode selects which existing, independently validated Aegis workflow
@@ -96,6 +97,9 @@ func (s *ResearchService) Run(ctx context.Context, req ResearchRequest) (*Resear
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// Scope language checks to NEW research executions. Existing artifacts and
+	// standalone agent calls remain unchanged. This does not translate inputs.
+	ctx = researchlang.RequireChinese(ctx)
 
 	switch req.Mode {
 	case ModeDecision:
