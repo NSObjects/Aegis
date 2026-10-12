@@ -86,7 +86,7 @@ export function readLiveReport(input: unknown): LiveReport {
 
   if (mode === "DECISION") {
     field(overview, "研究动作（非委托）", root.action);
-    card(cards, "decision", "研究决策", "Decision 模式：仅供研究，不构成委托。", root, (f, e, s) => {
+    card(cards, "decision", "研究决策", "单标的决策研究：仅供研究，不构成委托。", root, (f, e, s) => {
       field(f, "标的", s.symbol);
       field(f, "研究动作", s.action);
       entry(e, "市场观点", s.market_view);
@@ -99,7 +99,7 @@ export function readLiveReport(input: unknown): LiveReport {
 
   field(overview, "标的", research.symbol);
   field(overview, "研究结论", plan?.conclusion);
-  field(overview, "TradeIntent（非指令）", intent?.status);
+  field(overview, "研究意向（非指令）", intent?.status);
   field(overview, "最终风险门禁", gate?.disposition);
   const portfolioState = value(portfolio?.portfolio_state);
   if (portfolioState) field(overview, "账户状态", portfolioState === "NOT_PROVIDED" ? "NOT_PROVIDED · 未知" : portfolioState);
@@ -110,7 +110,7 @@ export function readLiveReport(input: unknown): LiveReport {
     claims(e, "冲突观点", s.conflicts, "description");
     strings(e, "研究风险", s.risks);
   });
-  card(cards, "market", "市场环境 · Market", "市场宽度与情绪等来自后端研究时点的上下文。", object(research.market), (f, e, s) => {
+  card(cards, "market", "市场环境", "市场宽度与情绪等来自后端研究时点的上下文。", object(research.market), (f, e, s) => {
     field(f, "市场数据日", s.as_of);
     field(f, "市场状态", s.regime);
     field(f, "上涨家数", s.advance_count);
@@ -121,7 +121,7 @@ export function readLiveReport(input: unknown): LiveReport {
     strings(e, "市场证据", s.evidence);
     strings(e, "风险提示", s.risk);
   });
-  card(cards, "technical", "技术研究 · Technical", "价格和指标是该次研究的历史快照，并非当前实时行情。", object(research.technical), (f, e, s) => {
+  card(cards, "technical", "技术研究", "价格和指标是该次研究的历史快照，并非当前实时行情。", object(research.technical), (f, e, s) => {
     field(f, "研究交易日", s.requested_as_of);
     field(f, "有效交易日", s.effective_as_of);
     field(f, "最后交易日", s.last_trade_date);
@@ -148,7 +148,7 @@ export function readLiveReport(input: unknown): LiveReport {
     strings(e, "技术证据", s.evidence);
     strings(e, "技术风险", s.risk);
   });
-  card(cards, "event", "事件研究 · Event", "事件事实与原有证据文档 ID；ID 本身不等于可点击来源。", object(research.event), (f, e, s) => {
+  card(cards, "event", "事件研究", "事件事实与原有证据文档 ID；ID 本身不等于可点击来源。", object(research.event), (f, e, s) => {
     field(f, "事件状态", s.status);
     field(f, "研究截止", s.requested_as_of);
     field(f, "证据观察截止", s.evidence_as_of);
@@ -167,7 +167,7 @@ export function readLiveReport(input: unknown): LiveReport {
     strings(e, "事件证据", s.evidence);
     strings(e, "事件风险", s.risk);
   });
-  card(cards, "fundamental", "基本面 · Fundamental", "仅展示已公告且符合本次研究时点的源数据；不填补缺失财务数字。", object(research.fundamental), (f, e, s) => {
+  card(cards, "fundamental", "基本面研究", "仅展示已公告且符合本次研究时点的源数据；不填补缺失财务数字。", object(research.fundamental), (f, e, s) => {
     field(f, "研究交易日", s.requested_as_of);
     const income = object(s.income);
     if (income) {
@@ -179,7 +179,7 @@ export function readLiveReport(input: unknown): LiveReport {
     }
     entry(e, "模型解释（非财务原始数据）", s.interpretation);
   });
-  card(cards, "debate", "多空辩论 · Bull / Bear", "展示真实辩论回合与反驳目标 ID，不推断立场是否被接受。", review && object(review.debate_state), (f, e, s) => {
+  card(cards, "debate", "多空辩论", "展示真实辩论回合与反驳目标 ID，不推断立场是否被接受。", review && object(review.debate_state), (f, e, s) => {
     array(s.turns).forEach((v, i) => {
       const turn = object(v);
       if (!turn) return;
@@ -195,7 +195,7 @@ export function readLiveReport(input: unknown): LiveReport {
       });
     });
   });
-  card(cards, "manager", "研究经理 · Research Manager", "结论与机会、风险均沿用 typed ResearchPlan。", plan, (f, e, s) => {
+  card(cards, "manager", "研究经理判断", "结论与机会、风险均沿用 typed ResearchPlan。", plan, (f, e, s) => {
     field(f, "研究结论", s.conclusion);
     entry(e, "研究经理摘要", s.summary);
     claims(e, "机会", s.opportunities, "claim");
@@ -206,13 +206,13 @@ export function readLiveReport(input: unknown): LiveReport {
     if (accepted.length) entry(e, "已接受的论点 ID", accepted.join("、"));
     if (unresolved.length) entry(e, "尚未解决的论点 ID", unresolved.join("、"));
   });
-  card(cards, "intent", "研究意向 · TradeIntent", "研究性候选/观察/排除；绝非交易指令。", intent, (f, e, s) => {
+  card(cards, "intent", "研究意向", "研究性候选/观察/排除；绝非交易指令。", intent, (f, e, s) => {
     field(f, "研究状态", s.status);
     entry(e, "研究依据", s.thesis);
     strings(e, "支持信息", s.evidence);
     strings(e, "风险", s.risk);
   });
-  card(cards, "risk", "风险分析 · Risk Analyst", "独立风险评估；未解问题不能自动视为通过。", risk, (f, e, s) => {
+  card(cards, "risk", "风险分析", "独立风险评估；未解问题不能自动视为通过。", risk, (f, e, s) => {
     field(f, "风险判断", s.assessment);
     entry(e, "风险总结", s.summary);
     ["findings", "constraints", "unresolved"].forEach((key, index) => {
@@ -239,7 +239,7 @@ export function readLiveReport(input: unknown): LiveReport {
     if (!object(review?.observed_exposure) && portfolioState === "NOT_PROVIDED") entry(e, "已观测敞口", "账户状态未知且未提供可验证估值；不能推导现金、仓位或零敞口。");
     if (!object(review?.observed_exposure) && portfolioState === "POSITIONS") entry(e, "已观测敞口", "已知存在持仓，但未提供可验证的估值信息；不能推导资金或敞口比例。");
   });
-  card(cards, "ledger", "论点与证据索引 · EvidenceLedger", "仅显示后端明确提供的论点、引用域、事件 ID 与反驳关系。", review && object(review.evidence_ledger), (f, e, s) => {
+  card(cards, "ledger", "论点与证据索引", "仅显示后端明确提供的论点、引用域、事件 ID 与反驳关系。", review && object(review.evidence_ledger), (f, e, s) => {
     field(f, "归档结论", s.conclusion);
     array(s.arguments).forEach(raw => {
       const argument = object(raw);
