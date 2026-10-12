@@ -656,6 +656,7 @@ test("history uses server paging and keeps a selected Run separate from the list
   await expect(page.getByRole("button", { name: "下一页" })).toBeDisabled();
   await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) })).toBeVisible();
   await page.getByLabel("按股票代码筛选").fill("000001");
+  await expect(page.locator(".live-history-row")).toHaveCount(0);
   await expect(page.getByText("没有符合条件的研究记录。")).toBeVisible();
   await page.getByLabel("按股票代码筛选").fill("600519");
   await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) })).toBeVisible();
