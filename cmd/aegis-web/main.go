@@ -55,6 +55,7 @@ func main() {
 	evidence := flag.String("evidence-store", ".aegis/evidence", "event evidence snapshots")
 	parallel := flag.Int("max-parallel", 1, "simultaneous research workflows")
 	maxActive := flag.Int("max-active", 4, "running plus queued research")
+	runTimeout := flag.Duration("run-timeout", 20*time.Minute, "maximum wall-clock time for a queued or running research task")
 	lookback := flag.Duration("event-lookback", 7*24*time.Hour, "live event evidence lookback")
 	full := flag.Bool("portfolio-review", true, "full research with explicit account state")
 	flag.Parse()
@@ -96,6 +97,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := runs.SetRunTimeout(*runTimeout); err != nil { log.Fatal(err) }
 	defer runs.Close()
 	var handler *httpapi.Handler
 	if *dev {

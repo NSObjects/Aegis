@@ -24,6 +24,7 @@ const failureDescriptions: Record<string, string> = {
   PERSISTENCE: "研究记录持久化失败",
   INVALID_RESULT: "研究产物不符合结果契约",
   PROCESS_INTERRUPTED: "研究执行期间服务进程中断",
+  TIMEOUT: "研究执行超时，已记录为失败；不代表外部服务完全停止",
   UNKNOWN: "尚未定位具体原因；请查看已记录的阶段与工具事件",
 };
 
