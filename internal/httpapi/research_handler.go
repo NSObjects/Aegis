@@ -269,56 +269,19 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusAccepted, publicRun(rec))
 }
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	limit, offset := 100, 0
-	if raw := query.Get("limit"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 1 || n > 100 {
-			http.Error(w, "limit must be between 1 and 100", http.StatusBadRequest)
-			return
-		}
-		limit = n
-	}
-	if raw := query.Get("offset"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 0 || n > 1000000 {
-			http.Error(w, "invalid offset", http.StatusBadRequest)
-			return
-		}
-		offset = n
-	}
-	symbol := strings.ToUpper(strings.TrimSpace(query.Get("symbol")))
-	if symbol != "" && (len(symbol) > 9 || !regexp.MustCompile(`^[0-9A-Z.]+$`).MatchString(symbol)) {
-		http.Error(w, "invalid symbol filter", http.StatusBadRequest)
-		return
-	}
-	state := query.Get("state")
-	switch state {
-	case "", "PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED":
-	default:
-		http.Error(w, "invalid state filter", http.StatusBadRequest)
-		return
-	}
 	v, err := h.runs.List(r.Context())
 	if err != nil {
 		lookupError(w, err)
 		return
 	}
-	filtered := make([]application.RunRecord, 0)
+	if len(v) > 100 {
+		v = v[:100]
+	}
+	out := make([]application.RunRecord, 0, len(v))
 	for _, rec := range v {
-		if symbol != "" && !strings.Contains(rec.Symbol, symbol) { continue }
-		if state != "" && string(rec.State) != state { continue }
-		filtered = append(filtered, rec)
+		out = append(out, publicRun(rec))
 	}
-	total := len(filtered)
-	if offset >= total { filtered = filtered[:0] } else {
-		end := offset + limit
-		if end > total { end = total }
-		filtered = filtered[offset:end]
-	}
-	out := make([]application.RunRecord, 0, len(filtered))
-	for _, rec := range filtered { out = append(out, publicRun(rec)) }
-	sendJSON(w, http.StatusOK, map[string]any{"runs": out, "total": total, "limit": limit, "offset": offset, "has_more": offset+len(out) < total})
+	sendJSON(w, http.StatusOK, map[string]any{"runs": out})
 }
 func (h *Handler) load(w http.ResponseWriter, r *http.Request, id string) (application.RunRecord, bool) {
 	rec, err := h.runs.Get(r.Context(), id)

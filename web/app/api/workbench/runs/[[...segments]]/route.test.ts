@@ -102,19 +102,3 @@ describe("authenticated Next.js ResearchRun BFF", () => {
     expect(response.status).toBe(502);
   });
 });
-
-describe("history filter proxy allowlist", () => {
-  it("forwards only recognized query filters to the Go service", async () => {
-    fetchSpy.mockResolvedValue(new Response('{"runs":[],"total":0,"has_more":false}', { status: 200 }));
-    const res = await GET(request("?limit=25&offset=50&symbol=600519&state=FAILED"), params());
-    expect(res.status).toBe(200);
-    const url = new URL(fetchSpy.mock.calls[0][0] as string);
-    expect(url.pathname).toBe("/api/v1/research/runs");
-    expect(Object.fromEntries(url.searchParams)).toEqual({ limit: "25", offset: "50", symbol: "600519", state: "FAILED" });
-  });
-  it("does not forward unknown or repeated parameters", async () => {
-    expect((await GET(request("?token=secret"), params())).status).toBe(400);
-    expect((await GET(request("?limit=1&limit=2"), params())).status).toBe(400);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-});

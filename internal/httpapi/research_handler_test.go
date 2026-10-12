@@ -19,7 +19,6 @@ const testToken = "unit-test-long-secret-not-for-browser"
 type fakeRuns struct {
 	mu          sync.Mutex
 	rec         application.RunRecord
-	listRecords []application.RunRecord
 	submitCalls int
 	submitErr error
 	lastRequest application.ResearchRequest
@@ -45,7 +44,6 @@ func (f *fakeRuns) Get(_ context.Context, id string) (application.RunRecord, err
 func (f *fakeRuns) List(_ context.Context) ([]application.RunRecord, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.listRecords != nil { return append([]application.RunRecord(nil), f.listRecords...), nil }
 	return []application.RunRecord{f.rec}, nil
 }
 func (f *fakeRuns) Cancel(_ context.Context, id string) error {
@@ -218,46 +216,4 @@ func TestHTTPRerunProvenanceValidatedAndExposed(t *testing.T) {
  if invalid.Code!=400||strings.Contains(invalid.Body.String(),parent){
   t.Fatalf("invalid source leaked into response: %d %s",invalid.Code,invalid.Body.String())
  }
-}
-
-func TestHTTPRunHistoryPaginationFiltersAndValidation(t *testing.T) {
-	first := testRecord()
-	second := testRecord()
-	second.ID = strings.Repeat("b", 32)
-	second.Symbol = "000001.SZ"
-	second.State = application.RunFailed
-	third := testRecord()
-	third.ID = strings.Repeat("c", 32)
-	third.State = application.RunFailed
-	f := &fakeRuns{rec: first, listRecords: []application.RunRecord{first, second, third}}
-	h := mkHandler(t, f, application.ModeDecision)
-	for _, tc := range []struct { query string; status int; total int; count int; more bool }{
-		{"", 200, 3, 3, false},
-		{"?limit=1", 200, 3, 1, true},
-		{"?limit=1&offset=1", 200, 3, 1, true},
-		{"?limit=1&offset=5", 200, 3, 0, false},
-		{"?symbol=600519", 200, 2, 2, false},
-		{"?state=FAILED&symbol=.SH", 200, 1, 1, false},
-		{"?state=COMPLETED&symbol=000001", 200, 0, 0, false},
-		{"?limit=0", 400, 0, 0, false},
-		{"?limit=101", 400, 0, 0, false},
-		{"?offset=-1", 400, 0, 0, false},
-		{"?offset=1000001", 400, 0, 0, false},
-		{"?state=INVALID", 400, 0, 0, false},
-		{"?symbol=x!", 400, 0, 0, false},
-	} {
-		w := apiRequest(t, h, "GET", "/api/v1/research/runs"+tc.query, "", true, nil)
-		if w.Code != tc.status { t.Errorf("%s: HTTP %d: %s", tc.query, w.Code, w.Body.String()); continue }
-		if tc.status != 200 { continue }
-		var result struct {
-			Runs []application.RunRecord `json:"runs"`
-			Total int `json:"total"`
-			HasMore bool `json:"has_more"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil { t.Fatal(err) }
-		if len(result.Runs) != tc.count || result.Total != tc.total || result.HasMore != tc.more {
-			t.Errorf("%s: got count %d, total %d, has_more %v", tc.query, len(result.Runs), result.Total, result.HasMore)
-		}
-		if strings.Contains(w.Body.String(), "artifact") { t.Errorf("%s: list exposed artifact", tc.query) }
-	}
 }
