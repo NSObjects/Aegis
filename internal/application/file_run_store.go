@@ -166,7 +166,7 @@ func checkRunRecord(record RunRecord) error {
 			return errors.New("invalid research event sequence")
 		}
         if ev.Kind == "" {
-            if ev.Tool != "" { return errors.New("stage event cannot contain a tool") }
+            if ev.Tool != "" || ev.Outcome != "" { return errors.New("stage event cannot contain tool metadata") }
             continue // historical stage event compatibility
         }
         if ev.Kind != "TOOL" || (ev.Status != "START" && ev.Status != "DONE" && ev.Status != "FAIL") {
@@ -176,6 +176,7 @@ func checkRunRecord(record RunRecord) error {
         case "Market", "Technical", "Event", "Fundamental", "Synthesis", "Debate", "ResearchManager", "Trading", "Risk", "Portfolio":
         default: return errors.New("invalid research tool event stage")
         }
+        if ev.Outcome != "" && ev.Outcome != "SUCCEEDED" && ev.Outcome != "PARTIAL" && ev.Outcome != "TIMEOUT" && ev.Outcome != "FAILED" { return errors.New("invalid tool outcome") }
         if len(ev.Tool) == 0 || len(ev.Tool) > 64 { return errors.New("invalid tool event name") }
         for _, ch := range ev.Tool {
             if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-') {
