@@ -175,6 +175,7 @@ func NewArtifact(
 			input Input,
 		) (out *marketResult, runErr error) {
             defer startProgress(ctx, "Market")(&runErr)
+            defer func() { recordResearchFailure(ctx, runErr) }()
 			query := strings.TrimSpace(
 				input.MarketQuery,
 			)
@@ -228,6 +229,7 @@ func NewArtifact(
 			input Input,
 		) (out *eventResult, runErr error) {
             defer startProgress(ctx, "Event")(&runErr)
+            defer func() { recordResearchFailure(ctx, runErr) }()
 			eventContext, err :=
 				cfg.EventAgent.Analyze(
 					ctx,
