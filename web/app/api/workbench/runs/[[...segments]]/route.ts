@@ -43,7 +43,7 @@ async function proxy(req: NextRequest, ctx: Context, method: "GET" | "POST") {
   if (path.endsWith("/stream")) {
     const lastID = req.headers.get("last-event-id");
     if (lastID !== null) {
-      if (!/^\d{1,20}$/.test(lastID) || BigInt(lastID) > 18446744073709551615n) return NextResponse.json({ error: "invalid Last-Event-ID" }, { status: 400, headers: defaultHeaders });
+      if (!/^\d{1,20}$/.test(lastID) || BigInt(lastID) > BigInt("18446744073709551615")) return NextResponse.json({ error: "invalid Last-Event-ID" }, { status: 400, headers: defaultHeaders });
       headers.set("Last-Event-ID", lastID);
     }
   }
