@@ -8,11 +8,11 @@ import (
 // HistoricalObservation is a copied, validated observation from a real technical
 // tool invocation. It is not an LLM-generated response or a trading signal.
 type HistoricalObservation struct {
- Symbol string
- RequestedAsOf string
- EffectiveAsOf string
- PriceBasis string
- Bars []HistoricalBar
+ Symbol string `json:"symbol"`
+ RequestedAsOf string `json:"requested_as_of"`
+ EffectiveAsOf string `json:"effective_as_of"`
+ PriceBasis string `json:"price_basis"`
+ Bars []HistoricalBar `json:"bars"`
 }
 
 type historicalObserverKey struct{}
