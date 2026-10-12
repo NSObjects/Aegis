@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"Aegis/internal/research"
+ eventcap "Aegis/internal/capability/event"
+ technicalcap "Aegis/internal/capability/technical"
 )
 
 // RunState is the durable lifecycle of one research invocation. None of these
@@ -464,6 +466,20 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 			cancel()
 		}
 	})
+    // Only actual calls observed by the acquisition runner produce events.
+    // The common sink enforces identifier allowlisting before durable storage.
+    ctx = technicalcap.WithToolObserver(ctx, func(ev technicalcap.ToolObservation) {
+        research.ReportToolObservation(ctx, research.ToolObservation{
+            Stage: "Technical", Tool: technicalcap.ToolName, Status: ev.Status,
+            At: ev.At, DurationMS: ev.DurationMS,
+        })
+    })
+    ctx = eventcap.WithRetrievalObserver(ctx, func(ev eventcap.RetrievalObservation) {
+        research.ReportToolObservation(ctx, research.ToolObservation{
+            Stage: "Event", Tool: ev.RetrieverID, Status: ev.Status,
+            At: ev.At, DurationMS: ev.DurationMS,
+        })
+    })
 	ctx = research.WithProgressEvents(ctx, func(ev research.ProgressEvent) {
 		mu.Lock()
 		defer mu.Unlock()

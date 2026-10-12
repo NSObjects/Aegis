@@ -98,6 +98,12 @@ export function isLiveRun(x: unknown): x is LiveRun {
 export function isLiveEvent(x: unknown): x is LiveStageEvent {
   if (typeof x !== "object" || x === null) return false;
   const e = x as Record<string, unknown>;
+  // Strictly validate observed tool metadata; old events without kind remain valid.
+  if (e.kind !== undefined && e.kind !== "TOOL") return false;
+  if (e.kind === "TOOL" &&
+      (typeof e.tool !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(e.tool) ||
+        !["START", "DONE", "FAIL"].includes(String(e.status)))) return false;
+  if (e.kind !== "TOOL" && e.tool !== undefined) return false;
   return Number.isSafeInteger(e.seq) && (e.seq as number) > 0 &&
     typeof e.stage === "string" && e.stage.length > 0 && e.stage.length <= 100 &&
     typeof e.status === "string" && e.status.length > 0 &&

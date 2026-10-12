@@ -150,6 +150,10 @@ func (r AcquisitionPlanRunner) Run(
 	structuralErrors := make([]error, 0)
 
 	for _, step := range preparedSteps {
+        // Report actual execution, never tools merely present in the plan.
+        // RetrieverID is validated again by the Run-scoped allowlist before persistence.
+        started := time.Now()
+        reportRetrieval(ctx, RetrievalObservation{RetrieverID: step.Retriever.ID(), Status: "START", At: started.UTC()})
 		run, runErr := (TaskRunner{
 			Now:           now,
 			SnapshotStore: r.SnapshotStore,
@@ -159,6 +163,12 @@ func (r AcquisitionPlanRunner) Run(
 			step.Retriever,
 		)
 
+        resultStatus := "DONE"
+        if runErr != nil || run.Attempt.Status != AcquisitionSucceeded { resultStatus = "FAIL" }
+        reportRetrieval(ctx, RetrievalObservation{
+            RetrieverID: step.Retriever.ID(), Status: resultStatus,
+            At: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds(),
+        })
 		stepOutput := AcquisitionStepOutput{
 			StepID: step.ID,
 			Scope:  step.Scope,

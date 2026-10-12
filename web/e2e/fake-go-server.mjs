@@ -31,9 +31,9 @@ function evolve(run) {
   if (run.state !== "RUNNING") return;
   if (ms >= 800 && !run.stage1) { run.stage1 = true; append(run, "Market", "START"); }
   if (ms >= 1200 && !run.stage2) { run.stage2 = true; append(run, "Market", "DONE", 400); }
-  if (ms >= 1550 && !run.stage3) { run.stage3 = true; append(run, "Event", "START"); }
+  if (ms >= 1550 && !run.stage3) { run.stage3 = true; append(run, "Event", "START"); if (run.scenario === "tooltrace") run.events.push({seq:run.events.length+1,kind:"TOOL",stage:"Event",tool:"snapshot_official",status:"START",at:asOf()}); }
   if (run.scenario !== "hold" && ms >= 2200) {
-    if (!run.stage4) { run.stage4 = true; append(run, "Event", run.scenario === "fail" ? "FAIL" : "DONE", 650); }
+    if (!run.stage4) { run.stage4 = true; if (run.scenario === "tooltrace") run.events.push({seq:run.events.length+1,kind:"TOOL",stage:"Event",tool:"snapshot_official",status:"DONE",at:asOf(),duration_ms:345}); append(run, "Event", run.scenario === "fail" ? "FAIL" : "DONE", 650); }
     run.state = run.scenario === "fail" ? "FAILED" : "COMPLETED";
     if (run.state === "FAILED") run.failure_code = "RESEARCH_FAILED";
     run.finished_at = asOf();
@@ -185,7 +185,7 @@ const server = createServer(async (req, res) => {
     }
     const run_id = randomBytes(16).toString("hex");
     const created_at = asOf();
-    const scenario = body.market_query?.includes("hold") ? "hold" : body.market_query?.includes("fail") ? "fail" : body.market_query?.includes("historical comparison fixture") ? "comparison" : body.market_query?.includes("technical snapshot fixture") ? "snapshot" : "complete";
+    const scenario = body.market_query?.includes("hold") ? "hold" : body.market_query?.includes("fail") ? "fail" : body.market_query?.includes("historical comparison fixture") ? "comparison" : body.market_query?.includes("technical snapshot fixture") ? "snapshot" : body.market_query?.includes("observed tool trace fixture") ? "tooltrace" : "complete";
     const request_snapshot = {
       schema_version: 1, market_query_provided: Boolean(body.market_query?.trim()),
       event_window_start: new Date(Date.parse(created_at) - 7*24*3600*1000).toISOString(),
