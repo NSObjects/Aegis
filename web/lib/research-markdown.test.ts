@@ -12,7 +12,7 @@ describe("Markdown report export", () => {
     expect(result).toContain("600519.SH");
     expect(result).toContain("2026-10-12T00:00:00Z");
     expect(result).toContain("E-42");
-    expect(result).toContain("NOT_PROVIDED");
+    expect(result).toContain(String.raw`NOT\_PROVIDED`);
     expect(result).not.toContain("secret-input-not-for-export");
     expect(result).toContain("不构成交易指令");
   });
