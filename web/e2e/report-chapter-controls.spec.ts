@@ -24,6 +24,21 @@ test("completed report expands and collapses only the structured chapters", asyn
   await page.getByRole("button", { name: "收起所有章节" }).click();
   expect(await chapters.evaluateAll(nodes => nodes.every(node => !(node as HTMLDetailsElement).open))).toBe(true);
 
+  // Direct hash navigation and browser hash changes reveal a collapsed chapter.
+  const firstID = await chapters.first().getAttribute("id");
+  expect(firstID).toMatch(/^chapter-[a-z-]+$/);
+  const hash = "#report-" + firstID!.slice("chapter-".length);
+  await page.evaluate(nextHash => { window.location.hash = nextHash; }, hash);
+  await expect(chapters.first()).toHaveAttribute("open");
+  await page.getByRole("button", { name: "收起所有章节" }).click();
+  await expect(chapters.first()).not.toHaveAttribute("open");
+  await page.evaluate(nextHash => {
+    window.location.hash = "#other";
+    window.location.hash = nextHash;
+  }, hash);
+  await expect(chapters.first()).toHaveAttribute("open");
+
+  await page.getByRole("button", { name: "收起所有章节" }).click();
   // Individual chapters still use native keyboard-accessible details/summary.
   await chapters.first().locator("summary").click();
   await expect(chapters.first()).toHaveAttribute("open");
