@@ -52,7 +52,9 @@ export default function LiveRunOverview({
       <button type="button" className="run-overview-refresh" onClick={onRefresh}><RefreshCcw size={13}/>立即刷新</button>
     </div>
     {syncError && <p className="run-overview-warning" role="alert">无法刷新任务列表：{syncError}。以下可能是上一次成功返回的记录，不代表当前实时任务状态。</p>}
-    {!syncedAt ? <section className="surface run-overview-zero" role="status">正在获取 Go 研究任务列表；尚不显示统计，避免将未同步误报为 0 条任务。</section> : <>
+    {!syncedAt ? <section className="surface run-overview-zero" role={syncError ? "alert" : "status"}>
+      {syncError ? <><h3>研究任务列表暂时不可用</h3><p>首次同步未成功，尚无可靠任务数据；不会把请求失败显示成零条任务。</p><button className="btn" type="button" onClick={onRefresh}><RefreshCcw size={14}/>重新获取任务列表</button></> : "正在获取 Go 研究任务列表；尚不显示统计，避免将未同步误报为 0 条任务。"}
+    </section> : <>
       <div className="run-overview-metrics" aria-label="已返回任务样本状态分布">
         <div className="run-overview-kpi"><div className="run-overview-kpi-top"><span>返回样本</span><BarChart3 size={18}/></div><strong>{overview.total}</strong><small>后端当前任务列表</small></div>
         <div className="run-overview-kpi active"><div className="run-overview-kpi-top"><span>等待 / 执行中</span><Clock3 size={18}/></div><strong>{overview.active}</strong><small>需要关注进度</small></div>
