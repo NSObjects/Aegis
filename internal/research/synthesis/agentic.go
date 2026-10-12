@@ -5,6 +5,7 @@ import (
 	"Aegis/internal/agent/fundamental"
 	"Aegis/internal/agent/market"
 	"Aegis/internal/agent/technical"
+	"Aegis/internal/researchlang"
 	"context"
 	"encoding/json"
 	"errors"
@@ -83,8 +84,12 @@ func (s *AgenticSynthesizer) Synthesize(
 				Synthesis: synthesized,
 			}
 			if validationErr := Validate(artifact); validationErr == nil {
-				return artifact, nil
-			} else {
+                if langErr:=checkSynthesisLanguage(ctx,synthesized);langErr==nil {
+                    return artifact,nil
+                }else{
+                    err=langErr
+                }
+            } else {
 				// An LLM can continue inventing "cross-domain" conflicts backed
 				// by a single domain even after a corrective prompt. Only after
 				// the retry is exhausted may we omit those unsupported *relations*.
@@ -92,9 +97,9 @@ func (s *AgenticSynthesizer) Synthesize(
 				// still pass unchanged deterministic validation.
 				if attempt == 1 {
 					filtered, count := omitSingleDomainConflictCandidates(artifact)
-					if count > 0 && Validate(filtered) == nil {
-						return filtered, nil
-					}
+					if count > 0 && Validate(filtered) == nil && checkSynthesisLanguage(ctx,filtered.Synthesis)==nil {
+                        return filtered,nil
+                    }
 				}
 				err = fmt.Errorf("invalid research synthesis artifact: %w", validationErr)
 			}
@@ -104,8 +109,8 @@ func (s *AgenticSynthesizer) Synthesize(
 			messages = append(messages,
 				response,
 				schema.UserAgenticMessage(fmt.Sprintf(
-					"Your previous JSON failed deterministic validation: %v. Return the complete corrected JSON object only. Preserve upstream facts and obey the original schema; in particular, every conflict must reference at least two genuinely supported distinct domains. If a claimed conflict is supported within only one domain, REMOVE that conflict and, if necessary, describe its uncertainty under risks. Do not attach an unrelated domain citation to satisfy validation. Preserve upstream facts unchanged.",
-					err,
+					"Your previous JSON failed validation: %v. Return the complete corrected JSON object only. Preserve upstream facts and obey the original schema; in particular, every conflict must reference at least two genuinely supported distinct domains. If a claimed conflict is supported within only one domain, REMOVE that conflict and, if necessary, describe its uncertainty under risks. Do not attach an unrelated domain citation to satisfy validation. %s",
+                    err,researchlang.Correction,
 				)),
 			)
 		}
@@ -114,7 +119,15 @@ func (s *AgenticSynthesizer) Synthesize(
 }
 
 
-const omittedConflictRisk = "Generated cross-domain conflict candidate(s) omitted for insufficient independent domain references; omitted claims were not verified or resolved."
+func checkSynthesisLanguage(ctx context.Context, result Synthesis) error {
+    fields:=[]researchlang.Field{{Name:"synthesis.summary",Text:result.Summary}}
+    for _,a:=range result.Agreements {fields=append(fields,researchlang.Field{Name:"synthesis.agreements.claim",Text:a.Claim})}
+    for _,c:=range result.Conflicts {fields=append(fields,researchlang.Field{Name:"synthesis.conflicts.description",Text:c.Description})}
+    for _,risk:=range result.Risks {fields=append(fields,researchlang.Field{Name:"synthesis.risks",Text:risk})}
+    return researchlang.Check(ctx,fields...)
+}
+
+const omittedConflictRisk = "生成的跨领域冲突候选缺乏足够独立领域引用，已经移除；被移除的观点既未被核实，也未得到解决。"
 
 // omitSingleDomainConflictCandidates is a conservative last-resort fallback:
 // it removes only *purported cross-domain relations* whose references are
