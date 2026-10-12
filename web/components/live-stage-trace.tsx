@@ -7,6 +7,18 @@ import { buildRunTrace, stageLabels, stageReportId, type StagePhase } from "@/li
 
 type StreamStatus = "connected" | "disconnected" | "idle";
 
+const failureDescriptions: Record<string, string> = {
+  EVENT_JSON_DECODE: "事件分析模型输出无法解析为符合要求的 JSON",
+  EVENT_MODEL_GENERATE: "事件分析模型生成调用失败",
+  EVENT_MODEL_EMPTY: "事件分析模型返回空内容",
+  EVENT_CONTEXT_VALIDATION: "事件研究结果未通过结构校验",
+  EVENT_SYNTHESIS_VALIDATION: "事件研究结论未通过校验",
+  PERSISTENCE: "研究记录持久化失败",
+  INVALID_RESULT: "研究产物不符合结果契约",
+  PROCESS_INTERRUPTED: "研究执行期间服务进程中断",
+  UNKNOWN: "尚未定位具体原因；请查看已记录的阶段与工具事件",
+};
+
 const phaseLabels: Record<StagePhase, string> = {
   RUNNING: "执行中", DONE: "成功", FAIL: "失败",
   INCOMPLETE: "未记录完成", UNKNOWN: "未知状态",
@@ -51,6 +63,7 @@ export default function LiveStageTrace({
         <dl>
           <div><dt>错误代码</dt><dd><code>{run.failure_code ?? "后端未提供"}</code></dd></div>
           <div><dt>错误类别</dt><dd><code>{run.failure_category ?? "历史记录未提供"}</code></dd></div>
+          <div><dt>故障说明</dt><dd>{run.failure_category ? (failureDescriptions[run.failure_category] ?? "已记录错误类别，暂无细分说明") : "历史任务没有保存具体错误分类"}</dd></div>
           <div><dt>失败阶段</dt><dd>{(run.failure_stage ?? trace?.explicitFailure) ? (stageLabels[run.failure_stage ?? trace!.explicitFailure!] ?? (run.failure_stage ?? trace!.explicitFailure!)) + "（" + (run.failure_stage ?? trace!.explicitFailure!) + "）" : "阶段事件未定位"}</dd></div>
           <div><dt>任务 ID</dt><dd><code>{run.run_id}</code></dd></div>
         </dl>

@@ -620,6 +620,18 @@ func researchErrorCategory(err error) string {
 	if err == nil { return "NONE" }
 	msg := strings.ToLower(err.Error())
 	switch {
+	// Event categories are matched against stable wrapper context, never persisted raw text.
+	// Tool completion alone is not evidence that the Event agent succeeded.
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "decode strict json"):
+		return "EVENT_JSON_DECODE"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "generate model output"):
+		return "EVENT_MODEL_GENERATE"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "model returned empty output"):
+		return "EVENT_MODEL_EMPTY"
+	case strings.Contains(msg, "invalid event context:") || strings.Contains(msg, "validate event analyst context:"):
+		return "EVENT_CONTEXT_VALIDATION"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "normalize event analyst synthesis"):
+		return "EVENT_SYNTHESIS_VALIDATION"
 	case strings.Contains(msg, "research narrative is not in simplified chinese"):
 		return "LANGUAGE_VALIDATION"
 	case strings.Contains(msg, "decode research synthesis json"):
