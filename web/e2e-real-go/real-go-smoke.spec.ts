@@ -77,3 +77,31 @@ test("unknown Run deep link never renders another Run or exposes artifact", asyn
   await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
 });
+
+test("transient API outage preserves Run selection and recovers on manual refresh", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel("股票代码").fill("600519.SH");
+  await page.getByRole("button", { name: "启动真实研究" }).click();
+  const fields = page.locator(".live-run-fields");
+  await expect(fields).toContainText("失败", { timeout: 30_000 });
+  const href = await fields.locator("a.live-permalink").first().getAttribute("href");
+  const runId = new URL(href!, "http://localhost").searchParams.get("run");
+  expect(runId).toMatch(/^[a-f0-9]{32}$/);
+
+  await page.route("**/api/workbench/runs", async route => {
+    await route.abort("failed");
+  });
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(page.getByRole("alert").first()).toBeVisible({ timeout: 15_000 });
+  await expect(fields).toContainText(runId!);
+  await expect(fields).toContainText("失败");
+  await page.unroute("**/api/workbench/runs");
+
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(fields).toContainText(runId!, { timeout: 15_000 });
+  await expect(fields).toContainText("600519.SH");
+  await page.goto(href!);
+  await expect(fields).toContainText(runId!, { timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
+});
