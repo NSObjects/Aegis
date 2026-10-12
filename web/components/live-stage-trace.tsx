@@ -75,6 +75,12 @@ export default function LiveStageTrace({
               </dl>
               {step.phase === "INCOMPLETE" && <p className="live-trace-small">最后只记录了 START；终态不表示该阶段已经完成。</p>}
               {step.phase === "UNKNOWN" && <p className="live-trace-small">Go 原始状态：{step.rawStatus}，不能解释成成功。</p>}
+              {events.some(ev => ev.kind === "TOOL" && ev.stage === step.stage) && <div className="live-trace-tools" aria-label={`${step.stage} 实际观测工具事件`}>
+                <strong>已观测工具调用</strong>
+                <ul>{events.filter(ev => ev.kind === "TOOL" && ev.stage === step.stage).map(ev =>
+                  <li key={ev.seq}><code>{ev.tool ?? "未提供"}</code> · {ev.status === "START" ? "开始" : ev.status === "DONE" ? "完成" : ev.status === "FAIL" ? "失败" : "状态未知"} · #{ev.seq}{typeof ev.duration_ms === "number" ? ` · ${ev.duration_ms}ms` : ""}</li>
+                )}</ul>
+              </div>}
               {hasReport && <a className="live-trace-report-link" href={"#report-" + reportId}>查看本任务对应报告片段 ↗</a>}
             </li>;
           })}
@@ -92,7 +98,7 @@ export default function LiveStageTrace({
             <code>#{ev.seq}</code>
           </div>)}</div>
       </details>}
-      <p className="live-trace-boundary">当前 Go 事件只包含阶段、状态、时间与可选耗时；未提供脱敏工具调用、数据源名称和工具输入输出。这里不会伪造工具明细、跳过状态或模型内部推理。</p>
+      <p className="live-trace-boundary">阶段信息来自 Go 持久化事件；仅展示实际观测到的工具事件。未接入 observer 的工具不代表未执行。数据源、工具参数与返回值均不展示；不会伪造调用记录或模型内部推理。</p>
     </>}
     <div className="live-stream-foot"><Activity size={13}/>
       {terminal ? "任务已结束 · 事件从持久化接口补读" : stream === "disconnected" ?

@@ -381,7 +381,7 @@ test("observed Go stages show duration, lifecycle, links and restore after refre
   await expect(trace.locator(".live-trace-lifecycle")).toContainText("COMPLETED");
   await expect(trace.locator(".live-trace-stage")).toHaveCount(2);
   await expect(trace.locator(".live-trace-stage").filter({ hasText: "Market" }).locator("a")).toHaveAttribute("href", "#report-market");
-  await expect(trace.getByText("未提供脱敏工具调用", { exact: false })).toBeVisible();
+  await expect(trace.getByText("仅展示实际观测到的工具事件", { exact: false })).toBeVisible();
   await page.reload();
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功");

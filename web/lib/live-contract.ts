@@ -69,6 +69,8 @@ export interface LiveRun {
   evidence_index?: RunEvidenceIndex;
 }
 export interface LiveStageEvent {
+  kind?: "TOOL";
+  tool?: string;
   seq: number;
   stage: string;
   status: string;

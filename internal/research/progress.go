@@ -14,6 +14,40 @@ type progressWriter struct {
 	out io.Writer
 }
 type progressCallbackKey struct{}
+type toolCallbackKey struct{}
+
+// ToolObservation contains only explicitly observed, non-sensitive tool metadata.
+// Call sites must not attach arguments, results, URLs, credentials or prompts.
+type ToolObservation struct {
+  Stage string
+  Tool string
+  Status string
+  At time.Time
+  DurationMS int64
+}
+
+// WithToolObservations installs a run-scoped optional sink; no tool calls are inferred.
+func WithToolObservations(ctx context.Context, callback func(ToolObservation)) context.Context {
+  if ctx == nil || callback == nil { return ctx }
+  return context.WithValue(ctx, toolCallbackKey{}, callback)
+}
+
+// ReportToolObservation accepts only fixed known stages and tightly restricted identifiers.
+// Unknown values are dropped rather than persisted as attacker-controlled strings.
+func ReportToolObservation(ctx context.Context, ev ToolObservation) {
+  if ctx == nil || (ev.Status != "START" && ev.Status != "DONE" && ev.Status != "FAIL") || ev.DurationMS < 0 { return }
+  switch ev.Stage {
+  case "Market", "Technical", "Event", "Fundamental", "Synthesis", "Debate", "ResearchManager", "Trading", "Risk", "Portfolio":
+  default: return
+  }
+  if len(ev.Tool) == 0 || len(ev.Tool) > 64 { return }
+  for _, ch := range ev.Tool {
+    if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-') { return }
+  }
+  if ev.At.IsZero() { ev.At = time.Now().UTC() }
+  if cb, ok := ctx.Value(toolCallbackKey{}).(func(ToolObservation)); ok && cb != nil { cb(ev) }
+}
+
 
 // ProgressEvent is safe stage metadata. It deliberately omits prompts,
 // model responses, portfolio values and provider credentials.
