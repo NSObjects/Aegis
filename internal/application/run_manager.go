@@ -658,6 +658,13 @@ func researchErrorCategory(err error) string {
 		return "EVENT_CONTEXT_VALIDATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "normalize event analyst synthesis"):
 		return "EVENT_SYNTHESIS_VALIDATION"
+	// Match specific round failures before the broad evidence-loop fallback.
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "run event evidence research loop:") && strings.Contains(msg, "execute research acquisition plan:"):
+		return "EVENT_ACQUISITION_PLAN"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "run event evidence research loop:") && strings.Contains(msg, "canonicalize accumulated research evidence:"):
+		return "EVENT_ROUND_CANONICALIZATION"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "run event evidence research loop:") && strings.Contains(msg, "compile research plan:"):
+		return "EVENT_PLAN_COMPILE"
 	case strings.Contains(msg, "event research:") && (strings.Contains(msg, "run event evidence research loop:") || strings.Contains(msg, "create event evidence research loop:") || strings.Contains(msg, "event evidence research loop completed without") || strings.Contains(msg, "event evidence research returned task")):
 		return "EVENT_EVIDENCE_LOOP"
 	case strings.Contains(msg, "event research:") && (strings.Contains(msg, "capture live event evidence:") || strings.Contains(msg, "live event capture completed without")):
