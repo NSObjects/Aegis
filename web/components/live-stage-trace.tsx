@@ -51,7 +51,7 @@ export default function LiveStageTrace({
         <dl>
           <div><dt>错误代码</dt><dd><code>{run.failure_code ?? "后端未提供"}</code></dd></div>
           <div><dt>错误类别</dt><dd><code>{run.failure_category ?? "历史记录未提供"}</code></dd></div>
-          <div><dt>失败阶段</dt><dd>{run.failure_stage ? (stageLabels[run.failure_stage] ?? run.failure_stage) + "（" + run.failure_stage + "）" : "阶段事件未定位"}</dd></div>
+          <div><dt>失败阶段</dt><dd>{(run.failure_stage ?? trace?.explicitFailure) ? (stageLabels[run.failure_stage ?? trace!.explicitFailure!] ?? (run.failure_stage ?? trace!.explicitFailure!)) + "（" + (run.failure_stage ?? trace!.explicitFailure!) + "）" : "阶段事件未定位"}</dd></div>
           <div><dt>任务 ID</dt><dd><code>{run.run_id}</code></dd></div>
         </dl>
         <p>可展开下方原始事件，按 Go seq 和时间核对实际执行过程。类别为后端固定诊断标识，不是原始异常。缺少 FAIL 事件时不推断出错的 Agent；工具 DONE 不等于阶段成功。</p>
