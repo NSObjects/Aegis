@@ -633,3 +633,27 @@ func TestRunManagerPersistsActualToolEventsAcrossRestart(t *testing.T) {
   })
  }
 }
+
+func TestPersistedToolEventSchemaRejectsUnsafeMetadata(t *testing.T) {
+ now:=time.Now().UTC()
+ base:=RunRecord{
+  ID:strings.Repeat("a",32), Mode:ModeDecision,Symbol:"600519.SH",
+  RequestedAsOf:now,CreatedAt:now,State:RunPending,
+ }
+ valid:=RunEvent{Seq:1,Kind:"TOOL",Stage:"Event",Status:"START",Tool:"snapshot_official",At:now}
+ scenarios:=[]struct{name string; ev RunEvent; invalid bool}{
+  {"safe",valid,false},
+  {"legacy_stage",RunEvent{Seq:1,Stage:"Run",Status:"PENDING",At:now},false},
+  {"injected_name",RunEvent{Seq:1,Kind:"TOOL",Stage:"Event",Status:"DONE",Tool:"secret=payload",At:now},true},
+  {"unknown_kind",RunEvent{Seq:1,Kind:"RAW",Stage:"Event",Status:"DONE",Tool:"snapshot_official",At:now},true},
+  {"unknown_tool_status",RunEvent{Seq:1,Kind:"TOOL",Stage:"Event",Status:"SUCCESS",Tool:"snapshot_official",At:now},true},
+  {"tool_in_stage",RunEvent{Seq:1,Stage:"Market",Status:"DONE",Tool:"snapshot_official",At:now},true},
+ }
+ for _,test:=range scenarios {
+  t.Run(test.name,func(t *testing.T){
+   record:=base;record.Events=[]RunEvent{test.ev}
+   err:=checkRunRecord(record)
+   if (err!=nil)!=test.invalid {t.Fatalf("validation got %v, want invalid=%v",err,test.invalid)}
+  })
+ }
+}
