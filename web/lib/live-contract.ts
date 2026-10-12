@@ -67,6 +67,8 @@ export interface LiveRun {
   request_snapshot?: RunRequestSnapshot;
   model_provenance?: RunModelProvenance;
   evidence_index?: RunEvidenceIndex;
+  /** Go-owned, persisted raw daily series; validate before charting. */
+  historical_ohlcv?: unknown;
 }
 export interface LiveStageEvent {
   kind?: "TOOL";
