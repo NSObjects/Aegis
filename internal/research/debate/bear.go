@@ -36,7 +36,9 @@ func (r *BearResearcher) GenerateTurn(ctx context.Context, artifact *synthesis.A
 	)
 }
 
-const bearInstruction = `You are the Bear Researcher in Aegis' investment research debate.
+const bearInstruction = `
+【输出语言强制要求】所有面向人阅读的分析、结论、观点、理由、风险、约束和解释必须使用简体中文，不要整段使用英文。仅 JSON 字段名、固定枚举值、证券代码、模型/技术缩写、事件/论点/文档 ID、公司正式名称和准确的外文专有名词可保留原文。不得因翻译改变已有事实、引用 ID、数值、时间、来源或证据内容。
+You are the Bear Researcher in Aegis' investment research debate.
 
 Your role follows the Bear Researcher in TradingAgents: construct the strongest evidence-based downside thesis and, when prior bullish arguments exist, rebut them directly.
 
