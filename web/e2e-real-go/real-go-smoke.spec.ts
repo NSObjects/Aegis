@@ -63,3 +63,17 @@ test("two real Go failed Runs retain distinct identities and no cross-Run artifa
     expect(artifact.status()).not.toBe(200);
   }
 });
+
+test("unknown Run deep link never renders another Run or exposes artifact", async ({ page }) => {
+  const unknown = "f".repeat(32);
+  await page.goto("/?run=" + unknown);
+  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".live-run-detail")).toContainText("找不到任务", { timeout: 15_000 });
+  await expect(page.locator(".live-run-fields")).toHaveCount(0);
+  const missing = await page.request.get("/api/workbench/runs/" + unknown);
+  expect(missing.status()).toBe(404);
+  const artifact = await page.request.get("/api/workbench/runs/" + unknown + "/artifact");
+  expect(artifact.status()).not.toBe(200);
+  await expect(page.getByRole("button", { name: "导出 Markdown" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toHaveCount(0);
+});
