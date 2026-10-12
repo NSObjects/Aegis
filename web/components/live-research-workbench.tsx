@@ -118,7 +118,6 @@ export default function LiveResearchWorkbench() {
   useEffect(() => {
     if (!session?.authenticated || view !== "history") return;
     let cancelled = false;
-    setHistoryError(null);
     const queryKey = historyQueryKey;
     const params = new URLSearchParams({ limit: String(historyLimit), offset: String(historyPage * historyLimit) });
     if (historySymbol.trim()) params.set("symbol", historySymbol.trim().toUpperCase());
