@@ -185,7 +185,7 @@ func TestEvaluateAcceptableWithObservedValuationStillRequiresExecutionContext(t 
 	if err!=nil {t.Fatal(err)}
 	if decision.Disposition!=DispositionReviewRequired ||
 		decision.ReasonCode!=ReasonResearchReviewRequired ||
-		!strings.Contains(decision.Summary,"requires human assessment") {
+		!strings.Contains(decision.Summary,"仍需人工评估") {
 		t.Fatalf("observed account is not a trade authorization: %+v",decision)
 	}
 	if err:=Validate(decision,intent,book,review);err!=nil {t.Fatal(err)}
@@ -200,7 +200,7 @@ func TestEvaluateAcceptableWithoutValuationStillReportsMissingMoney(t *testing.T
 	decision,err:=Evaluate(testIntent(tradeintent.StatusCandidate),book,testRisk(risk.AssessmentAcceptable))
 	if err!=nil {t.Fatal(err)}
 	if decision.ReasonCode!=ReasonAccountDataAbsent ||
-		!strings.Contains(decision.Summary,"not provided") ||
+		!strings.Contains(decision.Summary,"未提供") ||
 		decision.Disposition!=DispositionReviewRequired {
 		t.Fatalf("unknown money is not known zero or authorized: %+v",decision)
 	}
