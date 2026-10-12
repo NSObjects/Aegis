@@ -2,6 +2,7 @@ package application
 
 import (
  "context"
+ "errors"
  "testing"
  "time"
 )
@@ -23,9 +24,18 @@ func TestNonCooperativeExecutorMustNotLeaveRunRunningAfterDeadline(t *testing.T)
  // should be externally visible without interpreting tool START as success.
  time.Sleep(150*time.Millisecond)
  observed, readErr := manager.Get(context.Background(), run.ID)
+ if readErr != nil { close(ex.release); t.Fatal(readErr) }
+ // A timed-out but still executing provider must continue occupying capacity.
+ _, capacityErr := manager.Submit(context.Background(), runFixture("000001.SZ"))
  close(ex.release)
- if readErr != nil { t.Fatal(readErr) }
+ if !errors.Is(capacityErr, ErrRunCapacity) { t.Fatalf("blocked executor prematurely released capacity: %v", capacityErr) }
  if observed.State != RunFailed || observed.FailureCode != FailureTimeout {
   t.Fatalf("deadline did not finalize non-cooperative run: state=%s code=%s", observed.State, observed.FailureCode)
+ }
+ manager.wg.Wait()
+ final,err:=manager.Get(context.Background(),run.ID)
+ if err!=nil { t.Fatal(err) }
+ if final.State != RunFailed || final.FailureCode != FailureTimeout || len(final.Artifact)!=0 {
+  t.Fatalf("late successful executor overwrote timeout: %+v",final)
  }
 }
