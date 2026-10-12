@@ -92,7 +92,7 @@ export default function LiveStageTrace({
               {events.some(ev => ev.kind === "TOOL" && ev.stage === step.stage) && <div className="live-trace-tools" aria-label={`${step.stage} 实际观测工具事件`}>
                 <strong>已观测工具调用</strong>
                 <ul>{events.filter(ev => ev.kind === "TOOL" && ev.stage === step.stage).map(ev =>
-                  <li key={ev.seq}><code>{ev.tool ?? "未提供"}</code> · {ev.status === "START" ? "开始" : ev.status === "DONE" ? "完成" : ev.status === "FAIL" ? "失败" : "状态未知"} · #{ev.seq}{typeof ev.duration_ms === "number" ? ` · ${ev.duration_ms}ms` : ""}</li>
+                  <li key={ev.seq}><code>{ev.tool ?? "未提供"}</code> · {ev.status === "START" ? "开始" : ev.status === "DONE" ? "完成" : ev.status === "FAIL" ? "失败" : "状态未知"}{ev.outcome ? " · " + ({SUCCEEDED: "采集成功", PARTIAL: "部分成功", TIMEOUT: "采集超时", FAILED: "采集失败"}[ev.outcome] ?? "结果未知") : ""} · #{ev.seq}{typeof ev.duration_ms === "number" ? ` · ${ev.duration_ms}ms` : ""}</li>
                 )}</ul>
               </div>}
               {hasReport && <a className="live-trace-report-link" href={"#report-" + reportId}>查看本任务对应报告片段 ↗</a>}
