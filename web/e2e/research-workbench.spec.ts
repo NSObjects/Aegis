@@ -150,6 +150,10 @@ test("real browser submits a run, receives stage SSE, reads artifact, and restor
   await page.locator("#chapter-portfolio summary").click();
   await expect(page.locator("#report-portfolio")).toContainText("FIXTURE_NO_REAL_ACCOUNT");
   await expect(page.locator(".live-run-fields")).toContainText(id);
+  const diagnostic = page.getByRole("status", { name: "任务失败诊断" });
+  await expect(diagnostic).toContainText("RESEARCH_FAILED");
+  await expect(diagnostic).toContainText(id);
+  await expect(diagnostic).toContainText("Event");
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(200);
   expect((await artifact.json()).research_artifact.synthesis.summary).toContain("PROTOCOL_FIXTURE_ONLY");
@@ -186,10 +190,6 @@ test("provider failure is terminal and cannot be presented as success", async ({
   await signIn(page);
   const id = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
-  const diagnostic = page.getByRole("status", { name: "任务失败诊断" });
-  await expect(diagnostic).toContainText("RESEARCH_FAILED");
-  await expect(diagnostic).toContainText(id);
-  await expect(diagnostic).toContainText("Event");
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(409);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
@@ -649,4 +649,16 @@ test("research history filters loaded runs without hiding source data or inventi
   await page.getByLabel("按任务状态筛选").selectOption("COMPLETED");
   await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
   await expect(page.locator(".live-history")).toContainText("已加载");
+});
+
+test("research history displays the persisted failure code for the correct run", async ({ page }) => {
+  await signIn(page);
+  const failedId = await submit(page, "fail provider fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  await page.getByRole("button", { name: "研究历史" }).click();
+  const failedRow = page.locator(".live-history-row").filter({ hasText: failedId.slice(0, 12) });
+  await expect(failedRow).toContainText("失败");
+  await expect(failedRow.locator(".live-history-failure")).toContainText("RESEARCH_FAILED");
+  await failedRow.click();
+  await expect(page.locator(".live-run-fields")).toContainText(failedId);
 });
