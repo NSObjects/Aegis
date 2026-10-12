@@ -7,6 +7,7 @@ import { readResearchBrief, readableResearchCode } from "@/lib/research-brief";
 import { BookOpen, ShieldAlert, ListChecks, BarChart3 } from "lucide-react";
 import LiveEvidenceNavigator from "@/components/live-evidence-navigator";
 import LiveTechnicalVisual from "@/components/live-technical-visual";
+import LiveHistoricalChart from "@/components/live-historical-chart";
 
 function RawArtifact({ value, label }: { value: unknown; label: string }) {
   if (value === null || value === undefined) return null;
@@ -114,7 +115,7 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
       </div>
       {report.cards.map(card => <details className="live-brief-chapter" key={card.id} id={"chapter-" + card.id}>
         <summary>{card.title}<span>查看完整章节</span></summary>
-        <div className="live-report-stack">{card.id === "technical" && <LiveTechnicalVisual artifact={artifact} run={run}/>}<ReportCardView card={card}/></div>
+        <div className="live-report-stack">{card.id === "technical" && <><LiveHistoricalChart run={run}/><LiveTechnicalVisual artifact={artifact} run={run}/></>}<ReportCardView card={card}/></div>
       </details>)}
     </section> : <section className="surface live-report-unavailable"><h3>无可识别的结构化段落</h3><p>原始工件仍可审计；请核对后端版本与 JSON 契约。</p></section>}
     <LiveEvidenceNavigator key={run.run_id} artifact={artifact}/>
