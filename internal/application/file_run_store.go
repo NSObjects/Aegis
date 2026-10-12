@@ -135,6 +135,7 @@ func checkRunRecord(record RunRecord) error {
 	} else if len(record.Artifact) != 0 || record.ArtifactVersion != 0 || record.ArtifactSHA256 != "" {
 		return errors.New("unfinished research must not expose an artifact or checksum")
 	}
+	if err := validateHistoricalObservation(record, record.HistoricalOHLCV); err != nil { return err }
 	if err := checkRunEvidenceIndex(record); err != nil {
 		return err
 	}
