@@ -1,7 +1,7 @@
 "use client";
 
 import type { LiveArtifact, LiveRun } from "@/lib/live-contract";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { readLiveReport, type ReportCard } from "@/lib/live-report";
 import { readResearchBrief, readableResearchCode } from "@/lib/research-brief";
 import { BookOpen, ShieldAlert, ListChecks, BarChart3 } from "lucide-react";
@@ -40,6 +40,13 @@ function ReportCardView({ card }: { card: ReportCard }) {
 export default function LiveResearchReport({ artifact, run }: { artifact: LiveArtifact; run: LiveRun }) {
   const report = readLiveReport(artifact);
   const brief = readResearchBrief(report);
+  const reportRoot = useRef<HTMLDivElement>(null);
+  const setAllChapters = (expanded: boolean) => {
+    // Scope to this report: never change the state of another Run or raw JSON panel.
+    reportRoot.current?.querySelectorAll<HTMLDetailsElement>("details.live-brief-chapter").forEach(chapter => {
+      chapter.open = expanded;
+    });
+  };
   // Stage trace and evidence links retain their existing #report-... targets.
   // Expand the actual chapter before the browser navigates to the anchor.
   useEffect(() => {
@@ -55,7 +62,7 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
     return () => document.removeEventListener("click", openLinkedChapter, true);
   }, [run.run_id]);
 
-  return <div className="live-report-stack live-structured-report">
+  return <div ref={reportRoot} className="live-report-stack live-structured-report">
     <section className="surface live-report-overview" aria-label="研究报告概览">
       <div className="eyebrow">已完成研究 · 只读原始工件</div>
       <div className="live-report-overview-top">
@@ -90,6 +97,10 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
     </section>
     {report.cards.length > 0 ? <section className="live-brief-appendix" aria-label="完整研究章节">
       <div className="live-brief-appendix-heading"><BookOpen size={18}/><div><h2>完整研究章节</h2><p>按需展开数据、分析过程、论点与引用。以上简报仅是原始报告的阅读索引。</p></div></div>
+      <div className="live-chapter-controls" role="group" aria-label="研究章节批量操作">
+        <button type="button" onClick={() => setAllChapters(true)}>展开所有章节</button>
+        <button type="button" onClick={() => setAllChapters(false)}>收起所有章节</button>
+      </div>
       {report.cards.map(card => <details className="live-brief-chapter" key={card.id} id={"chapter-" + card.id}>
         <summary>{card.title}<span>查看完整章节</span></summary>
         <div className="live-report-stack">{card.id === "technical" && <LiveTechnicalVisual artifact={artifact} run={run}/>}<ReportCardView card={card}/></div>
