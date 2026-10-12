@@ -270,6 +270,28 @@ test("unknown Live Run permalink never substitutes the latest report", async ({ 
 });
 
 
+
+test("narrow viewport retains Run deep-link isolation across history and browser navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page);
+  const known = await submit(page);
+  await expect(page.locator(".live-run-fields")).toContainText(known);
+  const unknown = "ffffffffffffffffffffffffffffffff";
+  await page.goto("/?run=" + unknown);
+  await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
+  await expect(page.locator(".live-run-fields")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await page.getByRole("button", { name: "研究历史" }).click();
+  await expect(page).toHaveURL(/view=history$/);
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp("run=" + unknown + "$"));
+  await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
+  await page.goto("/?run=" + known);
+  await expect(page.locator(".live-run-fields")).toContainText(known);
+  await expect(page.locator(".live-run-fields")).not.toContainText(unknown);
+  await expect(page.locator(".live-permalink").first()).toHaveAttribute("href", "/?run=" + known);
+});
+
 test("Live structured report reads Go-shaped fixture fields without fabricated financial values", async ({ page }) => {
   await signIn(page);
   const id = await submit(page);
