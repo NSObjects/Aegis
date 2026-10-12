@@ -38,6 +38,9 @@ const (
 // RunEvent is a persisted, replayable, non-sensitive execution event.
 // Seq increases strictly within a run; clients resume with Last-Event-ID.
 type RunEvent struct {
+	// Kind is omitted for historical stage events; TOOL means observed invocation metadata.
+	Kind string `json:"kind,omitempty"`
+	Tool string `json:"tool,omitempty"`
 	Seq        uint64    `json:"seq"`
 	Stage      string    `json:"stage"`
 	Status     string    `json:"status"`
@@ -445,6 +448,21 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 			return err
 		}
 		return nil
+	})
+	ctx = research.WithToolObservations(ctx, func(ev research.ToolObservation) {
+		mu.Lock()
+		defer mu.Unlock()
+		if record.State != RunRunning || eventPersistError { return }
+		// A tool event belongs to its real stage, but is not a stage transition.
+		record.Events = append(record.Events, RunEvent{
+			Seq: uint64(len(record.Events) + 1), Kind: "TOOL",
+			Stage: ev.Stage, Tool: ev.Tool, Status: ev.Status,
+			At: ev.At, DurationMS: ev.DurationMS,
+		})
+		if err := m.store.Save(context.Background(), record); err != nil {
+			eventPersistError = true
+			cancel()
+		}
 	})
 	ctx = research.WithProgressEvents(ctx, func(ev research.ProgressEvent) {
 		mu.Lock()
