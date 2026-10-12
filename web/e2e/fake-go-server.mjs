@@ -149,8 +149,19 @@ const server = createServer(async (req, res) => {
     return json(res, 405, { error: "method not allowed" });
   }
   if (url.pathname === prefix && req.method === "GET") {
-    const list = [...runs.values()].reverse().map(r => { evolve(r); return metadata(r); });
-    return json(res, 200, { runs: list });
+    const limit = url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : 100;
+    const offset = url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : 0;
+    const symbol = (url.searchParams.get("symbol") ?? "").trim().toUpperCase();
+    const state = url.searchParams.get("state") ?? "";
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isInteger(offset) || offset < 0 || offset > 1000000 ||
+      (symbol && (symbol.length > 9 || !/^[0-9A-Z.]+$/.test(symbol))) ||
+      (state && !["PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"].includes(state))) {
+      return json(res, 400, { error: "invalid history filters" });
+    }
+    const all = [...runs.values()].reverse().map(r => { evolve(r); return metadata(r); })
+      .filter(r => (!symbol || r.symbol.includes(symbol)) && (!state || r.state === state));
+    const page = all.slice(offset, offset + limit);
+    return json(res, 200, { runs: page, total: all.length, limit, offset, has_more: offset + page.length < all.length });
   }
   if (url.pathname === prefix && req.method === "POST") {
     let body;
