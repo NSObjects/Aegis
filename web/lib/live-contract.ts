@@ -77,6 +77,7 @@ export interface LiveRun {
 export interface LiveStageEvent {
   kind?: "TOOL";
   tool?: string;
+  outcome?: "SUCCEEDED" | "PARTIAL" | "TIMEOUT" | "FAILED";
   seq: number;
   stage: string;
   status: string;
@@ -109,7 +110,8 @@ export function isLiveEvent(x: unknown): x is LiveStageEvent {
   if (e.kind === "TOOL" &&
       (typeof e.tool !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(e.tool) ||
         !["START", "DONE", "FAIL"].includes(String(e.status)))) return false;
-  if (e.kind !== "TOOL" && e.tool !== undefined) return false;
+  if (e.kind === "TOOL" && e.outcome !== undefined && !["SUCCEEDED", "PARTIAL", "TIMEOUT", "FAILED"].includes(String(e.outcome))) return false;
+  if (e.kind !== "TOOL" && (e.tool !== undefined || e.outcome !== undefined)) return false;
   return Number.isSafeInteger(e.seq) && (e.seq as number) > 0 &&
     typeof e.stage === "string" && e.stage.length > 0 && e.stage.length <= 100 &&
     typeof e.status === "string" && e.status.length > 0 &&
