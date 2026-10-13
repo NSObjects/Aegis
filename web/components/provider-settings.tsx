@@ -75,7 +75,7 @@ export default function ProviderSettings({ localDev = false }: { localDev?: bool
     <section className="surface provider-settings-intro">
       <div className="eyebrow">Integrations / Provider credentials</div>
       <h2><KeyRound size={20}/> 模型与数据源凭证</h2>
-      <p>第三方服务按用途分组管理。新密钥只发送给 Aegis Go 服务端加密保存；浏览器仅显示配置状态，不读取或回显已保存的密钥。</p>
+      <p>第三方服务按用途分组管理。新密钥只发送给 Aegis Go 服务端加密保存；浏览器仅显示配置状态，不读取或回显已保存的密钥。“已配置”仅表示 Go 服务端存在凭证，不代表第三方服务可用或密钥有效。</p>
       {status && <div className="provider-settings-overview"><ShieldCheck size={16}/><span>{status.editable ? "服务端加密存储已启用" : "只读状态：尚未配置 Go 服务端加密主密钥"}</span><strong>{count} / {total} 已配置</strong></div>}
     </section>
     <form className="surface provider-settings-form" onSubmit={e => void save(e)}>
