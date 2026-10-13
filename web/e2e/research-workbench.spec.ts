@@ -16,8 +16,10 @@ async function signIn(page: Page) {
 async function submit(page: Page, query = "") {
   await page.getByLabel("股票代码").fill("600519.SH");
   if (query) await page.getByLabel("研究关注点（可选）").fill(query);
+  await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
   const id = await page.locator(".live-run-fields code").innerText();
   expect(id).toMatch(/^[a-f0-9]{32}$/);
   return id;
@@ -295,7 +297,7 @@ test("narrow viewport retains Run deep-link isolation across history and browser
 test("Live structured report reads Go-shaped fixture fields without fabricated financial values", async ({ page }) => {
   await signIn(page);
   const id = await submit(page);
-  await expect(page.getByRole("heading", { name: "结构化研究报告" })).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByRole("heading", { name: /的研究判断$/ })).toBeVisible({ timeout: 25_000 });
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator("#report-synthesis")).toContainText("PROTOCOL_FIXTURE_ONLY");
   await expect(page.locator("#report-market")).toContainText("20261009");
@@ -580,7 +582,7 @@ test("overview is authenticated, URL-addressable and opens the same completed Ru
   await list.locator(".run-overview-row").click();
   await expect(page).toHaveURL("/?run=" + id);
   await expect(page.locator(".live-run-fields")).toContainText(id);
-  await expect(page.getByRole("heading", { name: "结构化研究报告" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /的研究判断$/ })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL("/?view=overview");
   await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
@@ -617,7 +619,7 @@ test("overview active and failed filters open live progress or exact failure, wi
   await list.locator(".run-overview-row").click();
   await expect(page).toHaveURL("/?run=" + failed);
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED");
-  await expect(page.getByRole("heading", { name: "结构化研究报告" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /的研究判断$/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "再次研究该标的" })).toBeVisible();
 });
 
