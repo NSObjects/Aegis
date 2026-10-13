@@ -1,6 +1,10 @@
 package httpapi
 
 import (
+ "bufio"
+ "context"
+ "io"
+ "net/http/httptest"
  "net/http"
  "strings"
  "testing"
@@ -72,5 +76,56 @@ func TestSSEReplayDoesNotCrossRunBoundary(t *testing.T) {
   if missing.Code != http.StatusNotFound || strings.Contains(missing.Body.String(),tc.own) {
    t.Fatalf("cross-Run stream leaked event data: %d %s",missing.Code,missing.Body.String())
   }
+ }
+}
+
+// Exercise a real HTTP socket lifecycle rather than merely invoking a recorder.
+// The first connection is dropped after seq=1; the second replays 2..3.
+func TestSSEHTTPDisconnectAndResumeWithoutDuplicate(t *testing.T) {
+ record := testRecord()
+ record.State = application.RunRunning
+ record.FinishedAt = nil
+ record.Events = []application.RunEvent{{Seq: 1, Stage: "Run", Status: "RUNNING", At: record.CreatedAt}}
+ runs := &fakeRuns{rec: record}
+ h := mkHandler(t, runs, application.ModeDecision)
+ server := httptest.NewServer(h)
+ defer server.Close()
+ client := &http.Client{Timeout: 3 * time.Second}
+ endpoint := server.URL + "/api/v1/research/runs/" + record.ID + "/stream"
+ firstCtx, cancel := context.WithCancel(context.Background())
+ req, err := http.NewRequestWithContext(firstCtx, http.MethodGet, endpoint, nil)
+ if err != nil { t.Fatal(err) }
+ req.Header.Set("Authorization", "Bearer " + testToken)
+ res, err := client.Do(req)
+ if err != nil { cancel(); t.Fatal(err) }
+ reader := bufio.NewScanner(res.Body)
+ if !reader.Scan() || reader.Text() != "id: 1" {
+  cancel(); res.Body.Close(); t.Fatalf("initial SSE event missing: %s", reader.Text())
+ }
+ cancel()
+ res.Body.Close()
+ runs.mu.Lock()
+ runs.rec.Events = append(runs.rec.Events,
+  application.RunEvent{Seq: 2, Stage: "Event", Status: "DONE", At: record.CreatedAt},
+  application.RunEvent{Seq: 3, Stage: "Run", Status: "COMPLETED", At: record.CreatedAt})
+ runs.rec.State = application.RunCompleted
+ finished := record.CreatedAt
+ runs.rec.FinishedAt = &finished
+ runs.mu.Unlock()
+ replay, err := http.NewRequest(http.MethodGet, endpoint, nil)
+ if err != nil { t.Fatal(err) }
+ replay.Header.Set("Authorization", "Bearer " + testToken)
+ replay.Header.Set("Last-Event-ID", "1")
+ resumed, err := client.Do(replay)
+ if err != nil { t.Fatal(err) }
+ defer resumed.Body.Close()
+ body, err := io.ReadAll(resumed.Body)
+ if err != nil { t.Fatal(err) }
+ data := string(body)
+ if resumed.StatusCode != http.StatusOK ||
+  strings.Contains(data, "id: 1\n") ||
+  strings.Count(data, "id: 2\n") != 1 ||
+  strings.Count(data, "id: 3\n") != 1 {
+  t.Fatalf("SSE resume duplicate or missing events: %d %s", resumed.StatusCode, data)
  }
 }
