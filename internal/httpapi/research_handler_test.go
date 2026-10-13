@@ -261,3 +261,20 @@ func TestHTTPRunHistoryPaginationFiltersAndValidation(t *testing.T) {
 		if strings.Contains(w.Body.String(), "artifact") { t.Errorf("%s: list exposed artifact", tc.query) }
 	}
 }
+
+// Research capacity exhaustion is a concurrency admission limit, not a
+// general HTTP per-client request-rate limiter.
+func TestHTTPResearchCapacityLimitReturns429WithoutLeakingDetails(t *testing.T) {
+ runs := &fakeRuns{rec: testRecord(), submitErr: application.ErrRunCapacity}
+ handler := mkHandler(t, runs, application.ModeDecision)
+ response := apiRequest(t, handler, http.MethodPost, "/api/v1/research/runs", `{"symbol":"600519.SH"}`, true, nil)
+ if response.Code != http.StatusTooManyRequests {
+  t.Fatalf("capacity exhaustion status = %d, want 429: %s", response.Code, response.Body.String())
+ }
+ if !strings.Contains(response.Body.String(), "research capacity reached") {
+  t.Fatalf("expected safe public capacity response, got %s", response.Body.String())
+ }
+ if strings.Contains(strings.ToLower(response.Body.String()), "executor") {
+  t.Fatalf("internal executor details exposed: %s", response.Body.String())
+ }
+}
