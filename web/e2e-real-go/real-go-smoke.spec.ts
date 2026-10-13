@@ -46,6 +46,7 @@ test("two real Go failed Runs retain distinct identities and no cross-Run artifa
   for (const symbol of ["600519.SH", "000001.SZ"]) {
     await page.getByLabel("股票代码").fill(symbol);
     await page.getByRole("button", { name: "启动真实研究" }).click();
+    await expect(page.locator(".live-run-fields")).toContainText(symbol, { timeout: 30_000 });
     await expect(page.locator(".live-run-fields")).toContainText("失败", { timeout: 30_000 });
     const link = await page.locator(".live-run-fields a.live-permalink").first().getAttribute("href");
     const id = new URL(link!, "http://localhost").searchParams.get("run");
