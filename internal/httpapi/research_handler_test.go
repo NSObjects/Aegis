@@ -278,3 +278,25 @@ func TestHTTPResearchCapacityLimitReturns429WithoutLeakingDetails(t *testing.T) 
   t.Fatalf("internal executor details exposed: %s", response.Body.String())
  }
 }
+
+func TestAuthenticatedAPIRateLimit(t *testing.T) {
+ h := mkHandler(t, &fakeRuns{rec:testRecord()}, application.ModeDecision)
+ for i:=0;i<apiRequestsPerMinute;i++ {
+  got:=apiRequest(t,h,http.MethodGet,"/api/v1/research/runs","",true,nil)
+  if got.Code!=http.StatusOK { t.Fatalf("request %d: %d",i,got.Code) }
+ }
+ blocked:=apiRequest(t,h,http.MethodGet,"/api/v1/research/runs","",true,nil)
+ if blocked.Code!=http.StatusTooManyRequests {t.Fatalf("limit status = %d",blocked.Code)}
+ unauth:=apiRequest(t,h,http.MethodGet,"/api/v1/research/runs","",false,nil)
+ if unauth.Code!=http.StatusUnauthorized {t.Fatalf("auth bypassed: %d",unauth.Code)}
+}
+
+func TestSSEConnectionSlotsExhausted(t *testing.T) {
+ h:=mkHandler(t,&fakeRuns{rec:testRecord()},application.ModeDecision)
+ for i:=0;i<maxConcurrentSSE;i++ { h.sseSlots<-struct{}{} }
+ denied:=apiRequest(t,h,http.MethodGet,"/api/v1/research/runs/"+testRecord().ID+"/stream","",true,nil)
+ if denied.Code!=http.StatusTooManyRequests {t.Fatalf("expected 429, got %d",denied.Code)}
+ <-h.sseSlots
+ allowed:=apiRequest(t,h,http.MethodGet,"/api/v1/research/runs/"+testRecord().ID+"/stream","",true,nil)
+ if allowed.Code!=http.StatusOK {t.Fatalf("released slot not reusable: %d",allowed.Code)}
+}

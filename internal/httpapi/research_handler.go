@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+ "sync"
 	"time"
 
 	"Aegis/internal/application"
@@ -22,6 +23,8 @@ import (
 )
 
 const maxCreateBytes = 16 << 10
+const apiRequestsPerMinute = 120
+const maxConcurrentSSE = 16
 
 var symbolPattern = regexp.MustCompile(`^[0-9]{6}\.(SH|SZ)$`)
 
@@ -44,6 +47,10 @@ type Handler struct {
 	poll     time.Duration
 	localDev bool
 	credentials *settings.Store
+ rateMu sync.Mutex
+ windowStart time.Time
+ windowCount int
+ sseSlots chan struct{}
 }
 
 func NewHandler(runs RunController, token string, mode application.ResearchMode, lookback time.Duration) (*Handler, error) {
@@ -59,7 +66,7 @@ func NewHandler(runs RunController, token string, mode application.ResearchMode,
 	if lookback <= 0 {
 		return nil, errors.New("event lookback must be positive")
 	}
-	return &Handler{runs: runs, token: token, mode: mode, lookback: lookback, now: func() time.Time { return time.Now().UTC() }, poll: 300 * time.Millisecond}, nil
+	return &Handler{runs: runs, token: token, mode: mode, lookback: lookback, now: func() time.Time { return time.Now().UTC() }, poll: 300 * time.Millisecond, sseSlots: make(chan struct{}, maxConcurrentSSE)}, nil
 }
 
 // NewLocalDevHandler is permitted only by a loopback-bound CLI listener.
@@ -85,7 +92,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
+	if !h.localDev && !h.allowRequest(time.Now()) {
+  http.Error(w, "request rate limit exceeded", http.StatusTooManyRequests)
+  return
+ }
+ if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/research/runs")
 	if path == r.URL.Path {
 		http.NotFound(w, r)
@@ -138,6 +149,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.NotFound(w, r)
+}
+
+// A bounded per-process, single-user admission window; behind a reverse proxy
+// distributed deployments require a shared limiter instead.
+func (h *Handler) allowRequest(now time.Time) bool {
+ h.rateMu.Lock()
+ defer h.rateMu.Unlock()
+ if h.windowStart.IsZero() || now.Sub(h.windowStart) >= time.Minute {
+  h.windowStart = now
+  h.windowCount = 0
+ }
+ if h.windowCount >= apiRequestsPerMinute { return false }
+ h.windowCount++
+ return true
 }
 
 func methodNotAllowed(w http.ResponseWriter, allow string) {
@@ -368,6 +393,13 @@ func terminal(s application.RunState) bool {
 	return s == application.RunCompleted || s == application.RunFailed || s == application.RunCancelled
 }
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request, id string) {
+ select {
+ case h.sseSlots <- struct{}{}:
+  defer func(){ <-h.sseSlots }()
+ default:
+  http.Error(w, "SSE connection capacity reached", http.StatusTooManyRequests)
+  return
+ }
 	last := uint64(0)
 	if raw := r.Header.Get("Last-Event-ID"); raw != "" {
 		if len(raw) > 20 {
