@@ -62,6 +62,7 @@ export function compareResearchRuns(
     rows.push({ section, label, left: a, right: b, kind, key: section + "/" + label });
   };
   add("研究记录", "研究截止（PIT）", left.requested_as_of, right.requested_as_of);
+  add("研究记录", "模型配置指纹", left.model_provenance?.config_fingerprint, right.model_provenance?.config_fingerprint);
   add("研究记录", "任务状态", left.state, right.state);
   if (left.mode === "DECISION") {
     add("研究结论", "研究动作（非委托）", path(leftArtifact, ["action"]), path(rightArtifact, ["action"]));
