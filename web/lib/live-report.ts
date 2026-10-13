@@ -85,7 +85,9 @@ export function readLiveReport(input: unknown): LiveReport {
   const headline = value(plan?.summary) ?? value(synthesis?.summary) ?? value(root.market_view);
 
   if (mode === "DECISION") {
+    field(overview, "市场观点", root.market_view);
     field(overview, "研究动作（非委托）", root.action);
+    field(overview, "置信度", root.confidence);
     card(cards, "decision", "研究决策", "单标的决策研究：仅供研究，不构成委托。", root, (f, e, s) => {
       field(f, "标的", s.symbol);
       field(f, "研究动作", s.action);

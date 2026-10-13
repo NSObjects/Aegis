@@ -76,19 +76,24 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
 
   return <div ref={reportRoot} className="live-report-stack live-structured-report">
     <section className="surface live-report-overview" aria-label="研究报告概览">
-      <div className="eyebrow">已完成研究 · 只读原始工件</div>
+      <div className="eyebrow">研究判断</div>
       <div className="live-report-overview-top">
-        <div><h2>结构化研究报告</h2><p>标的 {run.symbol} · 研究截止 {new Date(run.requested_as_of).toLocaleString("zh-CN", { hour12: false })}</p></div>
-        <span className="badge blue">{report.mode === "PORTFOLIO_REVIEW" ? "组合研究" : report.mode === "DECISION" ? "单标的研究" : "研究类型未知"} · {report.mode}</span>
+        <div><h2>{run.symbol} 的研究判断</h2><p>研究截止 {new Date(run.requested_as_of).toLocaleString("zh-CN", { hour12: false })}</p></div>
+        <span className="badge blue">{report.mode === "PORTFOLIO_REVIEW" ? "组合审查" : report.mode === "DECISION" ? "单标的研究" : "研究类型未知"}</span>
       </div>
       <div className="live-brief-lead">
-        <span className="live-brief-eyebrow">研究结论 · 源自 Go 工件</span>
-        <h3>{readableResearchCode(brief.conclusion)}</h3>
+        <span className="live-brief-eyebrow">当前判断</span>
+        <h3>{readableResearchCode(brief.marketView ?? brief.conclusion)}</h3>
         <p>{brief.summary ?? "该次研究没有提供简要结论。请查看后续详情与原始工件。"}</p>
-        {brief.posture && <div className="live-brief-gate"><ShieldAlert size={15}/>风险门禁：<strong>{readableResearchCode(brief.posture)}</strong></div>}
+        <div className="live-decision-grid" aria-label="研究决策摘要">
+          <div><span>研究结论</span><strong>{readableResearchCode(brief.conclusion)}</strong></div>
+          <div><span>研究动作</span><strong>{readableResearchCode(brief.action)}</strong></div>
+          {brief.posture && <div><span>风险门禁</span><strong>{readableResearchCode(brief.posture)}</strong></div>}
+          {brief.confidence && <div><span>判断置信度</span><strong>{readableResearchCode(brief.confidence)}</strong></div>}
+        </div>
       </div>
-      {report.overview.length > 0 && <dl className="live-report-overview-facts">
-        {report.overview.map((item, i) => <div key={item.label + i}><dt>{item.label}</dt><dd>{readableResearchCode(item.value)}</dd></div>)}
+      {report.overview.filter(item => !["标的", "研究结论", "市场观点", "研究动作（非委托）", "研究意向（非指令）", "最终风险门禁", "置信度"].includes(item.label)).length > 0 && <dl className="live-report-overview-facts">
+        {report.overview.filter(item => !["标的", "研究结论", "市场观点", "研究动作（非委托）", "研究意向（非指令）", "最终风险门禁", "置信度"].includes(item.label)).map((item, i) => <div key={item.label + i}><dt>{item.label}</dt><dd>{readableResearchCode(item.value)}</dd></div>)}
       </dl>}
       <div className="live-brief-grid">
         <section className="live-brief-section" aria-label="研究关键依据"><h3><ListChecks size={17}/>关键依据</h3>
@@ -97,10 +102,10 @@ export default function LiveResearchReport({ artifact, run }: { artifact: LiveAr
         </section>
         <section className="live-brief-section" aria-label="研究风险与不确定性"><h3><ShieldAlert size={17}/>风险与不确定性</h3>
           {brief.risks.map(block=><div key={block.title} className="live-brief-block"><h4>{block.title}</h4><ul>{block.lines.map((line,i)=><li key={i}>{line}</li>)}</ul><small>来源：{block.source}</small></div>)}
-          {brief.unknowns.map((line,i)=><p className="live-brief-warning" key={i}>{line}</p>)}
-          {!brief.risks.length && !brief.unknowns.length && <p className="live-brief-muted">摘要层未提取到风险记录，不意味着风险为零。</p>}
+          {!brief.risks.length && <p className="live-brief-muted">摘要层未提取到风险记录，不意味着风险为零。</p>}
         </section>
       </div>
+      {brief.unknowns.length > 0 && <section className="live-brief-unknowns" aria-label="尚未确认"><h3><ShieldAlert size={16}/>尚未确认</h3><ul>{brief.unknowns.map((line, i)=><li key={i}>{line}</li>)}</ul></section>}
       {(brief.market.length > 0 || brief.technical.length > 0) && <section className="live-brief-metrics" aria-label="研究时点关键数据">
         <h3><BarChart3 size={16}/>研究时点关键数据（非实时）</h3>
         <dl>{[...brief.market, ...brief.technical].map((f,i)=><div key={f.label+i}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>

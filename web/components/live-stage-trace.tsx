@@ -121,7 +121,9 @@ export default function LiveStageTrace({
         <strong>Run 生命周期</strong>
         <div>{trace.lifecycle.map(ev => <span key={ev.seq}>{ev.status} <small>#{ev.seq}</small></span>)}</div>
       </div>}
-      {events.length > 0 && <details className="live-trace-raw" open>
+      {/* Raw events stay expanded while a Run is active (live log); terminal
+          Runs keep them collapsed so completed reports stay the focus. */}
+      {events.length > 0 && <details className="live-trace-raw" open={run ? !terminal : false}>
         <summary>原始事件记录 · {events.length} 条（Go seq）</summary>
         <div className="live-event-list">{events.map(ev =>
           <div key={ev.seq} className="live-event-item">

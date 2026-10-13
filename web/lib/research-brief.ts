@@ -6,6 +6,9 @@ export type BriefBlock = { title: string; lines: string[]; source: string };
 export type ResearchBrief = {
   summary: string | null;
   conclusion: string | null;
+  marketView: string | null;
+  action: string | null;
+  confidence: string | null;
   posture: string | null;
   market: ReportField[];
   technical: ReportField[];
@@ -34,6 +37,9 @@ export function readResearchBrief(report: LiveReport): ResearchBrief {
   const technical = card(report, "technical");
   const portfolio = card(report, "portfolio");
   const conclusion = match(overview, "研究结论") ?? match(overview, "研究动作（非委托）");
+  const marketView = match(overview, "市场观点") ?? match(market?.fields ?? [], "市场状态");
+  const action = match(overview, "研究动作（非委托）") ?? match(overview, "研究意向（非指令）");
+  const confidence = match(overview, "置信度");
   const posture = match(overview, "最终风险门禁") ?? match(portfolio?.fields ?? [], "组合决策");
   const evidence = [
     gather(manager, ["机会"], "潜在机会（原始研究观点）"),
@@ -59,7 +65,7 @@ export function readResearchBrief(report: LiveReport): ResearchBrief {
   if (!evidence.length) unknowns.push("未在摘要层发现明确的支持论点；请查看下方完整证据和原始数据。");
   return {
     summary: report.headline,
-    conclusion, posture,
+    conclusion, marketView, action, confidence, posture,
     market: market?.fields.filter(f => ["市场数据日","市场状态","上涨家数","下跌家数"].includes(f.label)) ?? [],
     technical: technical?.fields.filter(f => ["有效交易日","数据状态","收盘价","涨跌幅（%）","RSI14"].includes(f.label)) ?? [],
     evidence, risks, unknowns,

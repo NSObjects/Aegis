@@ -408,6 +408,9 @@ test("observed Go stages show duration, lifecycle, links and restore after refre
   await page.reload();
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功");
+  // Terminal runs keep raw events collapsed; expand before asserting they
+  // survived the refresh from the persisted event log.
+  await trace.locator(".live-trace-raw > summary").click();
   await expect(page.locator(".live-event-item").filter({ hasText: "Market" }).first()).toBeVisible();
 });
 
