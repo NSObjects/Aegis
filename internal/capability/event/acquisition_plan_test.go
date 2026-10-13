@@ -957,3 +957,156 @@ func TestAcquisitionPlanRunnerExecutesRemainingStepsAfterStructuralError(
 		t.Fatal("structural step error should be preserved")
 	}
 }
+
+// TestAcquisitionPlanRunnerSelectsMultiVersionSnapshotCandidates replays the
+// production failure where one logical document stored under two versions
+// (same raw document ID, drifted page content across captures) reached the
+// candidate selector and aborted the whole research round with
+// "candidate raw document id ... is duplicated".
+func TestAcquisitionPlanRunnerSelectsMultiVersionSnapshotCandidates(
+	t *testing.T,
+) {
+	store, err := NewFileEvidenceSnapshotStore(
+		t.TempDir(),
+	)
+	if err != nil {
+		t.Fatalf("create snapshot store: %v", err)
+	}
+
+	publishedAt := time.Date(
+		2026, 10, 9, 14, 51, 38, 0, time.UTC,
+	)
+	observedOlder := time.Date(
+		2026, 10, 11, 10, 20, 0, 0, time.UTC,
+	)
+	observedNewer := time.Date(
+		2026, 10, 12, 7, 57, 0, 0, time.UTC,
+	)
+	base := RawDocument{
+		ID:          "tavily_web_duplicate",
+		URL:         "https://example.com/article/1642799.shtml",
+		Publisher:   "web",
+		SourceType:  SourceOther,
+		PublishedAt: &publishedAt,
+	}
+	older := base
+	older.Title = "older capture"
+	older.Content = "market recap, first capture of the page"
+	older.FirstSeenAt = &observedOlder
+	older.AvailableAt = &observedOlder
+	older.RetrievedAt = observedOlder
+	newer := base
+	newer.Title = "newer capture"
+	newer.Content = "market recap, page content drifted since first capture"
+	newer.FirstSeenAt = &observedNewer
+	newer.AvailableAt = &observedNewer
+	newer.RetrievedAt = observedNewer
+
+	if err := store.Save(
+		context.Background(),
+		[]RawDocument{older, newer},
+	); err != nil {
+		t.Fatalf("seed snapshot store: %v", err)
+	}
+
+	retriever := &SnapshotRetriever{
+		Store: store,
+		Name:  "snapshot_breaking_news",
+		SourceTypes: []SourceType{
+			SourceIndustryMedia,
+			SourceMainstreamMedia,
+			SourceOther,
+		},
+	}
+	selector := &HybridEvidenceSelector{
+		TargetResolver: MapEvidenceTargetResolver{
+			"600519.SH": {
+				Symbol:  "600519.SH",
+				Name:    "贵州茅台",
+				Aliases: []string{"600519"},
+			},
+		},
+		SemanticMatcher: semanticMatcherFunc(
+			func(
+				_ context.Context,
+				_ EvidenceTarget,
+				documents []RawDocument,
+			) ([]SemanticEvidenceMatch, error) {
+				if len(documents) != 1 {
+					t.Fatalf(
+						"semantic documents = %d, want collapsed candidate set of 1",
+						len(documents),
+					)
+				}
+				return []SemanticEvidenceMatch{
+					{
+						RawDocumentID: documents[0].ID,
+						Relevant:      true,
+						Confidence:    0.9,
+						Reason:        "mentions target supplier contract",
+					},
+				}, nil
+			},
+		),
+	}
+
+	root := ResearchTask{
+		ID:           "task-multi-version",
+		Symbol:       "600519.SH",
+		TargetSymbol: "600519.SH",
+		AsOf: time.Date(
+			2026, 10, 12, 10, 58, 17, 0, time.UTC,
+		),
+		Requirements: ResearchRequirements{PITSafe: true},
+	}
+
+	output, err := (AcquisitionPlanRunner{}).Run(
+		context.Background(),
+		root,
+		AcquisitionPlan{
+			Steps: []AcquisitionStep{
+				{
+					ID:    "capture_breaking_news",
+					Scope: AcquisitionScopeCandidate,
+					Task: ResearchTask{
+						InformationNeed: NeedBreakingNews,
+					},
+					Retriever: retriever,
+				},
+			},
+			Selector: selector,
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"multi-version snapshot candidates must not abort the round: %v",
+			err,
+		)
+	}
+	if len(output.CandidateRawDocuments) != 2 {
+		t.Fatalf(
+			"candidate raw documents = %d, want both stored versions",
+			len(output.CandidateRawDocuments),
+		)
+	}
+	if len(output.Selections) != 1 {
+		t.Fatalf(
+			"selections = %d, want exactly one decision per raw document ID",
+			len(output.Selections),
+		)
+	}
+	if len(output.AcceptedRawDocuments) != 2 {
+		t.Fatalf(
+			"accepted raw documents = %d, want both versions of the selected document",
+			len(output.AcceptedRawDocuments),
+		)
+	}
+	if len(output.Canonicalization.Documents) != 1 ||
+		len(output.Canonicalization.Documents[0].Versions) != 2 {
+		t.Fatalf(
+			"canonical documents = %d (versions = %d), want one logical document with both versions",
+			len(output.Canonicalization.Documents),
+			len(output.Canonicalization.Documents[0].Versions),
+		)
+	}
+}

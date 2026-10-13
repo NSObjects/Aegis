@@ -299,6 +299,40 @@ func TestSemanticMatcherBatchesAndRetriesOnlyMissingIDs(t *testing.T) {
 	}
 }
 
+func TestSemanticMatcherRecoversFromBatchResponseFailure(t *testing.T) {
+	model := &semanticMatcherModel{responses: []*schema.AgenticMessage{
+		agenticTextMessage(schema.AgenticRoleTypeAssistant, "not json"),
+		agenticTextMessage(schema.AgenticRoleTypeAssistant,
+			`{"matches":[{"raw_document_id":"a","relevant":true,"confidence":0.91,"reason":"direct"}]}`),
+		agenticTextMessage(schema.AgenticRoleTypeAssistant,
+			`{"matches":[{"raw_document_id":"b","relevant":false,"confidence":0.93,"reason":"unrelated"}]}`),
+	}}
+	matcher := &AgenticSemanticEvidenceMatcher{Model: model}
+	var diagnostics []DiagnosticObservation
+	ctx := WithDiagnosticObserver(context.Background(), func(ev DiagnosticObservation) {
+		diagnostics = append(diagnostics, ev)
+	})
+
+	matches, err := matcher.Match(
+		ctx,
+		EvidenceTarget{Symbol: "600519.SH"},
+		[]RawDocument{{ID: "a"}, {ID: "b"}},
+	)
+	if err != nil {
+		t.Fatalf("Match() error = %v", err)
+	}
+	if len(matches) != 2 {
+		t.Fatalf("matches = %d, want 2", len(matches))
+	}
+	if model.calls != 3 {
+		t.Fatalf("calls = %d, want batch plus two single-document retries", model.calls)
+	}
+	if len(diagnostics) != 3 || diagnostics[0].Status != "START" ||
+		diagnostics[1].Status != "RETRY" || diagnostics[2].Status != "DONE" {
+		t.Fatalf("diagnostics = %+v", diagnostics)
+	}
+}
+
 func TestSemanticMatcherPersistentOmissionStopsResearch(t *testing.T) {
 	model := &semanticMatcherModel{responses: []*schema.AgenticMessage{
 		agenticTextMessage(schema.AgenticRoleTypeAssistant,

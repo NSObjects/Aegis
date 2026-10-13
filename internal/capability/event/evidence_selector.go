@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 const defaultSemanticSelectionThreshold = 0.80
@@ -142,21 +143,21 @@ func (s *HybridEvidenceSelector) Select(
 		len(documents),
 	)
 
-	seenIDs := make(map[string]struct{}, len(documents))
+	// Snapshot stores expose every stored version of one logical document;
+	// several versions share the same raw document ID. The selection contract
+	// allows exactly one decision per raw document ID, so collapse versions
+	// to their most recently observed representative before matching. A
+	// selected ID still admits every stored version downstream because
+	// applyEvidenceSelection filters candidates by raw document ID.
+	documents, err = deduplicateCandidatesByID(
+		documents,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, document := range documents {
 		documentID := strings.TrimSpace(document.ID)
-		if documentID == "" {
-			return nil, errors.New(
-				"candidate raw document id is required",
-			)
-		}
-		if _, duplicate := seenIDs[documentID]; duplicate {
-			return nil, fmt.Errorf(
-				"candidate raw document id %q is duplicated",
-				documentID,
-			)
-		}
-		seenIDs[documentID] = struct{}{}
 
 		if reason, matched := deterministicEvidenceMatch(
 			target,
@@ -277,6 +278,57 @@ func normalizeEvidenceTarget(
 	target.Aliases = aliases
 
 	return target, nil
+}
+
+// deduplicateCandidatesByID collapses candidate documents sharing one raw
+// document ID into a single decision input, keeping the most recently
+// observed version. It preserves first-seen order for stable decisions.
+func deduplicateCandidatesByID(
+	documents []RawDocument,
+) ([]RawDocument, error) {
+	unique := make(
+		[]RawDocument,
+		0,
+		len(documents),
+	)
+	indexByID := make(
+		map[string]int,
+		len(documents),
+	)
+
+	for _, document := range documents {
+		documentID := strings.TrimSpace(
+			document.ID,
+		)
+		if documentID == "" {
+			return nil, errors.New(
+				"candidate raw document id is required",
+			)
+		}
+
+		if index, exists := indexByID[documentID]; exists {
+			if rawObservationTime(document).After(
+				rawObservationTime(unique[index]),
+			) {
+				unique[index] = document
+			}
+			continue
+		}
+
+		indexByID[documentID] = len(unique)
+		unique = append(unique, document)
+	}
+
+	return unique, nil
+}
+
+func rawObservationTime(
+	document RawDocument,
+) time.Time {
+	if document.FirstSeenAt != nil {
+		return *document.FirstSeenAt
+	}
+	return document.RetrievedAt
 }
 
 func deterministicEvidenceMatch(

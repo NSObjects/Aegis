@@ -516,6 +516,11 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
             At: ev.At, DurationMS: ev.DurationMS,
         })
     })
+    ctx = eventcap.WithDiagnosticObserver(ctx, func(ev eventcap.DiagnosticObservation) {
+        log.Printf("AEGIS_EVENT_DIAGNOSTIC run=%s component=%s operation=%s tool=%s status=%s code=%s attempt=%d batch=%d input=%d output=%d missing=%d duration_ms=%d",
+            record.ID, ev.Component, ev.Operation, ev.Tool, ev.Status, ev.Code,
+            ev.Attempt, ev.Batch, ev.InputCount, ev.OutputCount, ev.MissingCount, ev.DurationMS)
+    })
 	ctx = research.WithProgressEvents(ctx, func(ev research.ProgressEvent) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -565,7 +570,11 @@ func (m *RunManager) execute(ctx context.Context, request ResearchRequest, recor
 	if err != nil {
 		// A diagnostic category is safe for hosted CI. Never log err.Error():
 		// provider failures can embed prompts, response bodies or credentials.
-		log.Printf("AEGIS_RUN_DIAGNOSTIC run=%s stage=%s category=%s", record.ID, lastResearchStage(record.Events), researchErrorCategory(err))
+		stage := explicitFailedStage(record.Events)
+		if stage == "" {
+			stage = lastResearchStage(record.Events)
+		}
+		log.Printf("AEGIS_RUN_DIAGNOSTIC run=%s stage=%s category=%s", record.ID, stage, researchErrorCategory(err))
 		mu.Lock()
 		record.FailureCategory = researchErrorCategory(err)
 		mu.Unlock()
@@ -683,7 +692,7 @@ func researchErrorCategory(err error) string {
 		return "MARKET_MODEL_EMPTY"
 	case strings.Contains(msg, "invalid market context json"):
 		return "MARKET_JSON_DECODE"
-	case strings.Contains(msg, "invalid market context after one correction") || strings.Contains(msg, "invalid market context:"):
+	case strings.Contains(msg, "invalid market context after one correction") || strings.Contains(msg, "invalid market context after one value correction") || strings.Contains(msg, "invalid market context:"):
 		return "MARKET_CONTEXT_VALIDATION"
 	case strings.Contains(msg, "research narrative is not in simplified chinese"):
 		return "LANGUAGE_VALIDATION"
@@ -695,6 +704,15 @@ func researchErrorCategory(err error) string {
 		return "SYNTHESIS_MODEL_GENERATE"
 	case strings.Contains(msg, "research synthesis model returned empty"):
 		return "SYNTHESIS_EMPTY_OUTPUT"
+	// Debate errors arrive as "research debate: {bull|bear} round N: ..." from
+	// the portfolio-review runner; "invalid debate state" may surface without
+	// that prefix from the post-run validation.
+	case strings.Contains(msg, "research debate") && strings.Contains(msg, "generate bull researcher turn") || strings.Contains(msg, "research debate") && strings.Contains(msg, "generate bear researcher turn"):
+		return "DEBATE_MODEL_GENERATE"
+	case strings.Contains(msg, "researcher turn after 2 attempts") || strings.Contains(msg, "must rebut at least one prior"):
+		return "DEBATE_TURN_VALIDATION"
+	case strings.Contains(msg, "research debate") || strings.Contains(msg, "invalid debate state"):
+		return "DEBATE_RUN"
 	default:
 		return "UNKNOWN"
 	}
@@ -712,8 +730,7 @@ func lastResearchStage(events []RunEvent) string {
 
 // explicitFailedStage never infers a failure from a START without FAIL or a tool event.
 func explicitFailedStage(events []RunEvent) string {
-	for i := len(events)-1; i >= 0; i-- {
-		ev := events[i]
+	for _, ev := range events {
 		if ev.Kind == "" && ev.Status == "FAIL" && ev.Stage != "Run" {
 			return ev.Stage
 		}

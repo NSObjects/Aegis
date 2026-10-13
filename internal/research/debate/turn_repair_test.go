@@ -101,11 +101,15 @@ func TestDebateRepairCannotBypassReferenceValidation(t *testing.T) {
 	}
 }
 
-func TestDebateRepairDoesNotRetryProviderFailures(t *testing.T) {
+func TestDebateRepairRetriesProviderFailureOnce(t *testing.T) {
+	originalDelay := debateProviderRetryDelay
+	debateProviderRetryDelay = 0
+	defer func() { debateProviderRetryDelay = originalDelay }()
+
 	m:=&scriptedTurnModel{err:errors.New("provider unavailable")}
 	_,err:=(&BullResearcher{Model:m}).GenerateTurn(context.Background(),validArtifact(),&State{Symbol:"600519.SH"},1)
-	if err==nil || !strings.Contains(err.Error(),"provider unavailable") || m.calls!=1 {
-		t.Fatalf("do not retry upstream failures: calls=%d err=%v",m.calls,err)
+	if err==nil || !strings.Contains(err.Error(),"provider unavailable") || m.calls!=2 {
+		t.Fatalf("transient provider failure must be retried exactly once: calls=%d err=%v",m.calls,err)
 	}
 }
 

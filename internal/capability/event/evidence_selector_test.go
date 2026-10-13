@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 type targetResolverFunc func(
@@ -548,5 +549,122 @@ func TestHybridEvidenceSelectorPartialSemanticMatchesStillRejectsInvalidIDs(t *t
 				t.Fatalf("error=%v, want %q",err,tc.want)
 			}
 		})
+	}
+}
+
+func TestHybridEvidenceSelectorCollapsesMultiVersionCandidates(
+	t *testing.T,
+) {
+	publishedAt := time.Date(
+		2026, 10, 9, 14, 51, 38, 0, time.UTC,
+	)
+	observedOlder := time.Date(
+		2026, 10, 11, 10, 20, 0, 0, time.UTC,
+	)
+	observedNewer := time.Date(
+		2026, 10, 12, 7, 57, 0, 0, time.UTC,
+	)
+
+	var matcherDocuments []RawDocument
+	selector := &HybridEvidenceSelector{
+		TargetResolver: targetResolverFunc(
+			func(
+				context.Context,
+				ResearchTask,
+			) (EvidenceTarget, error) {
+				return EvidenceTarget{
+					Symbol: "600519.SH",
+					Name:   "贵州茅台",
+				}, nil
+			},
+		),
+		SemanticMatcher: semanticMatcherFunc(
+			func(
+				_ context.Context,
+				_ EvidenceTarget,
+				documents []RawDocument,
+			) ([]SemanticEvidenceMatch, error) {
+				matcherDocuments = documents
+				matches := make(
+					[]SemanticEvidenceMatch,
+					0,
+					len(documents),
+				)
+				for _, document := range documents {
+					matches = append(
+						matches,
+						SemanticEvidenceMatch{
+							RawDocumentID: document.ID,
+							Relevant:      false,
+							Confidence:    0.1,
+							Reason:        "unrelated market news",
+						},
+					)
+				}
+				return matches, nil
+			},
+		),
+	}
+
+	decisions, err := selector.Select(
+		context.Background(),
+		ResearchTask{Symbol: "600519.SH"},
+		[]RawDocument{
+			{
+				ID:          "tavily_web_duplicate",
+				Title:       "older capture",
+				Publisher:   "web",
+				SourceType:  SourceOther,
+				PublishedAt: &publishedAt,
+				FirstSeenAt: &observedOlder,
+				Content:     "market recap without target mention",
+			},
+			{
+				ID:          "tavily_web_duplicate",
+				Title:       "newer capture",
+				Publisher:   "web",
+				SourceType:  SourceOther,
+				PublishedAt: &publishedAt,
+				FirstSeenAt: &observedNewer,
+				Content:     "market recap without target mention",
+			},
+			{
+				ID:         "cls_news_other",
+				Title:      "unrelated telegraph item",
+				Publisher:  "telegraph",
+				SourceType: SourceIndustryMedia,
+				FirstSeenAt: &observedNewer,
+				Content:    "market recap without target mention",
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf(
+			"multi-version candidates must not fail selection: %v",
+			err,
+		)
+	}
+	if len(decisions) != 2 {
+		t.Fatalf(
+			"decisions = %d, want one per raw document ID (2)",
+			len(decisions),
+		)
+	}
+	if len(matcherDocuments) != 2 {
+		t.Fatalf(
+			"semantic documents = %d, want collapsed set of 2",
+			len(matcherDocuments),
+		)
+	}
+	for _, document := range matcherDocuments {
+		if document.ID != "tavily_web_duplicate" {
+			continue
+		}
+		if document.Title != "newer capture" {
+			t.Fatalf(
+				"representative for duplicated ID = %q, want newest observed version",
+				document.Title,
+			)
+		}
 	}
 }

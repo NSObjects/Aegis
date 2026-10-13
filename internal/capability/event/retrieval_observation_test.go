@@ -10,7 +10,9 @@ import (
 
 func TestAcquisitionRunnerObservesExecutedRetrieversOnly(t *testing.T) {
  var got []RetrievalObservation
+ var diagnostics []DiagnosticObservation
  ctx := WithRetrievalObserver(context.Background(), func(ev RetrievalObservation) { got = append(got, ev) })
+ ctx = WithDiagnosticObserver(ctx, func(ev DiagnosticObservation) { diagnostics = append(diagnostics, ev) })
  calls := 0
  _, err := (AcquisitionPlanRunner{}).Run(ctx,
   ResearchTask{ID:"observable-event", Symbol:"600519.SH", Objective:"evidence"},
@@ -29,6 +31,12 @@ func TestAcquisitionRunnerObservesExecutedRetrieversOnly(t *testing.T) {
   }
  }
  if got[1].DurationMS < 0 {t.Fatal("negative duration")}
+ if len(diagnostics) < 2 || diagnostics[0].Status != "FAIL" || diagnostics[0].Code != "EVENT_ACQUISITION_ERROR" {
+  t.Fatalf("diagnostics = %+v", diagnostics)
+ }
+ if diagnostics[len(diagnostics)-1].Operation != "canonicalize" || diagnostics[len(diagnostics)-1].Status != "DONE" {
+  t.Fatalf("canonicalization diagnostic = %+v", diagnostics[len(diagnostics)-1])
+ }
 }
 
 func TestAcquisitionRunnerFiveSuccessfulToolsCanFailDuringEvidenceSelection(t *testing.T) {

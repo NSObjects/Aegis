@@ -2,6 +2,7 @@ package application
 
 import (
     "context"
+    "errors"
     "strings"
     "testing"
     "time"
@@ -15,6 +16,8 @@ func TestExplicitFailedStageUsesOnlyStageFAIL(t *testing.T) {
     if got := explicitFailedStage(events); got != "" { t.Fatalf("tool DONE is not stage failure: %q", got) }
     events = append(events, RunEvent{Seq: 3, Stage: "Event", Status: "FAIL"})
     if got := explicitFailedStage(events); got != "Event" { t.Fatalf("expected observed Event FAIL, got %q", got) }
+    events = append(events, RunEvent{Seq: 4, Stage: "Market", Status: "FAIL"})
+    if got := explicitFailedStage(events); got != "Event" { t.Fatalf("expected first stage failure Event, got %q", got) }
 }
 
 func TestFailureDiagnosticsStoredAndReopened(t *testing.T) {
@@ -58,6 +61,18 @@ func TestResearchFailureDoesNotPersistSensitiveError(t *testing.T) {
     result := awaitRun(t, manager, submitted.ID, RunFailed)
     if result.FailureCategory != "UNKNOWN" || result.FailureStage != "" {
         t.Fatalf("invented failure details: %+v", result)
+    }
+}
+
+func TestEventFailureCategoryIsPersistable(t *testing.T) {
+    store := newStore(t)
+    executor := &controlledRunExecutor{err: errors.New("event research: run event evidence research loop: acquisition step failed")}
+    manager := newMgr(t, executor, store, 1, 1)
+    submitted, err := manager.Submit(context.Background(), runFixture("600519.SH"))
+    if err != nil { t.Fatal(err) }
+    result := awaitRun(t, manager, submitted.ID, RunFailed)
+    if result.FailureCategory != "EVENT_EVIDENCE_LOOP" || result.FailureStage != "" {
+        t.Fatalf("event failure diagnostics not persisted: %+v", result)
     }
 }
 

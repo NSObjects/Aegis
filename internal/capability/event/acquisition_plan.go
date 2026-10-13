@@ -165,11 +165,25 @@ func (r AcquisitionPlanRunner) Run(
 
         resultStatus := "DONE"
         if runErr != nil || run.Attempt.Status != AcquisitionSucceeded { resultStatus = "FAIL" }
+		diagnosticErr := runErr
+		if diagnosticErr == nil && run.Attempt.ErrorMessage != "" {
+			diagnosticErr = errors.New(run.Attempt.ErrorMessage)
+		}
         reportRetrieval(ctx, RetrievalObservation{
             RetrieverID: step.Retriever.ID(), Status: resultStatus,
             Outcome: retrievalOutcome(run.Attempt.Status, runErr),
             At: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds(),
         })
+		reportDiagnostic(ctx, DiagnosticObservation{
+			Component:   "acquisition_step",
+			Operation:   "retrieve",
+			Tool:        step.Retriever.ID(),
+			Status:      resultStatus,
+			Code:        diagnosticCode(diagnosticErr),
+			InputCount:  1,
+			OutputCount: len(run.RawDocuments),
+			DurationMS:  time.Since(started).Milliseconds(),
+		})
 		stepOutput := AcquisitionStepOutput{
 			StepID: step.ID,
 			Scope:  step.Scope,
@@ -218,11 +232,26 @@ func (r AcquisitionPlanRunner) Run(
 	}
 
 	if len(structuralErrors) > 0 {
+		reportDiagnostic(ctx, DiagnosticObservation{
+			Component:   "acquisition_plan",
+			Operation:   "execute",
+			Status:      "FAIL",
+			Code:        "ACQUISITION_STEP_FAILED",
+			InputCount:  len(preparedSteps),
+			OutputCount: len(output.AcceptedRawDocuments) + len(output.CandidateRawDocuments),
+		})
 		return output, errors.Join(structuralErrors...)
 	}
 
 	if len(output.CandidateRawDocuments) > 0 {
 		if plan.Selector == nil {
+			reportDiagnostic(ctx, DiagnosticObservation{
+				Component:   "acquisition_plan",
+				Operation:   "select_candidate_evidence",
+				Status:      "FAIL",
+				Code:        "SELECTOR_REQUIRED",
+				InputCount:  len(output.CandidateRawDocuments),
+			})
 			return output, errors.New(
 				"event evidence selector is required for candidate documents",
 			)
@@ -238,6 +267,14 @@ func (r AcquisitionPlanRunner) Run(
 			decisions...,
 		)
 		if selectErr != nil {
+			reportDiagnostic(ctx, DiagnosticObservation{
+				Component:   "acquisition_plan",
+				Operation:   "select_candidate_evidence",
+				Status:      "FAIL",
+				Code:        diagnosticCode(selectErr),
+				InputCount:  len(output.CandidateRawDocuments),
+				OutputCount: len(decisions),
+			})
 			return output, fmt.Errorf(
 				"select candidate evidence: %w",
 				selectErr,
@@ -249,8 +286,24 @@ func (r AcquisitionPlanRunner) Run(
 			decisions,
 		)
 		if validationErr != nil {
+			reportDiagnostic(ctx, DiagnosticObservation{
+				Component:   "acquisition_plan",
+				Operation:   "validate_selection",
+				Status:      "FAIL",
+				Code:        diagnosticCode(validationErr),
+				InputCount:  len(output.CandidateRawDocuments),
+				OutputCount: len(decisions),
+			})
 			return output, validationErr
 		}
+		reportDiagnostic(ctx, DiagnosticObservation{
+			Component:   "acquisition_plan",
+			Operation:   "select_candidate_evidence",
+			Status:      "DONE",
+			Code:        "NONE",
+			InputCount:  len(output.CandidateRawDocuments),
+			OutputCount: len(decisions),
+		})
 
 		output.AcceptedRawDocuments = append(
 			output.AcceptedRawDocuments,
@@ -263,8 +316,23 @@ func (r AcquisitionPlanRunner) Run(
 		output.AcceptedRawDocuments,
 	)
 	if err != nil {
+		reportDiagnostic(ctx, DiagnosticObservation{
+			Component:   "acquisition_plan",
+			Operation:   "canonicalize",
+			Status:      "FAIL",
+			Code:        diagnosticCode(err),
+			InputCount:  len(output.AcceptedRawDocuments),
+		})
 		return output, err
 	}
+	reportDiagnostic(ctx, DiagnosticObservation{
+		Component:   "acquisition_plan",
+		Operation:   "canonicalize",
+		Status:      "DONE",
+		Code:        "NONE",
+		InputCount:  len(output.AcceptedRawDocuments),
+		OutputCount: len(canonicalization.Documents),
+	})
 	output.Canonicalization = canonicalization
 
 	corroboration := (EvidenceCorroborator{}).Corroborate(

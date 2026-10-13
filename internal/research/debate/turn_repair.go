@@ -4,6 +4,7 @@ import (
 	"Aegis/internal/research/synthesis"
 	"Aegis/internal/researchlang"
 	"context"
+	"time"
 	"errors"
 	"fmt"
 	"strings"
@@ -16,6 +17,34 @@ import (
 // supply a complete grounded turn on retry; the runtime never manufactures
 // argument IDs, references, claims or rebuttal targets.
 const maxDebateTurnAttempts = 2
+
+// debateProviderRetryDelay backs off the single retry after a transient
+// provider failure (rate limit, dropped connection). Cancelled contexts and
+// repeated provider failures are never retried twice.
+var debateProviderRetryDelay = 1500 * time.Millisecond
+
+// generateWithProviderRetry retries one transient provider failure. Format
+// and contract failures are not retried here; they flow through the regular
+// turn-correction attempts in generateValidatedTurn.
+func generateWithProviderRetry(
+	ctx context.Context,
+	chatModel model.BaseModel[*schema.AgenticMessage],
+	messages []*schema.AgenticMessage,
+) (*schema.AgenticMessage, error) {
+	response, err := chatModel.Generate(ctx, messages)
+	if err == nil {
+		return response, nil
+	}
+	if ctx.Err() != nil {
+		return nil, err
+	}
+	select {
+	case <-ctx.Done():
+		return nil, err
+	case <-time.After(debateProviderRetryDelay):
+	}
+	return chatModel.Generate(ctx, messages)
+}
 
 func generateValidatedTurn(
 	ctx context.Context,
@@ -39,10 +68,10 @@ func generateValidatedTurn(
 		if err := ctx.Err(); err != nil {
 			return Turn{}, err
 		}
-		response, err := chatModel.Generate(ctx, messages)
+		response, err := generateWithProviderRetry(ctx, chatModel, messages)
 		if err != nil {
-			// Provider errors are not malformed debate turns. Do not multiply
-			// network requests or hide upstream failures behind a retry.
+			// Provider failures keep failing fast after one backed-off
+			// retry; malformed turns below get a corrective regeneration.
 			return Turn{}, fmt.Errorf("generate %s researcher turn: %w", strings.ToLower(string(expectedSide)), err)
 		}
 		turn, validationErr := parseValidatedTurn(response, artifact, state, round, expectedSide)

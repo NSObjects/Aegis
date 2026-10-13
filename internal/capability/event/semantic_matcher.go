@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
@@ -70,52 +71,135 @@ func (m *AgenticSemanticEvidenceMatcher) Match(
 			end = len(documents)
 		}
 		batch := documents[start:end]
+		batchNumber := start/semanticEvidenceBatchSize + 1
+		batchStarted := time.Now()
+		reportDiagnostic(ctx, DiagnosticObservation{
+			Component:  "semantic_matcher",
+			Operation:  "classify_batch",
+			Status:     "START",
+			Code:       "NONE",
+			Attempt:    1,
+			Batch:      batchNumber,
+			InputCount: len(batch),
+		})
 		first, err := m.matchBatch(ctx, target, batch)
 		if err != nil {
-			return nil, fmt.Errorf("semantic evidence batch %d: %w",
-				start/semanticEvidenceBatchSize+1, err)
-		}
-		// Reject fabricated IDs, duplicate IDs or invalid confidence BEFORE
-		// accepting any subset from this model response.
-		if _, err := validatePartialSemanticMatches(batch, first, defaultSemanticSelectionThreshold); err != nil {
-			return nil, fmt.Errorf("validate semantic evidence batch %d: %w",
-				start/semanticEvidenceBatchSize+1, err)
-		}
-		seen := make(map[string]struct{}, len(first))
-		for _, match := range first {
-			seen[strings.TrimSpace(match.RawDocumentID)] = struct{}{}
-		}
-		omitted := make([]RawDocument, 0)
-		for _, document := range batch {
-			if _, ok := seen[strings.TrimSpace(document.ID)]; !ok {
-				omitted = append(omitted, document)
+			// A provider can truncate or otherwise corrupt a multi-document
+			// response even when the same documents can be classified
+			// individually. Recover at the smallest safe unit, while keeping
+			// cancellation fail-fast and never accepting a partial result.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				reportDiagnostic(ctx, DiagnosticObservation{
+					Component: "semantic_matcher", Operation: "classify_batch", Status: "FAIL",
+					Code: diagnosticCode(ctxErr), Attempt: 1, Batch: batchNumber,
+					InputCount: len(batch), DurationMS: time.Since(batchStarted).Milliseconds(),
+				})
+				return nil, ctxErr
 			}
-		}
-		// Only re-evaluate missing IDs, one document per request. A small
-		// batch can still omit an ID due to prompt and output drift; the
-		// single-document retry bounds output size without weakening coverage.
-		for _, document := range omitted {
-			recovered, err := m.matchBatch(ctx, target, []RawDocument{document})
+			reportDiagnostic(ctx, DiagnosticObservation{
+				Component: "semantic_matcher", Operation: "classify_batch", Status: "RETRY",
+				Code: diagnosticCode(err), Attempt: 1, Batch: batchNumber,
+				InputCount: len(batch), DurationMS: time.Since(batchStarted).Milliseconds(),
+			})
+			first, err = m.matchDocumentsIndividually(ctx, target, batch)
 			if err != nil {
-				return nil, fmt.Errorf("retry semantic document %q: %w",
-					document.ID, err)
+				reportDiagnostic(ctx, DiagnosticObservation{
+					Component: "semantic_matcher", Operation: "classify_batch", Status: "FAIL",
+					Code: diagnosticCode(err), Attempt: 2, Batch: batchNumber,
+					InputCount: len(batch), OutputCount: len(first),
+					DurationMS: time.Since(batchStarted).Milliseconds(),
+				})
+				return nil, fmt.Errorf("semantic evidence batch %d: %w", batchNumber, err)
 			}
-			if _, err := validatePartialSemanticMatches(
-				[]RawDocument{document}, recovered,
-				defaultSemanticSelectionThreshold,
-			); err != nil {
-				return nil, fmt.Errorf("validate retried semantic document %q: %w",
-					document.ID, err)
+		} else {
+			// Reject fabricated IDs, duplicate IDs or invalid confidence BEFORE
+			// accepting any subset from this model response.
+			if _, err := validatePartialSemanticMatches(batch, first, defaultSemanticSelectionThreshold); err != nil {
+				reportDiagnostic(ctx, DiagnosticObservation{
+					Component: "semantic_matcher", Operation: "classify_batch", Status: "FAIL",
+					Code: diagnosticCode(err), Attempt: 1, Batch: batchNumber,
+					InputCount: len(batch), OutputCount: len(first),
+					DurationMS: time.Since(batchStarted).Milliseconds(),
+				})
+				return nil, fmt.Errorf("validate semantic evidence batch %d: %w", batchNumber, err)
 			}
-			first = append(first, recovered...)
+			seen := make(map[string]struct{}, len(first))
+			for _, match := range first {
+				seen[strings.TrimSpace(match.RawDocumentID)] = struct{}{}
+			}
+			omitted := make([]RawDocument, 0)
+			for _, document := range batch {
+				if _, ok := seen[strings.TrimSpace(document.ID)]; !ok {
+					omitted = append(omitted, document)
+				}
+			}
+			// Only re-evaluate missing IDs, one document per request. A small
+			// batch can still omit an ID due to prompt and output drift; the
+			// single-document retry bounds output size without weakening coverage.
+			for _, document := range omitted {
+				reportDiagnostic(ctx, DiagnosticObservation{
+					Component: "semantic_matcher", Operation: "repair_missing_classification", Status: "RETRY",
+					Code: "SEMANTIC_COVERAGE_INCOMPLETE", Attempt: 2, Batch: batchNumber,
+					InputCount: len(batch), OutputCount: len(first), MissingCount: len(omitted),
+				})
+				recovered, err := m.matchDocumentsIndividually(ctx, target, []RawDocument{document})
+				if err != nil {
+					reportDiagnostic(ctx, DiagnosticObservation{
+						Component: "semantic_matcher", Operation: "repair_missing_classification", Status: "FAIL",
+						Code: diagnosticCode(err), Attempt: 2, Batch: batchNumber,
+						InputCount: len(batch), OutputCount: len(first), MissingCount: len(omitted),
+						DurationMS: time.Since(batchStarted).Milliseconds(),
+					})
+					return nil, err
+				}
+				first = append(first, recovered...)
+			}
 		}
 		if _, err := validateSemanticMatches(
 			batch, first, defaultSemanticSelectionThreshold,
 		); err != nil {
-			return nil, fmt.Errorf("semantic evidence batch %d: %w",
-				start/semanticEvidenceBatchSize+1, err)
+			reportDiagnostic(ctx, DiagnosticObservation{
+				Component: "semantic_matcher", Operation: "classify_batch", Status: "FAIL",
+				Code: diagnosticCode(err), Attempt: 2, Batch: batchNumber,
+				InputCount: len(batch), OutputCount: len(first),
+				DurationMS: time.Since(batchStarted).Milliseconds(),
+			})
+			return nil, fmt.Errorf("semantic evidence batch %d: %w", batchNumber, err)
 		}
+		reportDiagnostic(ctx, DiagnosticObservation{
+			Component: "semantic_matcher", Operation: "classify_batch", Status: "DONE",
+			Code: "NONE", Attempt: 1, Batch: batchNumber,
+			InputCount: len(batch), OutputCount: len(first),
+			DurationMS: time.Since(batchStarted).Milliseconds(),
+		})
 		matches = append(matches, first...)
+	}
+	return matches, nil
+}
+
+func (m *AgenticSemanticEvidenceMatcher) matchDocumentsIndividually(
+	ctx context.Context,
+	target EvidenceTarget,
+	documents []RawDocument,
+) ([]SemanticEvidenceMatch, error) {
+	matches := make([]SemanticEvidenceMatch, 0, len(documents))
+	for _, document := range documents {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		recovered, err := m.matchBatch(ctx, target, []RawDocument{document})
+		if err != nil {
+			return nil, fmt.Errorf("retry semantic document %q: %w",
+				document.ID, err)
+		}
+		if _, err := validateSemanticMatches(
+			[]RawDocument{document}, recovered,
+			defaultSemanticSelectionThreshold,
+		); err != nil {
+			return nil, fmt.Errorf("validate retried semantic document %q: %w",
+				document.ID, err)
+		}
+		matches = append(matches, recovered...)
 	}
 	return matches, nil
 }
@@ -203,8 +287,7 @@ func (m *AgenticSemanticEvidenceMatcher) matchBatch(
 	}
 
 	var trailing any
-	if err := decoder.Decode(&trailing);
-		err != io.EOF {
+	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
 			err = errors.New(
 				"multiple JSON values",

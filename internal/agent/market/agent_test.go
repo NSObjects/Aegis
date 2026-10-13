@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/cloudwego/eino/components/model"
@@ -10,10 +11,10 @@ import (
 )
 
 type fakeModel struct {
-	output string
+	output  string
 	outputs []string
-	calls int
-	err    error
+	calls   int
+	err     error
 }
 
 func (m *fakeModel) Generate(
@@ -27,7 +28,12 @@ func (m *fakeModel) Generate(
 
 	m.calls++
 	output := m.output
-	if len(m.outputs)>0 { if m.calls>len(m.outputs) { return nil,errors.New("unexpected extra market model call") }; output=m.outputs[m.calls-1] }
+	if len(m.outputs) > 0 {
+		if m.calls > len(m.outputs) {
+			return nil, errors.New("unexpected extra market model call")
+		}
+		output = m.outputs[m.calls-1]
+	}
 	return &schema.AgenticMessage{
 		Role: schema.AgenticRoleTypeAssistant,
 		ContentBlocks: []*schema.ContentBlock{
@@ -300,7 +306,6 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-
 func TestAssistantTextIgnoresToolCallMessage(t *testing.T) {
 	msg := &schema.AgenticMessage{
 		Role: schema.AgenticRoleTypeAssistant,
@@ -328,26 +333,98 @@ func TestAssistantTextIgnoresToolCallMessage(t *testing.T) {
 	}
 }
 
-func TestAgentAnalyzeCorrectsMultipleJSONObjectsOnce(t *testing.T){
- valid:=`{"as_of":"20260922","regime":"MIXED","evidence":["index breadth improved"],"confidence":0.72}`
- invalid:=`{"as_of":"20260921"}
+func TestAgentAnalyzeCorrectsMultipleJSONObjectsOnce(t *testing.T) {
+	valid := `{"as_of":"20260922","regime":"MIXED","evidence":["index breadth improved"],"confidence":0.72}`
+	invalid := `{"as_of":"20260921"}
 
 Let me correct and output the final JSON.
 
-`+valid
- m:=&fakeModel{outputs:[]string{invalid,valid}}
- a,err:=New(context.Background(),Config{Model:m})
- if err!=nil { t.Fatal(err) }
- got,err:=a.Analyze(context.Background(),"analyze market")
- if err!=nil||got==nil||got.AsOf!="20260922"||m.calls!=2 {
-  t.Fatalf("correction failed: result=%+v calls=%d err=%v",got,m.calls,err)
- }
+` + valid
+	m := &fakeModel{outputs: []string{invalid, valid}}
+	a, err := New(context.Background(), Config{Model: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.Analyze(context.Background(), "analyze market")
+	if err != nil || got == nil || got.AsOf != "20260922" || m.calls != 2 {
+		t.Fatalf("correction failed: result=%+v calls=%d err=%v", got, m.calls, err)
+	}
 }
 
-func TestAgentAnalyzeRejectsRepeatedMalformedCorrection(t *testing.T){
- m:=&fakeModel{outputs:[]string{"not json","still not json"}}
- a,err:=New(context.Background(),Config{Model:m})
- if err!=nil{t.Fatal(err)}
- got,err:=a.Analyze(context.Background(),"analyze market")
- if err==nil||got!=nil||m.calls!=2 {t.Fatalf("must reject malformed correction: result=%+v calls=%d err=%v",got,m.calls,err)}
+func TestAgentAnalyzeRejectsRepeatedMalformedCorrection(t *testing.T) {
+	m := &fakeModel{outputs: []string{"not json", "still not json"}}
+	a, err := New(context.Background(), Config{Model: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.Analyze(context.Background(), "analyze market")
+	if err == nil || got != nil || m.calls != 2 {
+		t.Fatalf("must reject malformed correction: result=%+v calls=%d err=%v", got, m.calls, err)
+	}
+}
+
+func TestAgentAnalyzeNormalizesInvalidRegimeOnce(t *testing.T) {
+	// JSON decodes but the regime value drifted off the enum; the
+	// value-correction pass must repair it without touching facts.
+	drifted := `{"as_of":"20261013","regime":"RISK-ON","evidence":["index breadth improved"],"confidence":0.72}`
+	normalized := `{"as_of":"20261013","regime":"RISK_ON","evidence":["index breadth improved"],"confidence":0.72}`
+	m := &fakeModel{outputs: []string{drifted, normalized}}
+	a, err := New(context.Background(), Config{Model: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.Analyze(context.Background(), "analyze market")
+	if err != nil || got == nil || got.Regime != RegimeRiskOn || m.calls != 2 {
+		t.Fatalf("value correction failed: result=%+v calls=%d err=%v", got, m.calls, err)
+	}
+}
+
+func TestAgentAnalyzeNormalizesPercentConfidenceOnce(t *testing.T) {
+	drifted := `{"as_of":"20261013","regime":"MIXED","evidence":["turnover expanded"],"confidence":85}`
+	normalized := `{"as_of":"20261013","regime":"MIXED","evidence":["turnover expanded"],"confidence":0.85}`
+	m := &fakeModel{outputs: []string{drifted, normalized}}
+	a, err := New(context.Background(), Config{Model: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.Analyze(context.Background(), "analyze market")
+	if err != nil || got == nil || got.Confidence != 0.85 || m.calls != 2 {
+		t.Fatalf("confidence correction failed: result=%+v calls=%d err=%v", got, m.calls, err)
+	}
+}
+
+func TestAgentAnalyzeRejectsUnrecoverableValueCorrection(t *testing.T) {
+	// Empty evidence cannot be repaired without inventing facts; the
+	// corrector must return empty and the run must fail with the
+	// value-correction error.
+	drifted := `{"as_of":"20261013","regime":"MIXED","evidence":[],"confidence":0.5}`
+	m := &fakeModel{outputs: []string{drifted, ""}}
+	a, err := New(context.Background(), Config{Model: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.Analyze(context.Background(), "analyze market")
+	if err == nil || got != nil || m.calls != 2 {
+		t.Fatalf("must reject unrecoverable value: result=%+v calls=%d err=%v", got, m.calls, err)
+	}
+	if !strings.Contains(err.Error(), "invalid market context after one value correction") {
+		t.Fatalf("error = %v, want value-correction failure", err)
+	}
+}
+
+func TestAgentAnalyzeValueCorrectsAfterFormatRepair(t *testing.T) {
+	// Formatting repair (decode failure) followed by a validation failure
+	// still gets the value-correction pass before giving up.
+	withCommentary := "分析如下：\n" + `{"as_of":"20261013","regime":"NEUTRAL","evidence":["breadth flat"],"confidence":0.6}`
+	wellFormed := `{"as_of":"20261013","regime":"NEUTRAL","evidence":["breadth flat"],"confidence":0.6}`
+	normalized := `{"as_of":"20261013","regime":"MIXED","evidence":["breadth flat"],"confidence":0.6}`
+	m := &fakeModel{outputs: []string{withCommentary, wellFormed, normalized}}
+	a, err := New(context.Background(), Config{Model: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.Analyze(context.Background(), "analyze market")
+	if err != nil || got == nil || got.Regime != RegimeMixed || m.calls != 3 {
+		t.Fatalf("chained correction failed: result=%+v calls=%d err=%v", got, m.calls, err)
+	}
 }
