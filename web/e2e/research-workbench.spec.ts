@@ -701,3 +701,32 @@ test("research history displays the persisted failure code for the correct run",
   await failedRow.click();
   await expect(page.locator(".live-run-fields")).toContainText(failedId);
 });
+
+
+test("browser EventSource reconnects with Last-Event-ID after interrupted fixture stream", async ({ page }) => {
+  await signIn(page);
+  let calls = 0;
+  let resumedCursor: string | undefined;
+  await page.route("**/api/workbench/runs/*/stream", async route => {
+    calls++;
+    if (calls === 1) {
+      // An SSE connection that delivers seq=1 and then closes abruptly.
+      // This intentionally tests browser replay behavior, not a paid Provider.
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store" },
+        body: 'id: 1\\nevent: research_stage\\ndata: {"seq":1,"stage":"Run","status":"PENDING"}\\n\\n',
+      });
+      return;
+    }
+    resumedCursor = route.request().headers()["last-event-id"];
+    await route.continue();
+  });
+  const id = await submit(page, "hold fixture");
+  await expect.poll(() => calls, { timeout: 15000 }).toBeGreaterThanOrEqual(2);
+  expect(resumedCursor).toBe("1");
+  const events = await page.request.get(`/api/workbench/runs/${id}/events`);
+  expect(events.status()).toBe(200);
+  await page.getByRole("button", { name: "请求取消" }).click();
+  await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20000 });
+});
