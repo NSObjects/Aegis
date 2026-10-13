@@ -108,8 +108,8 @@ describe("safe historical Run comparison", () => {
     expect(result?.evidence.added).toBeNull();
   });
   it("compares recorded model configuration fingerprints, without inventing missing provenance", () => {
-    const left = { ...a, model_provenance: { schema_version: 1, config_fingerprint: "a".repeat(64), bindings: [] } };
-    const right = { ...b, model_provenance: { schema_version: 1, config_fingerprint: "b".repeat(64), bindings: [] } };
+    const left = { ...a, model_provenance: { schema_version: 1 as const, config_fingerprint: "a".repeat(64), bindings: [] } };
+    const right = { ...b, model_provenance: { schema_version: 1 as const, config_fingerprint: "b".repeat(64), bindings: [] } };
     const result = compareResearchRuns(left, artifact(), right, artifact());
     expect(find(result, "模型配置指纹")).toMatchObject({kind: "different", left: "a".repeat(64), right: "b".repeat(64)});
     const missing = compareResearchRuns(a, artifact(), right, artifact());
