@@ -703,15 +703,15 @@ test("research history displays the persisted failure code for the correct run",
 });
 
 
-test("browser EventSource reconnects with Last-Event-ID after interrupted fixture stream", async ({ page }) => {
+test("browser recovers UI after a short SSE stream ends and polling catches terminal status", async ({ page }) => {
   await signIn(page);
-  let calls = 0;
-  let resumedCursor: string | undefined;
+  let streamRequests = 0;
   await page.route("**/api/workbench/runs/*/stream", async route => {
-    calls++;
-    if (calls === 1) {
-      // An SSE connection that delivers seq=1 and then closes abruptly.
-      // This intentionally tests browser replay behavior, not a paid Provider.
+    streamRequests++;
+    if (streamRequests === 1) {
+      // A complete short SSE response does not simulate a broken TCP stream.
+      // Verify UI recovery only; replay-cursor correctness is covered by the
+      // real HTTP disconnect/reconnect regression in Go.
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store" },
@@ -719,12 +719,10 @@ test("browser EventSource reconnects with Last-Event-ID after interrupted fixtur
       });
       return;
     }
-    resumedCursor = route.request().headers()["last-event-id"];
     await route.continue();
   });
   const id = await submit(page, "hold fixture");
-  await expect.poll(() => calls, { timeout: 15000 }).toBeGreaterThanOrEqual(2);
-  expect(resumedCursor).toBe("1");
+  await expect.poll(() => streamRequests, { timeout: 15000 }).toBeGreaterThanOrEqual(2);
   const events = await page.request.get(`/api/workbench/runs/${id}/events`);
   expect(events.status()).toBe(200);
   await page.getByRole("button", { name: "请求取消" }).click();
