@@ -96,6 +96,13 @@ describe("authenticated Next.js ResearchRun BFF", () => {
     expect(await response.text()).toBe(sse);
     expect((fetchSpy.mock.calls[0][1].headers as Headers).get("Last-Event-ID")).toBe("6");
   });
+  it("rejects malformed and overflowing SSE replay cursors before backend fetch", async () => {
+    for (const cursor of ["abc", "-1", "1x", "18446744073709551616"]) {
+      const response = await GET(request(`/${runID}/stream`, { lastEventId: cursor }), params([runID, "stream"]));
+      expect(response.status).toBe(400);
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
   it("never follows unexpected Go redirects", async () => {
     fetchSpy.mockResolvedValue(new Response(null, { status: 302, headers: { location: "https://evil.example" } }));
     const response = await GET(request(""), params());
