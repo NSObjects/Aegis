@@ -701,3 +701,30 @@ test("research history displays the persisted failure code for the correct run",
   await failedRow.click();
   await expect(page.locator(".live-run-fields")).toContainText(failedId);
 });
+
+
+test("browser recovers UI after a short SSE stream ends and polling catches terminal status", async ({ page }) => {
+  await signIn(page);
+  let streamRequests = 0;
+  await page.route("**/api/workbench/runs/*/stream", async route => {
+    streamRequests++;
+    if (streamRequests === 1) {
+      // A complete short SSE response does not simulate a broken TCP stream.
+      // Verify UI recovery only; replay-cursor correctness is covered by the
+      // real HTTP disconnect/reconnect regression in Go.
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store" },
+        body: 'id: 1\\nevent: research_stage\\ndata: {"seq":1,"stage":"Run","status":"PENDING"}\\n\\n',
+      });
+      return;
+    }
+    await route.continue();
+  });
+  const id = await submit(page, "hold fixture");
+  await expect.poll(() => streamRequests, { timeout: 15000 }).toBeGreaterThanOrEqual(2);
+  const events = await page.request.get(`/api/workbench/runs/${id}/events`);
+  expect(events.status()).toBe(200);
+  await page.getByRole("button", { name: "请求取消" }).click();
+  await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20000 });
+});
