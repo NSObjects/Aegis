@@ -9,6 +9,8 @@ test("observed TOOL events belong to the same Run and survive refresh", async ({
  await page.getByLabel("股票代码").fill("600519.SH");
  await page.getByLabel("研究关注点（可选）").fill("observed tool trace fixture");
  await page.getByRole("button",{name:"启动真实研究"}).click();
+ await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
+ await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
  await expect(page.locator(".live-run-fields")).toContainText("已完成",{timeout:25000});
  const tools=page.locator(".live-trace-tools");
  await expect(tools).toContainText("snapshot_official");
