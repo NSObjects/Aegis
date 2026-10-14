@@ -24,11 +24,21 @@ func TestNonCooperativeExecutorMustNotLeaveRunRunningAfterDeadline(t *testing.T)
  case <-ex.started:
  case <-time.After(time.Second): release(); t.Fatal("executor did not start")
  }
- // Inspect while the uncooperative provider is still running. A deadline
- // should be externally visible without interpreting tool START as success.
- time.Sleep(150*time.Millisecond)
- observed, readErr := manager.Get(context.Background(), run.ID)
- if readErr != nil { release(); t.Fatal(readErr) }
+ // The watchdog finalizes asynchronously when ctx expires. Poll the durable
+ // state instead of assuming a 150ms sleep schedules the watchdog on loaded CI.
+ // Keep the provider blocked throughout to verify capacity is not released.
+ var observed RunRecord
+ deadline := time.After(2*time.Second)
+ for {
+  var readErr error
+  observed, readErr = manager.Get(context.Background(), run.ID)
+  if readErr != nil { release(); t.Fatal(readErr) }
+  if observed.State == RunFailed && observed.FailureCode == FailureTimeout && observed.FinishedAt != nil { break }
+  select {
+  case <-deadline: release(); t.Fatalf("deadline watchdog did not persist terminal state: %+v", observed)
+  case <-time.After(10*time.Millisecond):
+  }
+ }
  // A timed-out but still executing provider must continue occupying capacity.
  _, capacityErr := manager.Submit(context.Background(), runFixture("000001.SZ"))
  release()
