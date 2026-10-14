@@ -2,6 +2,18 @@ import { expect, test, type Page } from "@playwright/test";
 
 const password = "ci-browser-access-password";
 
+// Older contract cases intentionally inspect the Run details and execution trace.
+// The report-first UI collapses these panels on each navigation. Open them
+// explicitly after navigation, without modifying production default behavior.
+async function revealRunDiagnostics(page: Page) {
+  const details = page.locator("details.live-secondary-panel");
+  await details.first().waitFor({ state: "attached", timeout: 10_000 }).catch(() => {});
+  await page.locator("details.live-secondary-panel").evaluateAll(nodes => {
+    for (const node of nodes) (node as HTMLDetailsElement).open = true;
+  });
+}
+
+
 async function signIn(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
@@ -48,6 +60,7 @@ test("persisted request snapshot is readable across navigation without echoing t
   await expect(page.locator(".live-request-snapshot")).toContainText("PIT-safe");
   await expect(page.locator(".live-request-snapshot")).toContainText("NOT_PROVIDED · 未知");
   await page.reload();
+  await revealRunDiagnostics(page);
   await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-request-snapshot summary")).toContainText("已记录");
@@ -72,6 +85,7 @@ test("run's configured model identity stays attached to the same run after brows
   await expect(page.locator(".live-model-provenance")).toContainText("fixture-model");
   await expect(page.locator(".live-model-provenance")).toContainText("模型 ID 不是第三方 Provider 保证的固定版本号");
   await page.reload();
+  await revealRunDiagnostics(page);
   await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-model-provenance summary")).toContainText("已记录");
@@ -106,6 +120,7 @@ test("completed portfolio source IDs stay attached to the original historical Ru
   await expect(panel).toContainText("文档 ID");
   await expect(panel.locator("a")).toHaveCount(1);
   await page.reload();
+  await revealRunDiagnostics(page);
   await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(panel.locator("summary")).toContainText("已记录");
@@ -170,6 +185,7 @@ test("real browser submits a run, receives stage SSE, reads artifact, and restor
   expect(replayed).not.toContain("id: 1\n");
   expect(replayed).toContain("event: research_stage");
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
   await page.getByRole("button", { name: "研究历史" }).click();
   await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0,12) }).first()).toBeVisible();
@@ -229,6 +245,7 @@ test("settings lets a signed-in operator save provider credentials without echoi
   expect(await page.locator("body").innerText()).not.toContain(marketKey);
 
   await page.reload();
+  await revealRunDiagnostics(page);
   await page.getByRole("button", { name: "凭证设置" }).click();
   await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
   await expect(page.getByLabel("TuShare Token")).toHaveValue("");
@@ -255,12 +272,15 @@ test("Live Run permalink, refresh and browser back/forward restore the correct w
 
   await page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) }).click();
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-permalink")).toHaveAttribute("href", `/?run=${id}`);
 
   await page.goto("/?view=settings");
+  await revealRunDiagnostics(page);
   await expect(page.getByRole("heading", { name: "数据源与模型凭证" })).toBeVisible();
   await page.goto(`/?run=${id}`);
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
 });
 
@@ -269,6 +289,7 @@ test("unknown Live Run permalink never substitutes the latest report", async ({ 
   await submit(page);
   const unknown = "ffffffffffffffffffffffffffffffff";
   await page.goto(`/?run=${unknown}`);
+  await revealRunDiagnostics(page);
   await expect(page.getByText(`找不到任务 ${unknown}`, { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
@@ -283,6 +304,7 @@ test("narrow viewport retains Run deep-link isolation across history and browser
   await expect(page.locator(".live-run-fields")).toContainText(known);
   const unknown = "ffffffffffffffffffffffffffffffff";
   await page.goto("/?run=" + unknown);
+  await revealRunDiagnostics(page);
   await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
@@ -292,6 +314,7 @@ test("narrow viewport retains Run deep-link isolation across history and browser
   await expect(page).toHaveURL(new RegExp("run=" + unknown + "$"));
   await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
   await page.goto("/?run=" + known);
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(known);
   await expect(page.locator(".live-run-fields")).not.toContainText(unknown);
   await expect(page.locator(".live-permalink").first()).toHaveAttribute("href", "/?run=" + known);
@@ -341,9 +364,11 @@ test("completed Run creates a new study with durable origin metadata and no copi
   await expect(page.locator(".live-run-fields")).toContainText("来源研究任务");
   await expect(page.locator(".live-run-fields a.live-permalink").last()).toHaveAttribute("href", "/?run=" + first);
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(second);
   await expect(page.locator(".live-run-fields")).toContainText(first);
   await page.goto("/?run=" + first);
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(first);
   await expect(page.locator(".live-run-fields")).not.toContainText("来源研究任务");
 });
@@ -362,6 +387,7 @@ test("failed and cancelled studies can be researched again without replaying old
   await expect(page.locator(".live-run-fields")).toContainText(failed);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
   await page.goto("/?run=" + failed);
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED");
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
 
@@ -411,6 +437,7 @@ test("observed Go stages show duration, lifecycle, links and restore after refre
   await expect(trace.locator(".live-trace-stage").filter({ hasText: "Market" }).locator("a")).toHaveAttribute("href", "#report-market");
   await expect(trace.getByText("仅展示实际观测到的工具事件", { exact: false })).toBeVisible();
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功");
   // Terminal runs keep raw events collapsed; expand before asserting they
@@ -435,6 +462,7 @@ test("failed and cancelled Go Runs show only observed stage failures, never infe
   await expect(trace.getByText("未收到 DONE 的阶段不代表成功", { exact: false })).toBeVisible();
   await expect(trace.locator(".live-trace-stage a.live-trace-report-link")).toHaveCount(0);
   await page.goto("/?run=" + failed);
+  await revealRunDiagnostics(page);
   await expect(trace.locator(".live-trace-error")).toContainText("Event");
   await expect(page.locator(".live-run-fields")).toContainText(failed);
   await expect(page.locator(".live-run-fields")).not.toContainText(held);
@@ -448,6 +476,7 @@ test("persisted-event polling restores trace when EventSource is unavailable", a
   await expect(page.getByRole("region", { name: "Agent 执行轨迹" }).locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功", { timeout: 20_000 });
   await expect(page.locator(".live-trace-lifecycle")).toContainText("COMPLETED");
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-trace-stage").filter({ hasText: "Event" })).toContainText("成功");
 });
@@ -482,6 +511,7 @@ test("completed Run presents one source-owned OHLC candle and technical values w
   expect(technical.snapshot).toMatchObject({ open: 1500.12, high: 1531.4, low: 1487.8, close: 1512.65 });
   expect(technical.moving_averages.ma5).toBe(1507.2);
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await page.locator("#chapter-technical summary").click();
   await expect(page.getByRole("region", { name: "技术行情快照可视化" }).locator("rect.technical-candle-body")).toHaveCount(1);
@@ -530,6 +560,7 @@ test("two completed research runs compare source-owned conclusion, market, techn
   expect(source.research_artifact.technical.snapshot.close).toBe(1528.2);
   expect(source.research_artifact.market.regime).toBe("RISK_OFF");
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(chart.getByRole("table", { name: "市场环境对比" })).toContainText("RISK_OFF");
   await expect(page.getByLabel("基准研究")).toHaveValue(baseline);
   await expect(page.getByLabel("对比研究")).toHaveValue(followup);
@@ -545,21 +576,26 @@ test("comparison refuses identical, failed and mismatched-symbol Runs, without m
   const original = await submit(page, "technical snapshot fixture");
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
   await page.goto("/?view=compare&left=" + original + "&right=" + original);
+  await revealRunDiagnostics(page);
   await expect(page.getByText("不能将同一 Run 与自己比较")).toBeVisible();
   await expect(page.locator(".live-compare-table")).toHaveCount(0);
   await page.goto("/?run=" + original);
+  await revealRunDiagnostics(page);
   const failed = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
   await page.goto("/?view=compare&left=" + original + "&right=" + failed);
+  await revealRunDiagnostics(page);
   await expect(page.getByText("对比只支持已完成 Run", { exact: false })).toBeVisible();
   await expect(page.locator(".live-compare-table")).toHaveCount(0);
   await page.goto("/?view=compare&left=" + original + "&right=" + "f".repeat(32));
+  await revealRunDiagnostics(page);
   await expect(page.getByText("读取服务端历史记录失败", { exact: false })).toBeVisible();
   await expect(page.locator(".live-compare-table")).toHaveCount(0);
 });
 
 test("anonymous comparison deep link never leaks run data before login", async ({ page }) => {
   await page.goto("/?view=compare&left=" + "a".repeat(32) + "&right=" + "b".repeat(32));
+  await revealRunDiagnostics(page);
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "两次研究记录对比" })).toHaveCount(0);
 });
@@ -567,6 +603,7 @@ test("anonymous comparison deep link never leaks run data before login", async (
 
 test("overview is authenticated, URL-addressable and opens the same completed Run report", async ({ page }) => {
   await page.goto("/?view=overview");
+  await revealRunDiagnostics(page);
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "研究任务总览" })).toHaveCount(0);
   await signIn(page);
@@ -590,6 +627,7 @@ test("overview is authenticated, URL-addressable and opens the same completed Ru
   await expect(page).toHaveURL("/?view=overview");
   await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
   await overview.getByRole("button", { name: "对比研究" }).click();
   await expect(page).toHaveURL("/?view=compare");
@@ -632,6 +670,7 @@ test("overview with a list of no records shows an empty state, not fabricated KP
     else await route.continue();
   });
   await page.goto("/?view=overview");
+  await revealRunDiagnostics(page);
   await page.getByLabel("工作台访问口令").fill(password);
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
   const overview = page.getByRole("region", { name: "研究任务概览" });
@@ -660,6 +699,7 @@ test("completed research defaults to a readable brief with expandable source cha
   await expect(page.locator("#report-manager")).toBeVisible();
   await expect(page.locator(".live-report-source-details")).not.toHaveAttribute("open");
   await page.reload();
+  await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(overview.getByText("研究结论 · 源自 Go 工件")).toBeVisible();
 });
