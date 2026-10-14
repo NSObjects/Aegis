@@ -10,6 +10,7 @@ test("completed run exports Markdown and JSON for the same durable Run ID", asyn
   await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
   await page.getByLabel("股票代码").fill("600519.SH");
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
 
   const permalink = page.locator(".live-run-fields a.live-permalink").first();
