@@ -45,6 +45,7 @@ async function submit(page: Page) {
   await page.getByLabel("股票代码").fill("600519.SH");
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
   return page.locator(".live-run-fields code").innerText();
 }
 
@@ -90,8 +91,12 @@ test("failed work never shows stale linked evidence", async ({ page }) => {
     status: 200, contentType: "application/json", body: JSON.stringify(fakeArtifact),
   }));
   await signIn(page);
-  await page.getByLabel("研究关注点（可选）").fill("fail provider fixture");
+  // The report-first layout uses a native details disclosure for creation.
+  // Fail with a precise locator error instead of the suite-wide 30s timeout.
+  await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
+  await expect(page.getByLabel("研究关注点（可选）")).toBeVisible({ timeout: 8_000 });
+  await page.getByLabel("研究关注点（可选）").fill("fail provider fixture", { timeout: 8_000 });
   await submit(page);
-  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 12_000 });
   await expect(page.getByRole("region", { name: "交互式证据与论点导航" })).toHaveCount(0);
 });

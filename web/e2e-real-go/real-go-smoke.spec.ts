@@ -46,6 +46,7 @@ test("two real Go failed Runs retain distinct identities and no cross-Run artifa
   for (const symbol of ["600519.SH", "000001.SZ"]) {
     await page.getByLabel("股票代码").fill(symbol);
     await page.getByRole("button", { name: "启动真实研究" }).click();
+    await expect(page.locator(".live-run-fields")).toContainText(symbol, { timeout: 30_000 });
     await expect(page.locator(".live-run-fields")).toContainText("失败", { timeout: 30_000 });
     const link = await page.locator(".live-run-fields a.live-permalink").first().getAttribute("href");
     const id = new URL(link!, "http://localhost").searchParams.get("run");
@@ -118,8 +119,13 @@ test("real Go browser rerun creates a distinct failed Run with provenance and no
   expect(parent).toMatch(/^[a-f0-9]{32}$/);
 
   await page.getByRole("button", { name: "再次研究该标的" }).click();
-  await expect(page.locator(".live-rerun-notice")).toContainText("再次研究");
+  await expect(page.locator("details.live-create")).toHaveAttribute("open", "", { timeout: 10_000 });
+  await expect(page.locator(".live-rerun-notice")).toContainText("再次研究", { timeout: 10_000 });
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  await expect.poll(async () => {
+    const href = await fields.locator("a.live-permalink").first().getAttribute("href");
+    return new URL(href!, "http://localhost").searchParams.get("run");
+  }, { timeout: 30_000 }).not.toBe(parent);
   await expect(fields).toContainText("失败", { timeout: 30_000 });
   const childHref = await fields.locator("a.live-permalink").first().getAttribute("href");
   const child = new URL(childHref!, "http://localhost").searchParams.get("run");

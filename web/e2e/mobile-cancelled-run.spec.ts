@@ -11,8 +11,9 @@ test("mobile cancelled research stays cancelled after deep-link reload", async (
   await page.getByLabel("股票代码").fill("600519.SH");
   await page.getByLabel("研究关注点（可选）").fill("hold fixture");
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await expect.poll(async () => page.locator(".live-run-fields code").innerText(), { timeout: 15_000 }).toMatch(/^[a-f0-9]{32}$/);
   const id = await page.locator(".live-run-fields code").innerText();
-  expect(id).toMatch(/^[a-f0-9]{32}$/);
   await page.getByRole("button", { name: "请求取消" }).click();
   await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
