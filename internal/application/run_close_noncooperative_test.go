@@ -17,7 +17,8 @@ func TestCloseWaitsForNonCooperativeExecutorWhileCancellationPersists(t *testing
  release := func() { once.Do(func() { close(ex.release) }) }
  defer release()
  manager := newMgr(t, ex, store, 1, 1)
- if err := manager.SetRunTimeout(40 * time.Millisecond); err != nil { t.Fatal(err) }
+ // Keep the normal run deadline (20m): this test exercises explicit
+ // shutdown cancellation, not the competing research TIMEOUT path.
  run, err := manager.Submit(context.Background(), runFixture("600519.SH"))
  if err != nil { t.Fatal(err) }
  select {
