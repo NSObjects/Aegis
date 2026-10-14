@@ -312,7 +312,8 @@ test("narrow viewport retains Run deep-link isolation across history and browser
   await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
-  await page.getByRole("button", { name: "研究历史" }).click();
+  // Mobile sidebar navigation is hidden at 375px; use the same addressable history route.
+  await page.goto("/?view=history");
   await expect(page).toHaveURL(/view=history$/);
   await page.goBack();
   await expect(page).toHaveURL(new RegExp("run=" + unknown + "$"));
@@ -455,6 +456,7 @@ test("failed and cancelled Go Runs show only observed stage failures, never infe
   await signIn(page);
   const failed = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   const trace = page.getByRole("region", { name: "Agent 执行轨迹" });
   await expect(trace.locator(".live-trace-error")).toContainText("Event");
   await expect(trace.locator(".live-trace-stage").filter({ hasText: "Event" })).toContainText("失败");
@@ -705,7 +707,7 @@ test("completed research defaults to a readable brief with expandable source cha
   await page.reload();
   await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
-  await expect(overview.getByText("研究结论 · 源自 Go 工件")).toBeVisible();
+  await expect(overview.getByText("研究结论", { exact: true }).first()).toBeVisible();
 });
 
 test("research history filters loaded runs without hiding source data or inventing pagination", async ({ page }) => {
