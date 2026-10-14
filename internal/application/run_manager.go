@@ -169,6 +169,8 @@ type RunManager struct {
 	maxActive int
 	runTimeout time.Duration
 	wg        sync.WaitGroup
+	shutdownOnce sync.Once
+	shutdownDone chan struct{}
 	now       func() time.Time
 }
 
@@ -633,19 +635,34 @@ func (m *RunManager) Cancel(ctx context.Context, id string) error {
 	return nil
 }
 
-// Close cancels active work and persists terminal outcomes before returning.
-// Do not invoke it from a workflow runner managed by this RunManager.
-func (m *RunManager) Close() {
-	if m == nil {
-		return
-	}
+// CloseContext starts shutdown and waits only until ctx is done. A provider
+// that ignores cancellation remains owned by this manager and retains its
+// execution slot until it actually returns. A deadline here is NOT a signal
+// that the provider stopped, and callers must not close shared dependencies
+// while outstanding workers can still use them.
+func (m *RunManager) CloseContext(ctx context.Context) error {
+	if m == nil { return nil }
+	if ctx == nil { return errors.New("close context is nil") }
 	m.mu.Lock()
 	if !m.closed {
 		m.closed = true
 		m.cancel()
 	}
 	m.mu.Unlock()
-	m.wg.Wait()
+	m.shutdownOnce.Do(func() {
+		m.shutdownDone = make(chan struct{})
+		go func() { m.wg.Wait(); close(m.shutdownDone) }()
+	})
+	select {
+	case <-m.shutdownDone: return nil
+	case <-ctx.Done(): return ctx.Err()
+	}
+}
+
+// Close preserves the original full-drain contract. Use CloseContext for a
+// bounded wait when non-cooperative provider calls may not return.
+func (m *RunManager) Close() {
+	_ = m.CloseContext(context.Background())
 }
 
 
