@@ -8,7 +8,9 @@ test("completed report expands and collapses only the structured chapters", asyn
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
   await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
 
-  await page.getByLabel("股票代码").fill("600519.SH");
+  await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
+  await expect(page.getByLabel("股票代码")).toBeVisible({ timeout: 8_000 });
+  await page.getByLabel("股票代码").fill("600519.SH", { timeout: 8_000 });
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 12_000 });
