@@ -491,6 +491,33 @@ test("persisted-event polling restores trace when EventSource is unavailable", a
 });
 
 
+
+test("SSE transport failure reconnects and merges persisted events for only the selected Run", async ({ page }) => {
+  await signIn(page);
+  let attempts = 0;
+  await page.route("**/api/workbench/runs/*/stream", async route => {
+    attempts++;
+    if (attempts === 1) {
+      await route.abort("failed");
+      return;
+    }
+    await route.continue();
+  });
+  const id = await submit(page, "hold fixture");
+  await expect.poll(() => attempts, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
+  const trace = page.getByRole("region", { name: "Agent 执行轨迹" });
+  await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await expect(trace.locator(".live-trace-stage").filter({ hasText: "Market" })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "请求取消" }).click();
+  await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
+  await expect(page.locator(".live-trace-lifecycle")).toContainText("CANCELLED");
+  const persisted = await page.request.get(`/api/workbench/runs/${id}/events`);
+  expect(persisted.status()).toBe(200);
+  const history = (await persisted.json()).events as Array<{ seq: number }>;
+  expect(history.length).toBeGreaterThan(1);
+  expect(new Set(history.map(event => event.seq)).size).toBe(history.length);
+});
+
 test("completed Run presents one source-owned OHLC candle and technical values without a fabricated price series", async ({ page }) => {
   await signIn(page);
   const id = await submit(page, "technical snapshot fixture");
