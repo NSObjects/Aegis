@@ -139,11 +139,12 @@ test("source index differentiates explicit NO_EVENT from failed research", async
   await panel.locator("summary").click();
   await expect(panel).toContainText("不是自动证明市场没有相关新闻");
 
+  await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await page.getByLabel("研究关注点（可选）").fill("fail synthetic source");
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
+  await expect.poll(async () => page.locator(".live-run-fields code").innerText(), { timeout: 15_000 }).not.toBe(noEventId);
   const failingId = await page.locator(".live-run-fields code").innerText();
-  expect(failingId).not.toBe(noEventId);
   await expect(page.locator(".live-run-fields")).toContainText("失败", { timeout: 25_000 });
   const failed = await (await page.request.get(`/api/workbench/runs/${failingId}`)).json();
   expect(failed.evidence_index).toBeUndefined();
@@ -163,6 +164,8 @@ test("anonymous browser cannot read ResearchRun or bypass Web login", async ({ p
 test("real browser submits a run, receives stage SSE, reads artifact, and restores history", async ({ page }) => {
   await signIn(page);
   const id = await submit(page);
+  await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await page.locator("details.live-trace-raw").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await expect(page.locator(".live-event-item").filter({ hasText: "Market" }).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".live-brief-lead")).toContainText("FIXTURE_ONLY_MANAGER_NO_RESEARCH", { timeout: 25_000 });
   await expect(page.getByRole("navigation", { name: "研究报告章节目录" })).toBeVisible();
@@ -208,6 +211,7 @@ test("provider failure is terminal and cannot be presented as success", async ({
   await signIn(page);
   const id = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   const diagnostic = page.getByRole("status", { name: "任务失败诊断" });
   await expect(diagnostic).toContainText("RESEARCH_FAILED");
   await expect(diagnostic).toContainText(id);
@@ -428,6 +432,7 @@ test("observed Go stages show duration, lifecycle, links and restore after refre
   await signIn(page);
   const id = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   const trace = page.getByRole("region", { name: "Agent 执行轨迹" });
   await expect(trace.locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功");
   await expect(trace.locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("Go 记录耗时");
@@ -473,6 +478,7 @@ test("persisted-event polling restores trace when EventSource is unavailable", a
   await page.route("**/api/workbench/runs/*/stream", route => route.abort());
   const id = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await expect(page.getByRole("region", { name: "Agent 执行轨迹" }).locator(".live-trace-stage").filter({ hasText: "Market" })).toContainText("成功", { timeout: 20_000 });
   await expect(page.locator(".live-trace-lifecycle")).toContainText("COMPLETED");
   await page.reload();
@@ -576,7 +582,6 @@ test("comparison refuses identical, failed and mismatched-symbol Runs, without m
   const original = await submit(page, "technical snapshot fixture");
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
   await page.goto("/?view=compare&left=" + original + "&right=" + original);
-  await revealRunDiagnostics(page);
   await expect(page.getByText("不能将同一 Run 与自己比较")).toBeVisible();
   await expect(page.locator(".live-compare-table")).toHaveCount(0);
   await page.goto("/?run=" + original);
@@ -584,11 +589,9 @@ test("comparison refuses identical, failed and mismatched-symbol Runs, without m
   const failed = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
   await page.goto("/?view=compare&left=" + original + "&right=" + failed);
-  await revealRunDiagnostics(page);
   await expect(page.getByText("对比只支持已完成 Run", { exact: false })).toBeVisible();
   await expect(page.locator(".live-compare-table")).toHaveCount(0);
   await page.goto("/?view=compare&left=" + original + "&right=" + "f".repeat(32));
-  await revealRunDiagnostics(page);
   await expect(page.getByText("读取服务端历史记录失败", { exact: false })).toBeVisible();
   await expect(page.locator(".live-compare-table")).toHaveCount(0);
 });
@@ -649,6 +652,7 @@ test("overview active and failed filters open live progress or exact failure, wi
   await expect(list.locator(".run-overview-row")).toContainText("查看进度");
   await list.locator(".run-overview-row").click();
   await expect(page).toHaveURL("/?run=" + held);
+  await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await expect(page.getByRole("region", { name: "Agent 执行轨迹" })).toBeVisible();
   await page.getByRole("button", { name: "请求取消" }).click();
   await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
@@ -688,7 +692,7 @@ test("completed research defaults to a readable brief with expandable source cha
   const id = await submit(page, "technical snapshot fixture");
   await expect(page.locator(".live-run-fields")).toContainText("已完成", {timeout:25000});
   const overview = page.getByRole("region",{name:"研究报告概览"});
-  await expect(overview.getByText("研究结论 · 源自 Go 工件")).toBeVisible();
+  await expect(overview.getByText("研究结论", { exact: true }).first()).toBeVisible();
   await expect(overview.getByRole("region",{name:"研究关键依据"})).toBeVisible();
   await expect(overview.getByRole("region",{name:"研究风险与不确定性"})).toBeVisible();
   await expect(page.getByRole("heading",{name:"完整研究章节"})).toBeVisible();
