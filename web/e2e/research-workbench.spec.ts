@@ -317,10 +317,7 @@ test("narrow viewport retains Run deep-link isolation across history and browser
   await expect(page).toHaveURL(/view=history$/);
   await page.goBack();
   await expect(page).toHaveURL(new RegExp("run=" + unknown + "$"));
-  // A browser history entry may restore a cached React tree; reload the deep link
-  // to validate its durable, session-authorized isolation independently.
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  // Browser back must restore the missing-Run warning without a page reload.
   await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
   await page.goto("/?run=" + known);
   await revealRunDiagnostics(page);
