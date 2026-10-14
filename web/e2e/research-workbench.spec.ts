@@ -48,6 +48,7 @@ test("persisted request snapshot is readable across navigation without echoing t
   await expect(page.locator(".live-request-snapshot")).toContainText("PIT-safe");
   await expect(page.locator(".live-request-snapshot")).toContainText("NOT_PROVIDED · 未知");
   await page.reload();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-request-snapshot summary")).toContainText("已记录");
   await page.locator(".live-request-snapshot summary").click();
