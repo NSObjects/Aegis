@@ -17,6 +17,7 @@ test("observed TOOL events belong to the same Run and survive refresh", async ({
  await expect(tools).toContainText("完成");
  await expect(page.locator(".live-trace-stage").filter({hasText:"Event"})).toContainText("成功");
  await page.reload();
+ await page.locator("details.live-trace-panel").evaluate((el: HTMLDetailsElement) => { el.open = true; });
  await expect(tools).toContainText("snapshot_official");
  await expect(tools).toContainText("345ms");
 });
