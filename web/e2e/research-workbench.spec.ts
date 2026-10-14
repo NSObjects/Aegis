@@ -106,6 +106,7 @@ test("completed portfolio source IDs stay attached to the original historical Ru
   await expect(panel).toContainText("文档 ID");
   await expect(panel.locator("a")).toHaveCount(1);
   await page.reload();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(panel.locator("summary")).toContainText("已记录");
   await panel.locator("summary").click();
