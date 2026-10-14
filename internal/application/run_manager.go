@@ -163,6 +163,7 @@ type RunManager struct {
 	active    map[string]context.CancelFunc
 	idempotency map[string]runKeyIndexEntry
 	closed    bool
+	closeDone chan struct{}
 	ctx       context.Context
 	cancel    context.CancelFunc
 	slots     chan struct{}
@@ -633,19 +634,36 @@ func (m *RunManager) Cancel(ctx context.Context, id string) error {
 	return nil
 }
 
-// Close cancels active work and persists terminal outcomes before returning.
-// Do not invoke it from a workflow runner managed by this RunManager.
-func (m *RunManager) Close() {
-	if m == nil {
-		return
-	}
+// CloseContext requests shutdown and waits for active executors to exit.
+// If the caller's deadline expires, the executor remains owned by this manager:
+// slots are not released and late callbacks still cannot overwrite terminal runs.
+// A context timeout never means the underlying provider goroutine was killed.
+// Do not invoke from an executor belonging to this manager.
+func (m *RunManager) CloseContext(ctx context.Context) error {
+	if m == nil { return nil }
+	if ctx == nil { return errors.New("close context is nil") }
 	m.mu.Lock()
 	if !m.closed {
 		m.closed = true
 		m.cancel()
+		m.closeDone = make(chan struct{})
+		done := m.closeDone
+		// Closed prevents further wg.Add calls. The single waiter is shared
+		// by all Close/CloseContext callers and stays alive while work is stuck.
+		go func() { m.wg.Wait(); close(done) }()
 	}
+	done := m.closeDone
 	m.mu.Unlock()
-	m.wg.Wait()
+	select {
+	case <-done: return nil
+	case <-ctx.Done(): return ctx.Err()
+	}
+}
+
+// Close preserves the legacy blocking drain contract. Use CloseContext for
+// callers that must bound how long they wait for non-cooperative providers.
+func (m *RunManager) Close() {
+	_ = m.CloseContext(context.Background())
 }
 
 
