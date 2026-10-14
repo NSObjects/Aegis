@@ -56,3 +56,43 @@ func TestNonCooperativeExecutorMustNotLeaveRunRunningAfterDeadline(t *testing.T)
   t.Fatalf("late successful executor overwrote timeout: %+v",final)
  }
 }
+
+
+// A bounded shutdown reports pending ownership without pretending to kill a
+// provider that ignored cancellation. An eventual second wait drains it.
+func TestRunManagerCloseContextPreservesBlockedExecutorOwnership(t *testing.T) {
+ store := newStore(t)
+ ex := &controlledRunExecutor{started: make(chan struct{}, 1), release: make(chan struct{}), ignoreCancel: true}
+ var once sync.Once
+ release := func(){once.Do(func(){close(ex.release)})}
+ defer release()
+ manager := newMgr(t, ex, store, 1, 1)
+ run, err := manager.Submit(context.Background(), runFixture("600519.SH"))
+ if err != nil { t.Fatal(err) }
+ select {
+ case <-ex.started:
+ case <-time.After(time.Second): t.Fatal("executor did not start")
+ }
+ ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+ defer cancel()
+ if err := manager.CloseContext(ctx); !errors.Is(err, context.DeadlineExceeded) {
+  release()
+  t.Fatalf("blocked executor must not be treated as drained: %v", err)
+ }
+ if len(manager.slots) != 1 { release(); t.Fatal("uncooperative executor prematurely released slot") }
+ observed, err := manager.Get(context.Background(), run.ID)
+ if err != nil { release(); t.Fatal(err) }
+ if observed.State != RunCancelled || observed.FinishedAt == nil || len(observed.Artifact) != 0 {
+  release()
+  t.Fatalf("shutdown must durably cancel without allowing late artifacts: %+v", observed)
+ }
+ release()
+ doneCtx, doneCancel := context.WithTimeout(context.Background(), time.Second)
+ defer doneCancel()
+ if err := manager.CloseContext(doneCtx); err != nil {
+  t.Fatalf("released provider did not drain: %v", err)
+ }
+ final, err := manager.Get(context.Background(), run.ID)
+ if err != nil { t.Fatal(err) }
+ if final.State != RunCancelled || len(final.Artifact) != 0 { t.Fatalf("late result changed terminal Run: %+v", final) }
+}
