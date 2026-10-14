@@ -45,6 +45,7 @@ async function submit(page: Page) {
   await page.getByLabel("股票代码").fill("600519.SH");
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
   return page.locator(".live-run-fields code").innerText();
 }
 
