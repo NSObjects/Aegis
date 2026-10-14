@@ -72,6 +72,7 @@ test("run's configured model identity stays attached to the same run after brows
   await expect(page.locator(".live-model-provenance")).toContainText("fixture-model");
   await expect(page.locator(".live-model-provenance")).toContainText("模型 ID 不是第三方 Provider 保证的固定版本号");
   await page.reload();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await expect(page.locator(".live-model-provenance summary")).toContainText("已记录");
   await page.locator(".live-model-provenance summary").click();
