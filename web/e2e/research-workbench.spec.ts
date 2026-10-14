@@ -14,9 +14,9 @@ async function signIn(page: Page) {
 }
 
 async function submit(page: Page, query = "") {
+  await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await page.getByLabel("股票代码").fill("600519.SH");
   if (query) await page.getByLabel("研究关注点（可选）").fill(query);
-  await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect(page.getByText("研究任务已提交至 Go 服务", { exact: false })).toBeVisible();
   await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
