@@ -10,6 +10,7 @@ test("cancel active research shows terminal state and never enables exports afte
   await page.getByLabel("股票代码").fill("600519.SH");
   await page.getByLabel("研究关注点（可选）").fill("hold browser cancellation fixture");
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
   const run = page.locator(".live-run-fields");
   await expect(run).toContainText("600519.SH");
   const href = await run.locator("a.live-permalink").first().getAttribute("href");
