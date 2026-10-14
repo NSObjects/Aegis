@@ -9,10 +9,11 @@ test("completed report expands and collapses only the structured chapters", asyn
 
   await page.getByLabel("股票代码").fill("600519.SH");
   await page.getByRole("button", { name: "启动真实研究" }).click();
-  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 12_000 });
 
   const chapters = page.locator("details.live-brief-chapter");
-  await expect(chapters.first()).toBeVisible();
+  await expect(chapters.first()).toBeVisible({ timeout: 8_000 });
   const count = await chapters.count();
   expect(count).toBeGreaterThan(0);
   const raw = page.locator("details.live-report-source-details");
