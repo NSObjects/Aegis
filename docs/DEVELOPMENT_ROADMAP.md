@@ -1,6 +1,6 @@
 # Aegis 开发路线图（唯一开发导航）
 
-> 更新：2026-10-11。目的：当前阶段结束后，打开本文件即可找到**下一项应实施的任务**、实施范围、验收条件、完成证据；不需要重新讨论产品方向。
+> 更新：2026-10-14。目的：当前阶段结束后，打开本文件即可找到**下一项应实施的任务**、实施范围、验收条件、完成证据；不需要重新讨论产品方向。
 >
 > V1 内核完成证据：2026-10-11 [PR #142](https://github.com/NSObjects/Aegis/pull/142) 的固定 head `61de58d0c0812de5d98c35e481491355debdff4f` 运行 [Integration #38098687921](https://github.com/NSObjects/Aegis/actions/runs/38098687921)：8/8 真实 Hosted Job 均 SUCCESS；[CI #38098690842](https://github.com/NSObjects/Aegis/actions/runs/38098690842) SUCCESS。合并后 `main` merge SHA 为 `b6ab9b688450c8f62f40483e0b5ccd870a3614ca`，[main CI #38098968618](https://github.com/NSObjects/Aegis/actions/runs/38098968618) SUCCESS。详见 [V1 验收记录](V1_ACCEPTANCE.md)。
 >
@@ -10,9 +10,9 @@
 
 ## 0. 从这里继续开发（必须随任务完成更新）
 
-**现在：R1 — Web 研究工作台（R0 V1 内核已完成验收）。**
+**现在：R1 — Web 研究工作台最终验收（R0 V1 内核已完成验收）。**
 
-**下一项：R1-03 — 补齐 ResearchRun 可审计的运行配置/模型版本与来源索引，并核验真实完成及失败的历史恢复；现有阶段事件和 Artifact 文件持久化已验收，勿重写。**
+**下一项：R1-14 / Issue #201 — 核实 PR #325 合并后 main Go/Web CI，审定剩余断线与 Hosted 再次研究的实际验收限制；满足 Exit Gate 后把 R1 标记 DONE，并开始 R2-01。不要重做已关闭的 R1 Issues。**
 
 **R0 Exit Gate：已满足。R1-01、R1-02 的已有运行闭环已核实。** `internal/application/research_service.go` 和 `live_factory.go` 统一装配与执行路径，CLI `cmd/aegis/main.go`、HTTP `cmd/aegis-web/main.go` 都复用此入口；现有 `research_service_test.go` 验证 typed 输出及原 CLI JSON 形状，V1 Hosted 验证正式 CLI。R1-02 的并发、取消、重启和幂等由已合并 PR #145 验证；R1-03 的 Artifact 完整性由 PR #147 验证；不重复搭建 Eino Graph。
 
@@ -21,7 +21,7 @@
 | 执行顺序 | 阶段/主要成果 | 状态 | 通过后进入 |
 | --- | --- | --- | --- |
 | **R0** | 当前 V1：Multi-Agent 研究内核实际跑通 | **DONE**（固定 SHA 全量 Hosted 8/8 + 合并后 main CI） | **R1-01** |
-| **R1** | **研究工作台 V1**：API/任务/实时过程/Web/研究报告/历史 | **IN_PROGRESS**（复核已实现能力） | **R2-01** |
+| **R1** | **研究工作台 V1**：API/任务/实时过程/Web/研究报告/历史 | **IN_REVIEW**（#201 最终验收；其余 R1 Issue 已关闭） | **R2-01** |
 | **R2** | 对话研究：Conversation Agent、追问、跨运行比较 | PLANNED | R3-01 |
 | **R3** | 研究发现：确定性选股、Watchlist、横向比较 | PLANNED | R4-01 |
 | **R4** | 自动研究：监控、触发、增量复查、定期报告 | PLANNED | R5-01 |
@@ -61,7 +61,7 @@
 
 ---
 
-## R1 — 最高优先级：交付真正可用的 Web 研究工作台
+> **2026-10-14 收尾核对（R1 尚未宣布 DONE）**：R1 标题的 Issues 已关闭 22/23，剩余 #201；#194 窄屏/深链和 #288 非协作超时均已关闭。真实 Hosted Go/Eino → Web 只读报告已由 Integration #38230031159 验证；SSE 请求网络错误重连测试 PR #325 已合并至 `30081203c49fa75f2bf9b51e96734d471040e1d1`，固定 head Go/Web CI 成功。合并后 main Go CI #38542404417 成功；Web CI #38542404489 在此次核对时仍运行中。尚未独立证明已建立的 TCP 连接中途断线恢复，亦未运行 Hosted 成功 Run 的第二次付费研究。以上范围须如实记入 #201，不能用普通 CI 绿灯冒充 Hosted 验收。\n\n## R1 — 最高优先级：交付真正可用的 Web 研究工作台
 
 **定位**：R1 不是「在网页上显示一个 Agent 流程图」，而是用户日常研究股票的主要工作环境。**本阶段必须做完基础研究操作、研究过程、报告和历史闭环，才能进入 R2 对话研究**；动态仓位管理属于独立大型 R7，不阻塞本阶段。
 
