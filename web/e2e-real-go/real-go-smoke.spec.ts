@@ -119,7 +119,8 @@ test("real Go browser rerun creates a distinct failed Run with provenance and no
   expect(parent).toMatch(/^[a-f0-9]{32}$/);
 
   await page.getByRole("button", { name: "再次研究该标的" }).click();
-  await expect(page.locator(".live-rerun-notice")).toContainText("再次研究");
+  await expect(page.locator("details.live-create")).toHaveAttribute("open", "", { timeout: 10_000 });
+  await expect(page.locator(".live-rerun-notice")).toContainText("再次研究", { timeout: 10_000 });
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect.poll(async () => {
     const href = await fields.locator("a.live-permalink").first().getAttribute("href");
