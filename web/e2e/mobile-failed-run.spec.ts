@@ -12,8 +12,9 @@ test("mobile failed Run remains failed after refresh and never exposes a report"
   await page.getByLabel("研究关注点（可选）").fill("fail provider fixture");
   await page.getByRole("button", { name: "启动真实研究" }).click();
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await expect.poll(async () => page.locator(".live-run-fields code").innerText(), { timeout: 15_000 }).toMatch(/^[a-f0-9]{32}$/);
   const id = await page.locator(".live-run-fields code").innerText();
-  expect(id).toMatch(/^[a-f0-9]{32}$/);
   await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
   await expect(page.getByRole("heading", { name: "结构化研究报告" })).toHaveCount(0);
