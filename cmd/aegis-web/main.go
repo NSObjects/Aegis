@@ -98,7 +98,16 @@ func main() {
 		log.Fatal(err)
 	}
 	if err := runs.SetRunTimeout(*runTimeout); err != nil { log.Fatal(err) }
-	defer runs.Close()
+	// Bound process shutdown even when a provider ignores cancellation. This
+	// does not terminate a stuck worker or free its slot prematurely; the
+	// process is exiting after the grace period.
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := runs.CloseContext(shutdownCtx); err != nil {
+			log.Printf("AEGIS_SHUTDOWN_WARNING component=run_manager category=EXECUTOR_NOT_DRAINED")
+		}
+	}()
 	var handler *httpapi.Handler
 	if *dev {
 		handler, err = httpapi.NewLocalDevHandler(runs, mode, *lookback)
