@@ -8,6 +8,7 @@ import (
  "net/http"
  "os"
  "os/exec"
+ "syscall"
  "path/filepath"
  "strings"
  "testing"
@@ -78,7 +79,6 @@ func TestRealServerProcessRestart(t *testing.T) {
  if before==nil{stop(first);t.Fatal("expected no-credential run to fail before restart")}
  stop(first)
  second,logs:=start()
- defer stop(second)
  resp,err:=client.Get(statusURL);if err!=nil{t.Fatal(err)}
  var restored map[string]any
  err=json.NewDecoder(resp.Body).Decode(&restored);resp.Body.Close()
@@ -96,4 +96,20 @@ func TestRealServerProcessRestart(t *testing.T) {
  if err!=nil||history.StatusCode!=200 {t.Fatalf("history after restart: %d %v",history.StatusCode,err)}
  if !strings.Contains(fmt.Sprint(listed),created.RunID){t.Fatalf("persisted Run absent from history: %s",created.RunID)}
  // The second process was started with the same disk store but a new manager.
+ // Exercise real SIGTERM shutdown, rather than terminating the server only
+ // with SIGKILL. This validates the normal cmd/aegis-web close path; it does
+ // not simulate a provider that ignores cancellation.
+ if err := second.Process.Signal(syscall.SIGTERM); err != nil {
+  t.Fatalf("send SIGTERM to actual Go server: %v", err)
+ }
+ stopped := make(chan error, 1)
+ go func() { stopped <- second.Wait() }()
+ select {
+ case err := <-stopped:
+  if err != nil { t.Fatalf("Go server did not exit cleanly after SIGTERM: %v; logs: %s", err, logs.String()) }
+ case <-time.After(13*time.Second):
+  _ = second.Process.Kill()
+  <-stopped
+  t.Fatalf("Go server did not complete graceful shutdown within bounded budget; logs: %s", logs.String())
+ }
 }
