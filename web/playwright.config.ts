@@ -13,9 +13,6 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  // Avoid spending 30+ minutes on a cascading failure after a shared UI change.
-  // Preserve the first failing test and its Playwright trace for diagnosis.
-  maxFailures: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
   use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
