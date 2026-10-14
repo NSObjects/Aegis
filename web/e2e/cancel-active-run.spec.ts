@@ -23,6 +23,7 @@ test("cancel active research shows terminal state and never enables exports afte
   const artifact = await page.request.get("/api/workbench/runs/" + id + "/artifact");
   expect(artifact.status()).not.toBe(200);
   await page.goto(href!);
+  await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await expect(run).toContainText("已取消", { timeout: 15_000 });
   await expect(run).toContainText(id!);
   await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
