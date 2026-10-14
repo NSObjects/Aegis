@@ -9,8 +9,8 @@ import (
 )
 
 // Close must retain ownership of a non-cooperative executor while the
-// independent watchdog makes its timeout terminal state durable.
-func TestCloseWaitsForNonCooperativeExecutorWhileTimeoutPersists(t *testing.T) {
+// independent watchdog makes its cancellation terminal state durable.
+func TestCloseWaitsForNonCooperativeExecutorWhileCancellationPersists(t *testing.T) {
  store := newStore(t)
  ex := &controlledRunExecutor{started: make(chan struct{}, 1), release: make(chan struct{}), ignoreCancel: true}
  var once sync.Once
@@ -34,12 +34,12 @@ func TestCloseWaitsForNonCooperativeExecutorWhileTimeoutPersists(t *testing.T) {
  for {
   observed, err := manager.Get(context.Background(), run.ID)
   if err != nil { t.Fatal(err) }
-  if observed.State == RunFailed && observed.FailureCode == FailureTimeout && observed.FinishedAt != nil {
-   if len(observed.Artifact) != 0 { t.Fatal("timed out Run exposed an artifact") }
+  if observed.State == RunCancelled && observed.FinishedAt != nil {
+   if len(observed.Artifact) != 0 { t.Fatal("cancelled Run exposed an artifact") }
    break
   }
   select {
-  case <-deadline: t.Fatalf("terminal timeout not persisted: state=%s code=%s", observed.State, observed.FailureCode)
+  case <-deadline: t.Fatalf("terminal cancellation not persisted: state=%s code=%s", observed.State, observed.FailureCode)
   case <-time.After(10*time.Millisecond):
   }
  }
