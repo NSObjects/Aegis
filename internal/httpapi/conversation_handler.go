@@ -8,10 +8,11 @@ import (
  "net/http"
  "regexp"
  "strings"
+ "Aegis/internal/application"
 )
 
-type AuthorizedConversationResponder interface {
- RespondAuthorized(context.Context,string,string)(string,error)
+type ConfirmedResearchStarter interface {
+ StartConfirmedResearch(context.Context,string,string)(application.ConversationRunSummary,error)
 }
 
 var conversationStartSymbol = regexp.MustCompile(`^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)$`)
@@ -47,9 +48,13 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
  var err error
  if request.StartSymbol!="" || request.ConfirmStart {
   if !request.ConfirmStart || !conversationStartSymbol.MatchString(request.StartSymbol) {http.Error(w,"invalid research authorization",http.StatusBadRequest);return}
-  authorized,ok:=h.conversation.(AuthorizedConversationResponder)
+  starter,ok:=h.conversation.(ConfirmedResearchStarter)
   if !ok {http.Error(w,"research start unavailable",http.StatusServiceUnavailable);return}
-  answer,err=authorized.RespondAuthorized(r.Context(),request.Message,request.StartSymbol)
+  run,startErr:=starter.StartConfirmedResearch(r.Context(),request.Message,request.StartSymbol)
+  if startErr!=nil {http.Error(w,"research start failed",http.StatusServiceUnavailable);return}
+  if run.RunID=="" || run.Symbol!=request.StartSymbol {http.Error(w,"invalid research start result",http.StatusBadGateway);return}
+  sendJSON(w,http.StatusOK,map[string]string{"answer":"研究任务已创建，请按 Run ID 查询状态。","run_id":run.RunID,"symbol":run.Symbol,"state":string(run.State)})
+  return
  } else {
   answer,err=h.conversation.Respond(r.Context(),request.Message)
  }
