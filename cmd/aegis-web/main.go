@@ -118,6 +118,7 @@ func main() {
 		log.Fatal(err)
 	}
 	handler.WithCredentialStore(credentialStore)
+	handler.WithConversationResponder(&conversationRuntime{runs:runs,credentials:credentialStore,configPath:*cfg})
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 16 << 10}
 	go func() {
 		<-ctx.Done()
