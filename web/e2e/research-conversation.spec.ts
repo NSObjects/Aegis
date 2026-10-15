@@ -43,7 +43,7 @@ test("research start needs explicit ticker confirmation and forwards scoped cons
   const response = await responsePromise;
   expect(response.status()).toBe(200);
   expect(response.request().postDataJSON()).toEqual({ message: "请研究 600519.SH", start_symbol: "600519.SH", confirm_start: true });
-  await expect(panel).toContainText("run_fixture_001");
+  await expect(panel).toContainText("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   await expect(check).toHaveCount(0);
 });
 
