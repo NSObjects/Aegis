@@ -10,9 +10,9 @@
 
 ## 0. 从这里继续开发（必须随任务完成更新）
 
-**现在：R1 — Web 研究工作台最终验收（R0 V1 内核已完成验收）。**
+**现在：R2 — 对话研究与深入交互（R1 Web 研究工作台已完成 Exit Gate）。**
 
-**下一项：R1-14 / Issue #201 — 核实 PR #325 合并后 main Go/Web CI，审定剩余断线与 Hosted 再次研究的实际验收限制；满足 Exit Gate 后把 R1 标记 DONE，并开始 R2-01。不要重做已关闭的 R1 Issues。**
+**下一项：R2-01 / Issue #202 — Conversation Agent 复用既有 ResearchRun/Application Service，通过最小 typed tools 启动真实研究和只读已有研究事实；先查 main 与开放 PR，避免重建内核。**
 
 **R0 Exit Gate：已满足。R1-01、R1-02 的已有运行闭环已核实。** `internal/application/research_service.go` 和 `live_factory.go` 统一装配与执行路径，CLI `cmd/aegis/main.go`、HTTP `cmd/aegis-web/main.go` 都复用此入口；现有 `research_service_test.go` 验证 typed 输出及原 CLI JSON 形状，V1 Hosted 验证正式 CLI。R1-02 的并发、取消、重启和幂等由已合并 PR #145 验证；R1-03 的 Artifact 完整性由 PR #147 验证；不重复搭建 Eino Graph。
 
@@ -21,7 +21,7 @@
 | 执行顺序 | 阶段/主要成果 | 状态 | 通过后进入 |
 | --- | --- | --- | --- |
 | **R0** | 当前 V1：Multi-Agent 研究内核实际跑通 | **DONE**（固定 SHA 全量 Hosted 8/8 + 合并后 main CI） | **R1-01** |
-| **R1** | **研究工作台 V1**：API/任务/实时过程/Web/研究报告/历史 | **IN_REVIEW**（#201 最终验收；其余 R1 Issue 已关闭） | **R2-01** |
+| **R1** | **研究工作台 V1**：API/任务/实时过程/Web/研究报告/历史 | **DONE**（#201 Exit Gate 已完成，明确记录未覆盖场景） | **R2-01** |
 | **R2** | 对话研究：Conversation Agent、追问、跨运行比较 | PLANNED | R3-01 |
 | **R3** | 研究发现：确定性选股、Watchlist、横向比较 | PLANNED | R4-01 |
 | **R4** | 自动研究：监控、触发、增量复查、定期报告 | PLANNED | R5-01 |
@@ -61,7 +61,7 @@
 
 ---
 
-> **2026-10-14 收尾核对（R1 尚未宣布 DONE）**：R1 标题的 Issues 已关闭 22/23，剩余 #201；#194 窄屏/深链和 #288 非协作超时均已关闭。真实 Hosted Go/Eino → Web 只读报告已由 Integration #38230031159 验证；SSE 请求网络错误重连测试 PR #325 已合并至 `30081203c49fa75f2bf9b51e96734d471040e1d1`，固定 head Go/Web CI 成功。合并后 main Go CI #38542404417 成功；Web CI #38542404489 在此次核对时仍运行中。尚未独立证明已建立的 TCP 连接中途断线恢复，亦未运行 Hosted 成功 Run 的第二次付费研究。以上范围须如实记入 #201，不能用普通 CI 绿灯冒充 Hosted 验收。\n\n## R1 — 最高优先级：交付真正可用的 Web 研究工作台
+> **2026-10-14 收尾核对（R1 尚未宣布 DONE）**：R1 标题的 Issues 已关闭 22/23，剩余 #201；#194 窄屏/深链和 #288 非协作超时均已关闭。真实 Hosted Go/Eino → Web 只读报告已由 Integration #38230031159 验证；SSE 请求网络错误重连测试 PR #325 已合并至 `30081203c49fa75f2bf9b51e96734d471040e1d1`，固定 head Go/Web CI 成功。合并后 main Go CI #38542404417 成功；Web CI #38542404489 在此次核对时仍运行中。尚未独立证明已建立的 TCP 连接中途断线恢复，亦未运行 Hosted 成功 Run 的第二次付费研究。以上范围须如实记入 #201，不能用普通 CI 绿灯冒充 Hosted 验收。\n\n> **2026-10-14 R1 Exit Gate 已关闭**：#201 记录了真实 Hosted 一次成功研究及浏览器只读报告、失败/取消/重启/安全、SSE 请求错误恢复、固定 SHA 的 Go/Web CI；main `8dfa60a075e50d8ad1fad960275efccd67534207` 的 Go CI #38543336321 success。两项**未验证、非阻断**限制仍在：建立后 TCP SSE 中途断线完整浏览器验收，以及 Hosted 成功 Run 从 Web 再次触发第二次付费研究。不得将限制写成已通过，也不擅自触发付费调用。后续开发入口改为 #202 / R2-01。\n\n## R1 — 最高优先级：交付真正可用的 Web 研究工作台
 
 **定位**：R1 不是「在网页上显示一个 Agent 流程图」，而是用户日常研究股票的主要工作环境。**本阶段必须做完基础研究操作、研究过程、报告和历史闭环，才能进入 R2 对话研究**；动态仓位管理属于独立大型 R7，不阻塞本阶段。
 
