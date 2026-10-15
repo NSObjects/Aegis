@@ -49,3 +49,23 @@ func TestConversationResearchToolsRequiresManager(t *testing.T) {
  var tools *ConversationResearchTools
  if _,err:=tools.GetResearchRun(context.Background(),"any");err==nil{t.Fatal("nil tools allowed read")}
 }
+
+func TestConversationReadDebateUsesOnlyPersistedValidatedField(t *testing.T) {
+ ctx:=context.Background()
+ stub:=&conversationRunsStub{records:map[string]RunRecord{
+  "full":{ID:"full",State:RunCompleted,Artifact:json.RawMessage(`{"portfolio_review":{"debate_state":{"round":1,"marker":"canonical"},"trade_intent":{"evidence":["fake debate"]}}}`)},
+  "decision":{ID:"decision",State:RunCompleted,Artifact:json.RawMessage(`{"symbol":"600519.SH","evidence":["not a debate"]}`)},
+  "pending":{ID:"pending",State:RunRunning},
+  "broken":{ID:"broken",State:RunCompleted,Artifact:json.RawMessage(`{"portfolio_review":{"debate_state":null}}`)},
+ }}
+ tools:=&ConversationResearchTools{runs:stub}
+ got,err:=tools.ReadDebate(ctx,"full")
+ if err!=nil||string(got)!=`{"round":1,"marker":"canonical"}` {t.Fatalf("debate from typed artifact: %s %v",got,err)}
+ got[0]='!'
+ again,err:=tools.ReadDebate(ctx,"full")
+ if err!=nil||string(again)!=`{"round":1,"marker":"canonical"}` {t.Fatal("debate alias changed stored artifact")}
+ for _,id:=range []string{"decision","pending","broken"} {
+  if _,err:=tools.ReadDebate(ctx,id);err==nil {t.Fatalf("must not invent debate for %s",id)}
+ }
+ if _,err:=tools.ReadDebate(ctx,"missing");!errors.Is(err,ErrRunNotFound){t.Fatalf("unknown run: %v",err)}
+}
