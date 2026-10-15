@@ -16,11 +16,17 @@ export async function POST(req: NextRequest) {
     if (raw.length > 4096) return NextResponse.json({ error: "conversation request too large" }, { status: 413, headers });
     payload = JSON.parse(raw);
   } catch { return NextResponse.json({ error: "invalid conversation request" }, { status: 400, headers }); }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
-      Object.keys(payload).length !== 1 || typeof (payload as { message?: unknown }).message !== "string" ||
-      !(payload as { message: string }).message.trim() ||
-      (payload as { message: string }).message.length > 2048)
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return NextResponse.json({ error: "invalid conversation request" }, { status: 400, headers });
+  const data = payload as Record<string, unknown>;
+  const keys = Object.keys(data);
+  if (keys.some(key => !["message", "start_symbol", "confirm_start"].includes(key)) ||
+      typeof data.message !== "string" || !data.message.trim() || data.message.length > 2048)
     return NextResponse.json({ error: "invalid conversation message" }, { status: 400, headers });
+  const authorized = "start_symbol" in data || "confirm_start" in data;
+  if (authorized && (data.confirm_start !== true || typeof data.start_symbol !== "string" ||
+      !/^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)$/.test(data.start_symbol)))
+    return NextResponse.json({ error: "research start requires a confirmed A-share ticker" }, { status: 400, headers });
   try {
     const upstream = await fetch(`${config.baseURL}/api/v1/conversation/query`, {
       method: "POST",
