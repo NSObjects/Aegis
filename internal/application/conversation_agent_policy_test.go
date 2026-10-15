@@ -13,7 +13,7 @@ import (
 
 type conversationCaptureModel struct { tools []*schema.ToolInfo }
 func (m *conversationCaptureModel) Generate(context.Context,[]*schema.Message,...model.Option)(*schema.Message,error){ return nil,errors.New("fixture model must never call a provider") }
-func (m *conversationCaptureModel) Stream(context.Context,[]*schema.Message,...model.Option)(*schema.StreamReader[*schema.Message],error){ return nil,errors.New("fixture model must never stream a provider") }
+func (m *conversationCaptureModel) Stream(_ context.Context,_ []*schema.Message, opts ...model.Option)(*schema.StreamReader[*schema.Message],error){ m.tools=append([]*schema.ToolInfo(nil),model.GetCommonOptions(nil,opts...).Tools...); return nil,errors.New("fixture model intentionally stops after observing tool options") }
 func (m *conversationCaptureModel) WithTools(tools []*schema.ToolInfo)(model.ToolCallingChatModel,error){ m.tools=append([]*schema.ToolInfo(nil),tools...);return m,nil }
 
 func TestConversationAgentToolPolicyExcludesUnapprovedResearchStart(t *testing.T) {
