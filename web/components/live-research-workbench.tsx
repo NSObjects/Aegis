@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { renderResearchMarkdown } from "@/lib/research-markdown";
 import ProviderSettings from "@/components/provider-settings";
+import ResearchConversationPanel from "@/components/research-conversation-panel";
 import LiveResearchReport from "@/components/live-research-report";
 import LiveStageTrace from "@/components/live-stage-trace";
 import LiveRunComparison from "@/components/live-run-comparison";
@@ -354,5 +355,6 @@ export default function LiveResearchWorkbench() {
         </details>
       </div>
     </div>}
+    {session?.authenticated && <ResearchConversationPanel />}
     <footer className="live-footer">AEGIS RESEARCH · 研究结果仅供分析，不包含交易执行</footer></div></main></div>;
 }
