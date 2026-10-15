@@ -68,3 +68,22 @@ func (t *ConversationResearchTools) ReadArtifact(ctx context.Context, id string)
  if rec.State != RunCompleted || len(rec.Artifact)==0 { return nil,errors.New("completed research artifact unavailable") }
  return append(json.RawMessage(nil),rec.Artifact...),nil
 }
+
+// ReadDebate selects only the canonical validated debate_state from the
+// completed Portfolio Review artifact. Decision-only runs have no debate.
+// Never derive arguments from free-form TradeIntent evidence or model prose.
+func (t *ConversationResearchTools) ReadDebate(ctx context.Context, id string) (json.RawMessage, error) {
+ artifact, err := t.ReadArtifact(ctx, id)
+ if err != nil { return nil, err }
+ var root struct {
+  PortfolioReview *struct {
+   Debate json.RawMessage `json:"debate_state"`
+  } `json:"portfolio_review"`
+ }
+ if err := json.Unmarshal(artifact, &root); err != nil { return nil, errors.New("invalid persisted research artifact") }
+ if root.PortfolioReview == nil || len(root.PortfolioReview.Debate)==0 || string(root.PortfolioReview.Debate)=="null" {
+  return nil, errors.New("validated debate unavailable for this research run")
+ }
+ if root.PortfolioReview.Debate[0]!='{' { return nil, errors.New("invalid persisted debate state") }
+ return append(json.RawMessage(nil),root.PortfolioReview.Debate...),nil
+}
