@@ -33,7 +33,9 @@ export default function ResearchConversationPanel() {
       const data: unknown = await response.json();
       if (!data || typeof data !== "object" || typeof (data as { answer?: unknown }).answer !== "string")
         throw Error("对话返回格式错误");
-      setExchanges(current => [...current, { question, answer: (data as { answer: string }).answer }]);
+      const body = data as { answer: string; run_id?: string };
+      if (starting && (!body.run_id || !/^[a-f0-9]{32}$/.test(body.run_id))) throw Error("研究启动失败：未返回有效 Run ID");
+      setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
       setMessage("");
       setConfirmStart(false);
       setStartSymbol("");
