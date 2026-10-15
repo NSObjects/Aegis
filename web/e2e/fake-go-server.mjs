@@ -131,6 +131,14 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${host}:${port}`);
   if (url.pathname === "/healthz") return json(res, 200, { fixture: true });
   if (process.env.AEGIS_TEST_FIXTURE_LOCAL_DEV !== "1" && req.headers.authorization !== `Bearer ${secret}`) return json(res, 401, { error: "unauthorized" });
+  if (url.pathname === "/api/v1/conversation/query") {
+    if (req.method !== "POST") return json(res, 405, { error: "method not allowed" });
+    let body;
+    try { body = await readBody(req); } catch { return json(res, 400, { error: "invalid request" }); }
+    if (typeof body?.message !== "string" || !body.message.trim()) return json(res, 400, { error: "invalid message" });
+    // Synthetic fixture, not an LLM assertion or a real stock research fact.
+    return json(res, 200, { answer: "测试研究记录 run_fixture_001 已可查询；此回答仅来自浏览器测试服务。" });
+  }
   if (url.pathname === "/api/v1/settings/credentials") {
     if (req.method === "GET") return json(res, 200, providerStatus());
     if (req.method === "PUT") {
