@@ -12,7 +12,7 @@ import (
  "github.com/cloudwego/eino/components/tool/utils"
 )
 
-var conversationSymbolPattern=regexp.MustCompile(`^(?:600|601|603|605|688|000|001|002|003|300|301|302)[0-9]{3}\.(?:SH|SZ)$`)
+var conversationSymbolPattern=regexp.MustCompile(`^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)$`)
 
 // ConversationStartPolicy is supplied by the trusted API/session caller,
 // never by an LLM tool argument. Only decision mode is enabled here: portfolio
