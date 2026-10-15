@@ -20,6 +20,8 @@ var conversationSymbolPattern=regexp.MustCompile(`^(?:(?:600|601|603|605|688)[0-
 type ConversationStartPolicy struct {
  Cutoff time.Time
  Lookback time.Duration
+ // AllowedSymbol optionally pins authorization to one user-confirmed ticker.
+ AllowedSymbol string
 }
 
 type ConversationStartArgs struct {
@@ -32,9 +34,11 @@ type ConversationStartArgs struct {
 func (t *ConversationResearchTools) EinoStartResearchTool(policy ConversationStartPolicy) (tool.InvokableTool,error) {
  if t==nil||t.runs==nil{return nil,errors.New("conversation tools unavailable")}
  if policy.Cutoff.IsZero()||policy.Lookback<=0{return nil,errors.New("conversation start policy requires cutoff and lookback")}
+ if policy.AllowedSymbol!="" && !conversationSymbolPattern.MatchString(policy.AllowedSymbol) {return nil,errors.New("invalid authorized research symbol")}
  return utils.InferTool("StartResearch","Start a new Aegis decision research run on the requested A-share symbol; this may call paid research providers. Returns a Run ID, not a research conclusion.",func(ctx context.Context,args ConversationStartArgs)(ConversationRunSummary,error){
   symbol:=strings.ToUpper(strings.TrimSpace(args.Symbol))
   if !conversationSymbolPattern.MatchString(symbol){return ConversationRunSummary{},errors.New("invalid A-share symbol")}
+  if policy.AllowedSymbol!="" && symbol!=policy.AllowedSymbol{return ConversationRunSummary{},errors.New("research symbol not authorized for this request")}
   if len(args.MarketQuery)>1024{return ConversationRunSummary{},errors.New("market query too long")}
   input,err:=NewLiveResearchInput(symbol,args.MarketQuery,policy.Cutoff,policy.Lookback)
   if err!=nil{return ConversationRunSummary{},fmt.Errorf("build live research: %w",err)}
