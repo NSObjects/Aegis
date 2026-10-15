@@ -6,12 +6,17 @@ import (
  "errors"
  "io"
  "net/http"
+ "regexp"
  "strings"
 )
 
-// ConversationResponder runs the conversation using an approved model and
-// server-owned research tools. It is injected by the deployment, never by a
-// client-supplied URL, model name, credential, or executable tool declaration.
+type AuthorizedConversationResponder interface {
+ RespondAuthorized(context.Context,string,string)(string,error)
+}
+
+var conversationStartSymbol = regexp.MustCompile(`^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)$`)
+
+// ConversationResponder runs the conversation using approved model and tools.
 type ConversationResponder interface {
  Respond(context.Context,string)(string,error)
 }
@@ -28,13 +33,26 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
  const maxConversationBytes=4096
  dec:=json.NewDecoder(io.LimitReader(r.Body,maxConversationBytes+1))
  dec.DisallowUnknownFields()
- var request struct { Message string `json:"message"` }
+ var request struct {
+ Message string `json:"message"`
+ StartSymbol string `json:"start_symbol,omitempty"`
+ ConfirmStart bool `json:"confirm_start,omitempty"`
+ }
  if err:=dec.Decode(&request);err!=nil {http.Error(w,"invalid conversation request",http.StatusBadRequest);return}
  var extra any
  if dec.Decode(&extra)!=io.EOF {http.Error(w,"invalid or oversized conversation request",http.StatusBadRequest);return}
  request.Message=strings.TrimSpace(request.Message)
  if len(request.Message)==0||len(request.Message)>2048 {http.Error(w,"invalid conversation message",http.StatusBadRequest);return}
- answer,err:=h.conversation.Respond(r.Context(),request.Message)
+ var answer string
+ var err error
+ if request.StartSymbol!="" || request.ConfirmStart {
+  if !request.ConfirmStart || !conversationStartSymbol.MatchString(request.StartSymbol) {http.Error(w,"invalid research authorization",http.StatusBadRequest);return}
+  authorized,ok:=h.conversation.(AuthorizedConversationResponder)
+  if !ok {http.Error(w,"research start unavailable",http.StatusServiceUnavailable);return}
+  answer,err=authorized.RespondAuthorized(r.Context(),request.Message,request.StartSymbol)
+ } else {
+  answer,err=h.conversation.Respond(r.Context(),request.Message)
+ }
  if err!=nil {
   if errors.Is(err,context.Canceled)||errors.Is(err,context.DeadlineExceeded) {http.Error(w,"conversation interrupted",http.StatusGatewayTimeout);return}
   http.Error(w,"conversation unavailable",http.StatusServiceUnavailable);return
