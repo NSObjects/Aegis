@@ -6,34 +6,17 @@ import (
  "errors"
  "io"
  "net/http"
- "strings"
  "regexp"
+ "strings"
 )
 
-// ConversationResponder runs the conversation using an approved model and
-// server-owned research tools. It is injected by the deployment, never by a
-// client-supplied URL, model name, credential, or executable tool declaration.
 type AuthorizedConversationResponder interface {
  RespondAuthorized(context.Context,string,string)(string,error)
 }
 
-var conversationStartSymbol = regexp.MustCompile(`^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)package httpapi
+var conversationStartSymbol = regexp.MustCompile(`^(?:(?:600|601|603|605|688)[0-9]{3}\\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\\.SZ)$`)
 
-import (
- "context"
- "encoding/json"
- "errors"
- "io"
- "net/http"
- "strings"
- "regexp"
-)
-
-// ConversationResponder runs the conversation using an approved model and
-// server-owned research tools. It is injected by the deployment, never by a
-// client-supplied URL, model name, credential, or executable tool declaration.
-)
-
+// ConversationResponder runs the conversation using approved model and tools.
 type ConversationResponder interface {
  Respond(context.Context,string)(string,error)
 }
