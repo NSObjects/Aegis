@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
     const data: unknown = await upstream.json();
     if (!data || typeof data !== "object" || typeof (data as { answer?: unknown }).answer !== "string")
       return NextResponse.json({ error: "invalid backend conversation response" }, { status: 502, headers });
-    return NextResponse.json({ answer: (data as { answer: string }).answer }, { headers });
+    if (authorized && (typeof (data as { run_id?: unknown }).run_id !== "string" || !/^[a-f0-9]{32}$/.test((data as { run_id: string }).run_id)))
+      return NextResponse.json({ error: "backend did not create a valid research run" }, { status: 502, headers });
+    return NextResponse.json(authorized ? { answer: (data as { answer: string }).answer, run_id: (data as { run_id: string }).run_id, symbol: (payload as { start_symbol: string }).start_symbol, state: (data as { state?: unknown }).state } : { answer: (data as { answer: string }).answer }, { headers });
   } catch { return NextResponse.json({ error: "conversation unavailable" }, { status: 503, headers }); }
 }
