@@ -47,6 +47,7 @@ type Handler struct {
 	poll     time.Duration
 	localDev bool
 	credentials *settings.Store
+ conversation ConversationResponder
  rateMu sync.Mutex
  windowStart time.Time
  windowCount int
@@ -96,6 +97,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   http.Error(w, "request rate limit exceeded", http.StatusTooManyRequests)
   return
  }
+ if r.URL.Path == "/api/v1/conversation/query" { h.conversationQuery(w, r); return }
  if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/research/runs")
 	if path == r.URL.Path {
