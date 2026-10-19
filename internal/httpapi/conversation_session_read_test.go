@@ -38,3 +38,20 @@ func TestConversationSessionLookupRequiresAuthenticationAndExistingReference(t *
  method:=apiRequest(t,handler,http.MethodPost,path,"",true,nil)
  if method.Code!=http.StatusMethodNotAllowed{t.Fatalf("invalid method accepted: %d",method.Code)}
 }
+
+func TestConversationSessionFollowupResolvesPersistedReference(t *testing.T) {
+ id:=strings.Repeat("a",32)
+ fixture:=&conversationSessionLookupFixture{binding:application.ConversationSessionBinding{
+  SessionID:id,OwnerID:"single-operator",RunID:strings.Repeat("b",32),Symbol:"600519.SH",
+  AsOf:time.Date(2026,10,19,0,0,0,0,time.UTC),
+ }}
+ handler:=mkHandler(t,&fakeRuns{},application.ModeDecision)
+ handler.WithConversationResponder(fixture)
+ response:=apiRequest(t,handler,http.MethodPost,"/api/v1/conversation/query",
+  `{"message":"刚才那次研究有什么空头依据？","session_id":"`+id+`"}`,true,nil)
+ if response.Code!=http.StatusOK {t.Fatalf("followup status=%d response=%s",response.Code,response.Body.String())}
+ if fixture.calls!=1 {t.Fatalf("read-only responder calls=%d",fixture.calls)}
+ missing:=apiRequest(t,handler,http.MethodPost,"/api/v1/conversation/query",
+  `{"message":"刚才那次研究","session_id":"`+strings.Repeat("c",32)+`"}`,true,nil)
+ if missing.Code!=http.StatusNotFound||fixture.calls!=1 {t.Fatalf("unbound session called model: %d",missing.Code)}
+}
