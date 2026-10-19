@@ -118,7 +118,11 @@ func main() {
 		log.Fatal(err)
 	}
 	handler.WithCredentialStore(credentialStore)
-	handler.WithConversationResponder(&conversationRuntime{runs:runs,credentials:credentialStore,configPath:*cfg})
+	bindingStore, err := application.NewFileConversationBindingStore(filepath.Join(filepath.Dir(*path), "conversation-sessions"), runs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	handler.WithConversationResponder(&conversationRuntime{runs:runs,credentials:credentialStore,configPath:*cfg,bindings:bindingStore})
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 16 << 10}
 	go func() {
 		<-ctx.Done()
