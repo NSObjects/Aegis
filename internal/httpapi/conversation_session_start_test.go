@@ -3,6 +3,7 @@ package httpapi
 import (
  "context"
  "encoding/json"
+ "errors"
  "net/http"
  "strings"
  "testing"
@@ -57,4 +58,18 @@ func TestConfirmedResearchReusesOnlyValidatedSession(t *testing.T) {
  var result map[string]string
  if err:=json.Unmarshal(valid.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
  if result["session_id"]!=id||fixture.binding.SessionID!=id{t.Fatalf("session not reused: %+v %+v",result,fixture.binding)}
+}
+
+func TestCreatedRunRemainsTraceableWhenSessionBindingFails(t *testing.T) {
+ h:=mkHandler(t,&fakeRuns{},application.ModeDecision)
+ fixture:=&sessionStartFixture{bindErr:errors.New("disk write failed")}
+ h.WithConversationResponder(fixture)
+ response:=apiRequest(t,h,http.MethodPost,"/api/v1/conversation/query",`{"message":"研究股票","start_symbol":"600519.SH","confirm_start":true}`,true,nil)
+ if response.Code!=http.StatusOK {t.Fatalf("created Run hidden: %d %s",response.Code,response.Body.String())}
+ var result map[string]string
+ if err:=json.Unmarshal(response.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
+ if fixture.starts!=1||result["run_id"]!=strings.Repeat("a",32)||result["session_binding"]!="FAILED"||result["session_id"]!="" {
+  t.Fatalf("binding failure contract: %+v starts=%d",result,fixture.starts)
+ }
+ if !strings.Contains(result["answer"],"不要重复启动"){t.Fatalf("missing duplicate warning: %+v",result)}
 }
