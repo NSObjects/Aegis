@@ -97,3 +97,23 @@ test("follow-up sends restored session reference without authorizing a new resea
   expect(result.status()).toBe(200);
   expect(result.request().postDataJSON()).toEqual({ message: "刚才那次研究有什么空头依据？", session_id: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" });
 });
+
+test("second confirmed research reuses the restored conversation session", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  for (let i=0;i<2;i++) {
+    await panel.getByLabel("询问已有研究").fill(i===0 ? "第一次研究" : "第二次研究");
+    await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+    await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+    const pending = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
+    await panel.getByRole("button", { name: "发送问题" }).click();
+    const response = await pending;
+    expect(response.status()).toBe(200);
+    const sent = response.request().postDataJSON();
+    expect(sent.confirm_start).toBe(true);
+    if (i===0) expect(sent.session_id).toBeUndefined();
+    else expect(sent.session_id).toBe("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+  }
+});
