@@ -117,3 +117,23 @@ test("second confirmed research reuses the restored conversation session", async
     else expect(sent.session_id).toBe("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
   }
 });
+
+test("binding failure preserves created Run ID and warns against duplicate research", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.route("**/api/workbench/conversation", async route => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      answer: "研究任务已创建，但会话关联失败。请保存 Run ID；不要重复启动研究。",
+      run_id: "c".repeat(32), symbol: "600519.SH", state: "PENDING", session_binding: "FAILED",
+    }) });
+  });
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await panel.getByLabel("询问已有研究").fill("请研究 600519.SH");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  await expect(panel).toContainText("c".repeat(32));
+  await expect(panel.getByRole("alert")).toContainText("勿重复启动");
+  await expect(panel).not.toContainText("当前研究 · Run ID");
+});
