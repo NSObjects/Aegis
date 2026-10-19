@@ -40,6 +40,11 @@ on:
         required: true
         default: false
         type: boolean
+      run_conversation_hosted:
+        description: "One paid Conversation confirmation → real Run → read-only follow-up (single opt-in)"
+        required: true
+        default: false
+        type: boolean
       run_live_web_api:
         description: "Paid real Go HTTP ResearchRun and Eino provider E2E"
         required: true
@@ -661,3 +666,49 @@ jobs:
           # must never create a second provider request.
           cd web
           npx playwright test --config playwright.hosted.config.ts
+
+  conversation_hosted:
+    name: Real Conversation → ResearchRun Hosted E2E (one paid Run)
+    # Never run alongside another paid Integration job. Never triggered by push.
+    if: ${{ inputs.run_conversation_hosted && !inputs.run_live_web_api && !inputs.run_trading && !inputs.run_technical && !inputs.run_research && !inputs.run_multi_agent && !inputs.run_risk_portfolio && !inputs.run_fundamental && !inputs.run_production_cli }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      DEEPSEEK_STRONG_MODEL: ${{ vars.DEEPSEEK_STRONG_MODEL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Web dependencies and Chromium (before paid request)
+        shell: bash
+        run: |
+          cd web
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Verify repository credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEEPSEEK_API_KEY" || { echo "::error::DEEPSEEK_API_KEY missing"; exit 1; }
+          test -n "$TUSHARE_TOKEN" || { echo "::error::TUSHARE_TOKEN missing"; exit 1; }
+          test -n "$TAVILY_API_KEY" || { echo "::error::TAVILY_API_KEY missing"; exit 1; }
+      - name: Prepare research dependencies and binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          go build -o "$RUNNER_TEMP/aegis-web" ./cmd/aegis-web
+      - name: Verify one Conversation Run and read-only follow-up (no retries)
+        shell: bash
+        run: bash scripts/verify-conversation-hosted.sh
