@@ -63,7 +63,18 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
  if len(request.Message)==0||len(request.Message)>2048 {http.Error(w,"invalid conversation message",http.StatusBadRequest);return}
  var answer string
  var err error
- if request.SessionID!="" && (request.StartSymbol!="" || request.ConfirmStart) {http.Error(w,"session reference cannot start research",http.StatusBadRequest);return}
+ // A confirmed new Run may join an existing, authenticated session.
+ // Resolve the owner before starting any potentially billable work.
+ if request.SessionID!="" && (request.StartSymbol!="" || request.ConfirmStart) {
+  if !request.ConfirmStart || !conversationStartSymbol.MatchString(request.StartSymbol) {http.Error(w,"invalid research authorization",http.StatusBadRequest);return}
+  if application.ValidateConversationSessionID(request.SessionID)!=nil {http.Error(w,"invalid conversation session",http.StatusBadRequest);return}
+  resolver,ok:=h.conversation.(ConversationSessionResolver)
+  if !ok {http.Error(w,"conversation session unavailable",http.StatusServiceUnavailable);return}
+  if _,resolveErr:=resolver.ResolveConversationSession(r.Context(),request.SessionID,"single-operator");resolveErr!=nil {
+   http.Error(w,"conversation session not found",http.StatusNotFound);return
+  }
+  if _,ok:=h.conversation.(ConfirmedResearchSessionBinder);!ok {http.Error(w,"conversation session binder unavailable",http.StatusServiceUnavailable);return}
+ }
  if request.StartSymbol!="" || request.ConfirmStart {
   if !request.ConfirmStart || !conversationStartSymbol.MatchString(request.StartSymbol) {http.Error(w,"invalid research authorization",http.StatusBadRequest);return}
   starter,ok:=h.conversation.(ConfirmedResearchStarter)
@@ -73,7 +84,9 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
   if run.RunID=="" || run.Symbol!=request.StartSymbol {http.Error(w,"invalid research start result",http.StatusBadGateway);return}
   response:=map[string]string{"answer":"研究任务已创建，请按 Run ID 查询状态。","run_id":run.RunID,"symbol":run.Symbol,"state":string(run.State)}
   if binder,ok:=h.conversation.(ConfirmedResearchSessionBinder);ok {
-   sessionID,idErr:=application.NewConversationSessionID()
+   sessionID:=request.SessionID
+   var idErr error
+   if sessionID=="" {sessionID,idErr=application.NewConversationSessionID()}
    if idErr==nil {
     if _,bindErr:=binder.BindCompletedConversationRun(r.Context(),sessionID,"single-operator",run.RunID);bindErr==nil {response["session_id"]=sessionID}
    }
