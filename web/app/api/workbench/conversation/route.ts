@@ -25,8 +25,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid conversation message" }, { status: 400, headers });
   if ("session_id" in data && (typeof data.session_id !== "string" || !/^[a-f0-9]{32}$/.test(data.session_id)))
     return NextResponse.json({ error: "invalid conversation session" }, { status: 400, headers });
-  if ("session_id" in data && ("start_symbol" in data || "confirm_start" in data))
-    return NextResponse.json({ error: "session follow-up cannot start research" }, { status: 400, headers });
   const authorized = "start_symbol" in data || "confirm_start" in data;
   if (authorized && (data.confirm_start !== true || typeof data.start_symbol !== "string" ||
       !/^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)$/.test(data.start_symbol)))
