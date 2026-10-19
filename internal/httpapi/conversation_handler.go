@@ -30,7 +30,7 @@ type ConfirmedResearchStarter interface {
  StartConfirmedResearch(context.Context,string,string)(application.ConversationRunSummary,error)
 }
 
-var conversationMentionedSymbol = regexp.MustCompile(`(?:600|601|603|605|688)[0-9]{3}\\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\\.SZ`)
+var conversationMentionedSymbol = regexp.MustCompile(`(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ`)
 var conversationStartSymbol = regexp.MustCompile(`^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)$`)
 
 // ConversationResponder runs the conversation using approved model and tools.
