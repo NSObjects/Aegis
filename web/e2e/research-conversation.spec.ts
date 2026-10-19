@@ -58,3 +58,20 @@ test("conversation proxy rejects unconfirmed research action after authenticatio
   });
   expect(response).toBe(400);
 });
+
+test("confirmed research session is recovered after a browser reload", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await panel.getByLabel("询问已有研究").fill("启动600519.SH研究");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  const post = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  expect((await post).status()).toBe(200);
+  await expect(panel).toContainText("当前研究 · Run ID: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  await page.reload();
+  const restored = page.getByRole("region", { name: "研究对话" });
+  await expect(restored).toContainText("已恢复研究 600519.SH · Run ID: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+});
