@@ -142,3 +142,27 @@ func TestSelectConversationHistoricalRunByTradingCalendar(t *testing.T) {
   if _,err:=selectConversationHistoricalRun(tc.message,tc.history,now);err==nil{t.Fatalf("ambiguous/missing history resolved: %q",tc.message)}
  }
 }
+
+func TestSelectConversationHistoricalRunByDateAndTicker(t *testing.T) {
+ loc,err:=time.LoadLocation("Asia/Shanghai");if err!=nil{t.Fatal(err)}
+ now:=time.Date(2026,10,19,12,0,0,0,loc)
+ session:=strings.Repeat("a",32)
+ makeBinding:=func(id,symbol string,days int)application.ConversationSessionBinding {
+  return application.ConversationSessionBinding{SessionID:session,OwnerID:"single-operator",RunID:strings.Repeat(id,32),Symbol:symbol,AsOf:now.AddDate(0,0,-days)}
+ }
+ history:=[]application.ConversationSessionBinding{
+  makeBinding("a","000001.SZ",0),
+  makeBinding("b","600519.SH",1),
+  makeBinding("c","000001.SZ",1),
+ }
+ got,err:=selectConversationHistoricalRun("昨天600519.SH的研究",history,now)
+ if err!=nil||got.RunID!=history[1].RunID {t.Fatalf("ticker and date: %+v %v",got,err)}
+ for _,message:=range []string{
+  "昨天600519.SH和000001.SZ的研究",
+  "昨天601398.SH的研究",
+ } {
+  if _,err:=selectConversationHistoricalRun(message,history,now);err==nil{t.Fatalf("ambiguous or absent ticker accepted: %s",message)}
+ }
+ history=append(history,makeBinding("d","600519.SH",1))
+ if _,err:=selectConversationHistoricalRun("昨天600519.SH的研究",history,now);err==nil{t.Fatal("duplicate same-day ticker accepted")}
+}
