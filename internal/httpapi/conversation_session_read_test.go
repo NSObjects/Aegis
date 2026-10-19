@@ -51,6 +51,7 @@ func TestConversationSessionFollowupResolvesPersistedReference(t *testing.T) {
   `{"message":"刚才那次研究有什么空头依据？","session_id":"`+id+`"}`,true,nil)
  if response.Code!=http.StatusOK {t.Fatalf("followup status=%d response=%s",response.Code,response.Body.String())}
  if fixture.calls!=1 {t.Fatalf("read-only responder calls=%d",fixture.calls)}
+ if !strings.Contains(fixture.input,"run_id="+fixture.binding.RunID) || !strings.Contains(fixture.input,"symbol=600519.SH") || !strings.Contains(fixture.input,"as_of=2026-10-19T00:00:00Z") {t.Fatalf("missing canonical reference: %s",fixture.input)}
  missing:=apiRequest(t,handler,http.MethodPost,"/api/v1/conversation/query",
   `{"message":"刚才那次研究","session_id":"`+strings.Repeat("c",32)+`"}`,true,nil)
  if missing.Code!=http.StatusNotFound||fixture.calls!=1 {t.Fatalf("unbound session called model: %d",missing.Code)}
