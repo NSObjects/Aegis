@@ -86,20 +86,16 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
    if !ok {http.Error(w,"conversation session unavailable",http.StatusServiceUnavailable);return}
    binding,resolveErr:=resolver.ResolveConversationSession(r.Context(),request.SessionID,"single-operator")
    if resolveErr!=nil {http.Error(w,"conversation session not found",http.StatusNotFound);return}
-   if strings.Contains(request.Message,"上次") || strings.Contains(request.Message,"上一回") {
+   if strings.Contains(request.Message,"上次") || strings.Contains(request.Message,"上一回") || refersToHistoricalResearchDay(request.Message) {
     historyResolver,ok:=h.conversation.(ConversationSessionHistoryResolver)
     if !ok {http.Error(w,"历史研究不可用，请指定 Run ID",http.StatusConflict);return}
     history,historyErr:=historyResolver.ResolveConversationSessionHistory(r.Context(),request.SessionID,"single-operator")
-    if historyErr!=nil||len(history)<2||history[0].RunID!=binding.RunID {
-     http.Error(w,"未找到唯一的上次研究，请指定 Run ID",http.StatusConflict);return
+    if historyErr!=nil || len(history)==0 || history[0].RunID!=binding.RunID {
+     http.Error(w,"历史研究引用不可用",http.StatusConflict);return
     }
-    binding=history[1]
-   }
-   // Calendar-date references remain ambiguous without an explicit timezone
-   // and date resolver; never silently substitute the currently bound Run.
-   if refersToHistoricalResearchDay(request.Message) {
-    http.Error(w,"无法唯一定位历史研究，请指定对应 Run ID；当前无法按日期唯一定位",http.StatusConflict)
-    return
+    selected,selectErr:=selectConversationHistoricalRun(request.Message,history,time.Now())
+    if selectErr!=nil {http.Error(w,"无法唯一定位历史研究，请指定 Run ID",http.StatusConflict);return}
+    binding=selected
    }
    request.Message="当前已授权的历史研究引用：run_id="+binding.RunID+"，symbol="+binding.Symbol+"，as_of="+binding.AsOf.Format(time.RFC3339)+"。仅可使用研究只读工具验证事实；不得启动新研究。用户问题："+request.Message
   }
@@ -129,6 +125,35 @@ func (h *Handler) conversationSessionRead(w http.ResponseWriter,r *http.Request)
  
 // Until sessions have a durable Run history, calendar-relative questions must
 // not be resolved against whichever single Run happens to be currently bound.
+// Date references use the A-share market calendar, not the host timezone.
+func selectConversationHistoricalRun(message string,history []application.ConversationSessionBinding,now time.Time)(application.ConversationSessionBinding,error) {
+ if len(history)==0{return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
+ if strings.Contains(message,"上次") || strings.Contains(message,"上一回") {
+  if len(history)>1{return history[1],nil}
+  return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable
+ }
+ days:=0
+ switch {
+ case strings.Contains(message,"前天"),strings.Contains(message,"前日"): days=2
+ case strings.Contains(message,"昨天"),strings.Contains(message,"昨日"): days=1
+ default: return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable
+ }
+ loc,err:=time.LoadLocation("Asia/Shanghai")
+ if err!=nil{return application.ConversationSessionBinding{},err}
+ target:=now.In(loc).AddDate(0,0,-days).Format("2006-01-02")
+ var matched application.ConversationSessionBinding
+ count:=0
+ for _,entry:=range history {
+  if entry.AsOf.IsZero(){continue}
+  if entry.AsOf.In(loc).Format("2006-01-02")==target {
+   matched=entry
+   count++
+  }
+ }
+ if count!=1{return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
+ return matched,nil
+}
+
 func refersToHistoricalResearchDay(message string) bool {
  for _,term:=range []string{"昨天","前天","上周","上个月","昨日","前日"} {
   if strings.Contains(message,term) {return true}
