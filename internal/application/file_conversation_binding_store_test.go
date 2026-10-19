@@ -58,3 +58,19 @@ func TestFileConversationBindingStoreHistoryPersistsAndScopesOwner(t *testing.T)
  current,err:=reopened.Resolve("session-history","owner-one")
  if err!=nil||current.RunID!=second{t.Fatalf("existing single Run lookup broke: %+v %v",current,err)}
 }
+
+func TestFileConversationBindingStoreNeverOverwritesCorruptSession(t *testing.T) {
+ id:=strings.Repeat("a",32)
+ runs:=&conversationRunsStub{records:map[string]RunRecord{id:{ID:id,Symbol:"600519.SH",RequestedAsOf:time.Now().UTC()}}}
+ store,err:=NewFileConversationBindingStore(filepath.Join(t.TempDir(),"sessions"),runs)
+ if err!=nil{t.Fatal(err)}
+ session:="corrupt-session-123"
+ path:=store.path(session)
+ raw:=[]byte(`{"session_id":"corrupt-session-123","owner_id":"someone-else","run_id":"invalid"}`)
+ if err:=os.WriteFile(path,raw,0600);err!=nil{t.Fatal(err)}
+ if _,err:=store.Bind(context.Background(),session,"operator-one",id);!errors.Is(err,ErrConversationSessionUnavailable){
+  t.Fatalf("corrupt existing document overwritten: %v",err)
+ }
+ got,err:=os.ReadFile(path);if err!=nil{t.Fatal(err)}
+ if string(got)!=string(raw){t.Fatalf("corrupt document replaced: %s",got)}
+}
