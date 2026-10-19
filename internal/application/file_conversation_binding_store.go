@@ -78,7 +78,16 @@ func (s *FileConversationBindingStore) Bind(ctx context.Context,sessionID,ownerI
  s.mu.Lock();defer s.mu.Unlock()
  previous,err:=s.readDocument(sessionID)
  if err==nil&&previous.OwnerID!=ownerID{return ConversationSessionBinding{},ErrConversationSessionUnavailable}
- if err!=nil&&!errors.Is(err,ErrConversationSessionUnavailable){return ConversationSessionBinding{},err}
+ if err!=nil {
+  if !errors.Is(err,ErrConversationSessionUnavailable){return ConversationSessionBinding{},err}
+  // Unavailable can mean a malformed *existing* binding, not only a new
+  // session. Never overwrite an unreadable owner/history document.
+  if _,statErr:=os.Stat(s.path(sessionID));statErr==nil {
+   return ConversationSessionBinding{},ErrConversationSessionUnavailable
+  } else if !errors.Is(statErr,os.ErrNotExist) {
+   return ConversationSessionBinding{},statErr
+  }
+ }
  doc:=conversationBindingDocument{ConversationSessionBinding:item}
  if err==nil {
   seen:=map[string]bool{item.RunID:true}
