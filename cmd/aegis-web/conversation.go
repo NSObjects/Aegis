@@ -75,3 +75,8 @@ func (r *conversationRuntime) BindCompletedConversationRun(ctx context.Context, 
  if r==nil||r.bindings==nil {return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
  return r.bindings.Bind(ctx,sessionID,ownerID,runID)
 }
+
+func (r *conversationRuntime) ResolveConversationSession(ctx context.Context,sessionID,ownerID string)(application.ConversationSessionBinding,error) {
+ if r==nil||r.bindings==nil {return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
+ return r.bindings.Resolve(sessionID,ownerID)
+}

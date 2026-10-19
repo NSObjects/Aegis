@@ -13,6 +13,10 @@ import (
 
 // ConfirmedResearchSessionBinder is implemented only by the trusted Go runtime.
 // This API currently supports a single server-authenticated operator.
+type ConversationSessionResolver interface {
+ ResolveConversationSession(context.Context,string,string)(application.ConversationSessionBinding,error)
+}
+
 type ConfirmedResearchSessionBinder interface {
  BindCompletedConversationRun(context.Context,string,string,string)(application.ConversationSessionBinding,error)
 }
@@ -77,4 +81,17 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
  }
  if strings.TrimSpace(answer)=="" {http.Error(w,"conversation returned no answer",http.StatusServiceUnavailable);return}
  sendJSON(w,http.StatusOK,map[string]string{"answer":answer})
+}
+
+// conversationSessionRead exposes a canonical stored reference, not an artifact.
+// The owner is fixed to this explicitly single-operator server boundary.
+func (h *Handler) conversationSessionRead(w http.ResponseWriter,r *http.Request) {
+ if r.Method!=http.MethodGet {methodNotAllowed(w,"GET");return}
+ resolver,ok:=h.conversation.(ConversationSessionResolver)
+ if !ok {http.Error(w,"conversation sessions unavailable",http.StatusServiceUnavailable);return}
+ id:=strings.TrimPrefix(r.URL.Path,"/api/v1/conversation/sessions/")
+ if application.ValidateConversationSessionID(id)!=nil {http.Error(w,"invalid session",http.StatusBadRequest);return}
+ binding,err:=resolver.ResolveConversationSession(r.Context(),id,"single-operator")
+ if err!=nil {http.Error(w,"session not found",http.StatusNotFound);return}
+ sendJSON(w,http.StatusOK,map[string]any{"session_id":binding.SessionID,"run_id":binding.RunID,"symbol":binding.Symbol,"as_of":binding.AsOf})
 }
