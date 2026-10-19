@@ -75,3 +75,25 @@ test("confirmed research session is recovered after a browser reload", async ({ 
   const restored = page.getByRole("region", { name: "研究对话" });
   await expect(restored).toContainText("已恢复研究 600519.SH · Run ID: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 });
+
+test("follow-up sends restored session reference without authorizing a new research", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await panel.getByLabel("询问已有研究").fill("研究600519.SH");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  const first = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  expect((await first).status()).toBe(200);
+  await page.reload();
+  await expect(page.getByRole("region", { name: "研究对话" })).toContainText("已恢复研究 600519.SH");
+  const followup = page.getByRole("region", { name: "研究对话" });
+  await followup.getByLabel("询问已有研究").fill("刚才那次研究有什么空头依据？");
+  const second = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
+  await followup.getByRole("button", { name: "发送问题" }).click();
+  const result = await second;
+  expect(result.status()).toBe(200);
+  expect(result.request().postDataJSON()).toEqual({ message: "刚才那次研究有什么空头依据？", session_id: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" });
+});
