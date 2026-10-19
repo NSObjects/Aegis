@@ -58,7 +58,7 @@ func TestConversationSessionFollowupResolvesPersistedReference(t *testing.T) {
  if missing.Code!=http.StatusNotFound||fixture.calls!=1 {t.Fatalf("unbound session called model: %d",missing.Code)}
 }
 
-func TestConversationSessionFollowupCannotAuthorizeNewResearch(t *testing.T) {
+func TestConversationSessionCannotStartWithoutBinder(t *testing.T) {
  id:=strings.Repeat("a",32)
  fixture:=&conversationSessionLookupFixture{binding:application.ConversationSessionBinding{
   SessionID:id,OwnerID:"single-operator",RunID:strings.Repeat("b",32),Symbol:"600519.SH",
@@ -71,9 +71,9 @@ func TestConversationSessionFollowupCannotAuthorizeNewResearch(t *testing.T) {
   `{"message":"追问","session_id":"`+id+`","confirm_start":true}`,
  } {
   response:=apiRequest(t,handler,http.MethodPost,"/api/v1/conversation/query",body,true,nil)
-  if response.Code!=http.StatusBadRequest {t.Fatalf("mixed session/start accepted: %d %s",response.Code,response.Body.String())}
+  if response.Code!=http.StatusServiceUnavailable {t.Fatalf("start without binder not rejected: %d %s",response.Code,response.Body.String())}
  }
- if fixture.calls!=0 {t.Fatalf("mixed requests reached model: %d",fixture.calls)}
+ if fixture.calls!=0 {t.Fatalf("unavailable starter reached model: %d",fixture.calls)}
 }
 
 func TestConversationSessionCalendarReferenceRequiresRunDisambiguation(t *testing.T) {
