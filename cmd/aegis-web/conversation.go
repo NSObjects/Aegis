@@ -21,6 +21,7 @@ type conversationRuntime struct {
  runs *application.RunManager
  credentials *settings.Store
  configPath string
+ bindings *application.FileConversationBindingStore
 }
 
 func (r *conversationRuntime) Respond(ctx context.Context,message string)(string,error) {
@@ -65,4 +66,12 @@ func (r *conversationRuntime) StartConfirmedResearch(ctx context.Context,_ strin
  tools,err:=application.NewConversationResearchTools(r.runs)
  if err!=nil{return application.ConversationRunSummary{},err}
  return tools.StartResearch(ctx,application.ResearchRequest{Mode:application.ModeDecision,Input:input})
+}
+
+// BindCompletedConversationRun associates a freshly submitted, persisted Run
+// with a server-validated conversation session. The caller must derive owner
+// identity from authenticated server state, never from model output.
+func (r *conversationRuntime) BindCompletedConversationRun(ctx context.Context, sessionID, ownerID, runID string) (application.ConversationSessionBinding,error) {
+ if r==nil||r.bindings==nil {return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
+ return r.bindings.Bind(ctx,sessionID,ownerID,runID)
 }
