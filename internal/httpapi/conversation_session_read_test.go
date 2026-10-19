@@ -55,3 +55,21 @@ func TestConversationSessionFollowupResolvesPersistedReference(t *testing.T) {
   `{"message":"刚才那次研究","session_id":"`+strings.Repeat("c",32)+`"}`,true,nil)
  if missing.Code!=http.StatusNotFound||fixture.calls!=1 {t.Fatalf("unbound session called model: %d",missing.Code)}
 }
+
+func TestConversationSessionFollowupCannotAuthorizeNewResearch(t *testing.T) {
+ id:=strings.Repeat("a",32)
+ fixture:=&conversationSessionLookupFixture{binding:application.ConversationSessionBinding{
+  SessionID:id,OwnerID:"single-operator",RunID:strings.Repeat("b",32),Symbol:"600519.SH",
+  AsOf:time.Date(2026,10,19,0,0,0,0,time.UTC),
+ }}
+ handler:=mkHandler(t,&fakeRuns{},application.ModeDecision)
+ handler.WithConversationResponder(fixture)
+ for _,body:=range []string{
+  `{"message":"追问","session_id":"`+id+`","start_symbol":"600519.SH","confirm_start":true}`,
+  `{"message":"追问","session_id":"`+id+`","confirm_start":true}`,
+ } {
+  response:=apiRequest(t,handler,http.MethodPost,"/api/v1/conversation/query",body,true,nil)
+  if response.Code!=http.StatusBadRequest {t.Fatalf("mixed session/start accepted: %d %s",response.Code,response.Body.String())}
+ }
+ if fixture.calls!=0 {t.Fatalf("mixed requests reached model: %d",fixture.calls)}
+}
