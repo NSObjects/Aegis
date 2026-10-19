@@ -45,7 +45,8 @@ export default function ResearchConversationPanel() {
       const data: unknown = await response.json();
       if (!data || typeof data !== "object" || typeof (data as { answer?: unknown }).answer !== "string")
         throw Error("对话返回格式错误");
-      const body = data as { answer: string; run_id?: string; session_id?: string };\n      if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setRestored("当前研究 · Run ID: " + body.run_id); }
+      const body = data as { answer: string; run_id?: string; session_id?: string };
+      if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setRestored("当前研究 · Run ID: " + body.run_id); }
       if (starting && (!body.run_id || !/^[a-f0-9]{32}$/.test(body.run_id))) throw Error("研究启动失败：未返回有效 Run ID");
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
       setMessage("");
@@ -58,7 +59,8 @@ export default function ResearchConversationPanel() {
   return <section aria-label="研究对话" className="surface" style={{ padding: 20, marginBlock: 16 }}>
     <h2 style={{ fontWeight: 700 }}>研究对话</h2>
     <p style={{ marginBlock: 8, opacity: .75 }}>可询问已有 Run 的研究结论或多空依据。默认只读。只有填写股票代码并确认后，才允许对话 Agent 发起新的研究任务；模型回答及新研究都可能产生费用。</p>
-    {restored && <p aria-live="polite">{restored}</p>}\n    <div aria-live="polite">
+    {restored && <p aria-live="polite">{restored}</p>}
+    <div aria-live="polite">
       {exchanges.map((entry, index) => <div key={index} style={{ paddingBlock: 12, borderBottom: "1px solid var(--line, #ddd)" }}>
         <p><strong>你：</strong>{entry.question}</p>
         <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}><strong>Aegis：</strong>{entry.answer}</p>
