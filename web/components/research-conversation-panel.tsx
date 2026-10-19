@@ -40,7 +40,7 @@ export default function ResearchConversationPanel() {
       const response = await fetch("/api/workbench/conversation", {
         method: "POST", credentials: "same-origin", cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(starting ? { message: question, start_symbol: startSymbol.trim().toUpperCase(), confirm_start: true } : currentSession ? { message: question, session_id: currentSession } : { message: question }),
+        body: JSON.stringify(starting ? { message: question, start_symbol: startSymbol.trim().toUpperCase(), confirm_start: true, ...(currentSession ? { session_id: currentSession } : {}) } : currentSession ? { message: question, session_id: currentSession } : { message: question }),
       });
       if (!response.ok) throw Error(response.status === 401 ? "登录已过期，请重新登录" : "对话服务暂不可用，请检查模型配置");
       const data: unknown = await response.json();
