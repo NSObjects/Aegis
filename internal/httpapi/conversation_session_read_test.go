@@ -66,12 +66,12 @@ func TestConversationSessionCannotStartWithoutBinder(t *testing.T) {
  }}
  handler:=mkHandler(t,&fakeRuns{},application.ModeDecision)
  handler.WithConversationResponder(fixture)
- for _,body:=range []string{
-  `{"message":"追问","session_id":"`+id+`","start_symbol":"600519.SH","confirm_start":true}`,
-  `{"message":"追问","session_id":"`+id+`","confirm_start":true}`,
+ for _,tc:=range []struct{body string;status int}{
+  {`{"message":"追问","session_id":"`+id+`","start_symbol":"600519.SH","confirm_start":true}`,http.StatusServiceUnavailable},
+  {`{"message":"追问","session_id":"`+id+`","confirm_start":true}`,http.StatusBadRequest},
  } {
-  response:=apiRequest(t,handler,http.MethodPost,"/api/v1/conversation/query",body,true,nil)
-  if response.Code!=http.StatusServiceUnavailable {t.Fatalf("start without binder not rejected: %d %s",response.Code,response.Body.String())}
+  response:=apiRequest(t,handler,http.MethodPost,"/api/v1/conversation/query",tc.body,true,nil)
+  if response.Code!=tc.status {t.Fatalf("invalid session/start request: got %d, want %d, %s",response.Code,tc.status,response.Body.String())}
  }
  if fixture.calls!=0 {t.Fatalf("unavailable starter reached model: %d",fixture.calls)}
 }
