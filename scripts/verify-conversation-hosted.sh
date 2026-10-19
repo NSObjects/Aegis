@@ -58,7 +58,7 @@ jq -e 'type=="object" and (length>0)' "$data_dir/artifact.json" >/dev/null
 
 # Follow-up may invoke a model, but MUST NOT create another research Run.
 # The only read-side reference is the server-owned session_id.
-jq -nc --arg id "$session_id" '{message:"这次研究的空头依据是什么？",session_id:$id}' >"$data_dir/followup-request.json"
+jq -nc --arg id "$run_id" '{message:("请只读查询已有 Run ID "+$id+" 的空头依据；如无空头辩论产物，请明确说明缺失。不要启动新的研究。")}' >"$data_dir/followup-request.json"
 followup_http=$(curl -sS --max-time 65 -o "$data_dir/followup.json" -w '%{http_code}' \
   -H 'Content-Type: application/json' -X POST \
   --data-binary @"$data_dir/followup-request.json" "$base/api/v1/conversation/query")
