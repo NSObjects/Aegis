@@ -30,6 +30,7 @@ type ConfirmedResearchStarter interface {
  StartConfirmedResearch(context.Context,string,string)(application.ConversationRunSummary,error)
 }
 
+var conversationMentionedSymbol = regexp.MustCompile(`(?:600|601|603|605|688)[0-9]{3}\\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\\.SZ`)
 var conversationStartSymbol = regexp.MustCompile(`^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)$`)
 
 // ConversationResponder runs the conversation using approved model and tools.
@@ -128,6 +129,15 @@ func (h *Handler) conversationSessionRead(w http.ResponseWriter,r *http.Request)
 // Date references use the A-share market calendar, not the host timezone.
 func selectConversationHistoricalRun(message string,history []application.ConversationSessionBinding,now time.Time)(application.ConversationSessionBinding,error) {
  if len(history)==0{return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
+ symbols:=conversationMentionedSymbol.FindAllString(strings.ToUpper(message),-1)
+ if len(symbols)>0 {
+  ticker:=symbols[0]
+  for _,symbol:=range symbols[1:] {if symbol!=ticker{return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}}
+  filtered:=make([]application.ConversationSessionBinding,0,len(history))
+  for _,entry:=range history {if entry.Symbol==ticker {filtered=append(filtered,entry)}}
+  history=filtered
+  if len(history)==0{return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
+ }
  if strings.Contains(message,"上次") || strings.Contains(message,"上一回") {
   if len(history)>1{return history[1],nil}
   return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable
