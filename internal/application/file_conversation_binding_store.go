@@ -32,11 +32,9 @@ func (s *FileConversationBindingStore) path(id string)string{
  return filepath.Join(s.dir,hex.EncodeToString(hash[:])+".json")
 }
 func (s *FileConversationBindingStore) read(id string)(ConversationSessionBinding,error){
- raw,err:=os.ReadFile(s.path(id));if errors.Is(err,os.ErrNotExist){return ConversationSessionBinding{},ErrConversationSessionUnavailable};if err!=nil{return ConversationSessionBinding{},err}
- if len(raw)>4096{return ConversationSessionBinding{},ErrConversationSessionUnavailable}
- var item ConversationSessionBinding
- if json.Unmarshal(raw,&item)!=nil||item.SessionID!=id||item.OwnerID==""||!validRunID(item.RunID){return ConversationSessionBinding{},ErrConversationSessionUnavailable}
- return item,nil
+ doc,err:=s.readDocument(id)
+ if err!=nil{return ConversationSessionBinding{},err}
+ return doc.ConversationSessionBinding,nil
 }
 // conversationBindingDocument remains backward compatible with the original
 // single-binding JSON representation and stores a bounded history of Run refs.
