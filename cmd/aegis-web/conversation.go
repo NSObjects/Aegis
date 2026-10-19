@@ -80,3 +80,8 @@ func (r *conversationRuntime) ResolveConversationSession(ctx context.Context,ses
  if r==nil||r.bindings==nil {return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
  return r.bindings.Resolve(sessionID,ownerID)
 }
+
+func (r *conversationRuntime) ResolveConversationSessionHistory(_ context.Context,sessionID,ownerID string)([]application.ConversationSessionBinding,error) {
+ if r==nil||r.bindings==nil{return nil,application.ErrConversationSessionUnavailable}
+ return r.bindings.ResolveHistory(sessionID,ownerID)
+}
