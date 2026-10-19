@@ -58,6 +58,7 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
  if len(request.Message)==0||len(request.Message)>2048 {http.Error(w,"invalid conversation message",http.StatusBadRequest);return}
  var answer string
  var err error
+ if request.SessionID!="" && (request.StartSymbol!="" || request.ConfirmStart) {http.Error(w,"session reference cannot start research",http.StatusBadRequest);return}
  if request.StartSymbol!="" || request.ConfirmStart {
   if !request.ConfirmStart || !conversationStartSymbol.MatchString(request.StartSymbol) {http.Error(w,"invalid research authorization",http.StatusBadRequest);return}
   starter,ok:=h.conversation.(ConfirmedResearchStarter)
