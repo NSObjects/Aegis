@@ -46,7 +46,15 @@ export default function ResearchConversationPanel() {
       const data: unknown = await response.json();
       if (!data || typeof data !== "object" || typeof (data as { answer?: unknown }).answer !== "string")
         throw Error("对话返回格式错误");
-      const body = data as { answer: string; run_id?: string; session_id?: string };
+      const body = data as { answer: string; run_id?: string; session_id?: string; session_binding?: string };
+      if (starting && body.session_binding === "FAILED") {
+        setExchanges(current => [...current, { question, answer: body.answer + " Run ID: " + body.run_id }]);
+        setMessage("");
+        setConfirmStart(false);
+        setStartSymbol("");
+        setError("研究已创建，但历史会话关联失败。请保留 Run ID，勿重复启动。");
+        return;
+      }
       if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setRestored("当前研究 · Run ID: " + body.run_id); }
       if (starting && (!body.run_id || !/^[a-f0-9]{32}$/.test(body.run_id))) throw Error("研究启动失败：未返回有效 Run ID");
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
