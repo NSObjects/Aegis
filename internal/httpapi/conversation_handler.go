@@ -83,13 +83,20 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
   if startErr!=nil {http.Error(w,"research start failed",http.StatusServiceUnavailable);return}
   if run.RunID=="" || run.Symbol!=request.StartSymbol {http.Error(w,"invalid research start result",http.StatusBadGateway);return}
   response:=map[string]string{"answer":"研究任务已创建，请按 Run ID 查询状态。","run_id":run.RunID,"symbol":run.Symbol,"state":string(run.State)}
+  response["session_binding"]="FAILED"
   if binder,ok:=h.conversation.(ConfirmedResearchSessionBinder);ok {
    sessionID:=request.SessionID
    var idErr error
    if sessionID=="" {sessionID,idErr=application.NewConversationSessionID()}
    if idErr==nil {
-    if _,bindErr:=binder.BindCompletedConversationRun(r.Context(),sessionID,"single-operator",run.RunID);bindErr==nil {response["session_id"]=sessionID}
+    if _,bindErr:=binder.BindCompletedConversationRun(r.Context(),sessionID,"single-operator",run.RunID);bindErr==nil {
+     response["session_id"]=sessionID
+     response["session_binding"]="BOUND"
+    }
    }
+  }
+  if response["session_binding"]=="FAILED" {
+   response["answer"]="研究任务已创建，但会话关联失败。请保存 Run ID 并通过研究列表查询；不要重复启动研究。"
   }
   sendJSON(w,http.StatusOK,response)
   return
