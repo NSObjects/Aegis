@@ -91,3 +91,30 @@ func TestConversationSessionCalendarReferenceRequiresRunDisambiguation(t *testin
  }
  if fixture.calls!=0 {t.Fatalf("unresolved historical date reached model: %d",fixture.calls)}
 }
+
+type conversationHistoryFixture struct {
+ conversationSessionLookupFixture
+ history []application.ConversationSessionBinding
+}
+func (f *conversationHistoryFixture) ResolveConversationSessionHistory(_ context.Context,id,owner string)([]application.ConversationSessionBinding,error) {
+ if id!=f.binding.SessionID||owner!=f.binding.OwnerID{return nil,application.ErrConversationSessionUnavailable}
+ return f.history,nil
+}
+
+func TestConversationPreviousRunSelectionIsReadOnlyAndCanonical(t *testing.T) {
+ id:=strings.Repeat("a",32)
+ current:=application.ConversationSessionBinding{SessionID:id,OwnerID:"single-operator",RunID:strings.Repeat("b",32),Symbol:"600519.SH",AsOf:time.Date(2026,10,19,0,0,0,0,time.UTC)}
+ previous:=application.ConversationSessionBinding{SessionID:id,OwnerID:"single-operator",RunID:strings.Repeat("c",32),Symbol:"000001.SZ",AsOf:time.Date(2026,10,17,0,0,0,0,time.UTC)}
+ fixture:=&conversationHistoryFixture{conversationSessionLookupFixture:conversationSessionLookupFixture{binding:current},history:[]application.ConversationSessionBinding{current,previous}}
+ handler:=mkHandler(t,&fakeRuns{},application.ModeDecision)
+ handler.WithConversationResponder(fixture)
+ path:="/api/v1/conversation/query"
+ body,_:=json.Marshal(map[string]string{"message":"上次研究的空头观点呢？","session_id":id})
+ response:=apiRequest(t,handler,http.MethodPost,path,string(body),true,nil)
+ if response.Code!=http.StatusOK{t.Fatalf("previous Run lookup: %d %s",response.Code,response.Body.String())}
+ if fixture.calls!=1||!strings.Contains(fixture.input,"run_id="+previous.RunID)||strings.Contains(fixture.input,"run_id="+current.RunID){t.Fatalf("incorrect previous Run: %q",fixture.input)}
+ fixture.calls=0
+ fixture.history=[]application.ConversationSessionBinding{current}
+ response=apiRequest(t,handler,http.MethodPost,path,string(body),true,nil)
+ if response.Code!=http.StatusConflict||fixture.calls!=0{t.Fatalf("missing previous Run guessed: %d calls=%d",response.Code,fixture.calls)}
+}
