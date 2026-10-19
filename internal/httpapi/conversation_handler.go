@@ -8,6 +8,7 @@ import (
  "net/http"
  "regexp"
  "strings"
+ "time"
  "Aegis/internal/application"
 )
 
@@ -48,6 +49,7 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
  Message string `json:"message"`
  StartSymbol string `json:"start_symbol,omitempty"`
  ConfirmStart bool `json:"confirm_start,omitempty"`
+ SessionID string `json:"session_id,omitempty"`
  }
  if err:=dec.Decode(&request);err!=nil {http.Error(w,"invalid conversation request",http.StatusBadRequest);return}
  var extra any
@@ -73,6 +75,14 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
   sendJSON(w,http.StatusOK,response)
   return
  } else {
+  if request.SessionID!="" {
+   if application.ValidateConversationSessionID(request.SessionID)!=nil {http.Error(w,"invalid conversation session",http.StatusBadRequest);return}
+   resolver,ok:=h.conversation.(ConversationSessionResolver)
+   if !ok {http.Error(w,"conversation session unavailable",http.StatusServiceUnavailable);return}
+   binding,resolveErr:=resolver.ResolveConversationSession(r.Context(),request.SessionID,"single-operator")
+   if resolveErr!=nil {http.Error(w,"conversation session not found",http.StatusNotFound);return}
+   request.Message="当前已授权的历史研究引用：run_id="+binding.RunID+"，symbol="+binding.Symbol+"，as_of="+binding.AsOf.Format(time.RFC3339)+"。仅可使用研究只读工具验证事实；不得启动新研究。用户问题："+request.Message
+  }
   answer,err=h.conversation.Respond(r.Context(),request.Message)
  }
  if err!=nil {
