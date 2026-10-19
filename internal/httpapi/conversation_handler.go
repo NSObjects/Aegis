@@ -11,6 +11,12 @@ import (
  "Aegis/internal/application"
 )
 
+// ConfirmedResearchSessionBinder is implemented only by the trusted Go runtime.
+// This API currently supports a single server-authenticated operator.
+type ConfirmedResearchSessionBinder interface {
+ BindCompletedConversationRun(context.Context,string,string,string)(application.ConversationSessionBinding,error)
+}
+
 type ConfirmedResearchStarter interface {
  StartConfirmedResearch(context.Context,string,string)(application.ConversationRunSummary,error)
 }
@@ -53,7 +59,14 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
   run,startErr:=starter.StartConfirmedResearch(r.Context(),request.Message,request.StartSymbol)
   if startErr!=nil {http.Error(w,"research start failed",http.StatusServiceUnavailable);return}
   if run.RunID=="" || run.Symbol!=request.StartSymbol {http.Error(w,"invalid research start result",http.StatusBadGateway);return}
-  sendJSON(w,http.StatusOK,map[string]string{"answer":"研究任务已创建，请按 Run ID 查询状态。","run_id":run.RunID,"symbol":run.Symbol,"state":string(run.State)})
+  response:=map[string]string{"answer":"研究任务已创建，请按 Run ID 查询状态。","run_id":run.RunID,"symbol":run.Symbol,"state":string(run.State)}
+  if binder,ok:=h.conversation.(ConfirmedResearchSessionBinder);ok {
+   sessionID,idErr:=application.NewConversationSessionID()
+   if idErr==nil {
+    if _,bindErr:=binder.BindCompletedConversationRun(r.Context(),sessionID,"single-operator",run.RunID);bindErr==nil {response["session_id"]=sessionID}
+   }
+  }
+  sendJSON(w,http.StatusOK,response)
   return
  } else {
   answer,err=h.conversation.Respond(r.Context(),request.Message)
