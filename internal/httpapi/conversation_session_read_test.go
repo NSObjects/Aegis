@@ -118,3 +118,27 @@ func TestConversationPreviousRunSelectionIsReadOnlyAndCanonical(t *testing.T) {
  response=apiRequest(t,handler,http.MethodPost,path,string(body),true,nil)
  if response.Code!=http.StatusConflict||fixture.calls!=0{t.Fatalf("missing previous Run guessed: %d calls=%d",response.Code,fixture.calls)}
 }
+
+func TestSelectConversationHistoricalRunByTradingCalendar(t *testing.T) {
+ loc,err:=time.LoadLocation("Asia/Shanghai");if err!=nil{t.Fatal(err)}
+ now:=time.Date(2026,10,19,12,0,0,0,loc)
+ session:=strings.Repeat("a",32)
+ current:=application.ConversationSessionBinding{SessionID:session,OwnerID:"single-operator",RunID:strings.Repeat("b",32),AsOf:now}
+ yesterday:=application.ConversationSessionBinding{SessionID:session,OwnerID:"single-operator",RunID:strings.Repeat("c",32),AsOf:now.AddDate(0,0,-1)}
+ earlier:=application.ConversationSessionBinding{SessionID:session,OwnerID:"single-operator",RunID:strings.Repeat("d",32),AsOf:now.AddDate(0,0,-2)}
+ history:=[]application.ConversationSessionBinding{current,yesterday,earlier}
+ for _,tc:=range []struct{message,run string}{
+  {"昨天的空头论点",yesterday.RunID},{"昨日的报告",yesterday.RunID},
+  {"前天的多头依据",earlier.RunID},{"前日的研究",earlier.RunID},
+  {"上次的研究",yesterday.RunID},
+ } {
+  got,err:=selectConversationHistoricalRun(tc.message,history,now)
+  if err!=nil||got.RunID!=tc.run {t.Fatalf("%q: %+v %v",tc.message,got,err)}
+ }
+ duplicate:=append(append([]application.ConversationSessionBinding{},history...),yesterday)
+ for _,tc:=range []struct{message string; history []application.ConversationSessionBinding}{
+  {"昨天",duplicate},{"上个月",history},{"昨天",history[:1]},
+ } {
+  if _,err:=selectConversationHistoricalRun(tc.message,tc.history,now);err==nil{t.Fatalf("ambiguous/missing history resolved: %q",tc.message)}
+ }
+}
