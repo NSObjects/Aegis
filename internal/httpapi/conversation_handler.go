@@ -82,6 +82,12 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
    if !ok {http.Error(w,"conversation session unavailable",http.StatusServiceUnavailable);return}
    binding,resolveErr:=resolver.ResolveConversationSession(r.Context(),request.SessionID,"single-operator")
    if resolveErr!=nil {http.Error(w,"conversation session not found",http.StatusNotFound);return}
+   // A session currently stores one Run. Calendar-relative references require
+   // a historical index; never silently substitute the current Run.
+   if refersToHistoricalResearchDay(request.Message) {
+    http.Error(w,"无法唯一定位历史研究，请指定对应 Run ID；当前会话仅绑定一个 Run",http.StatusConflict)
+    return
+   }
    request.Message="当前已授权的历史研究引用：run_id="+binding.RunID+"，symbol="+binding.Symbol+"，as_of="+binding.AsOf.Format(time.RFC3339)+"。仅可使用研究只读工具验证事实；不得启动新研究。用户问题："+request.Message
   }
   answer,err=h.conversation.Respond(r.Context(),request.Message)
@@ -105,4 +111,14 @@ func (h *Handler) conversationSessionRead(w http.ResponseWriter,r *http.Request)
  binding,err:=resolver.ResolveConversationSession(r.Context(),id,"single-operator")
  if err!=nil {http.Error(w,"session not found",http.StatusNotFound);return}
  sendJSON(w,http.StatusOK,map[string]any{"session_id":binding.SessionID,"run_id":binding.RunID,"symbol":binding.Symbol,"as_of":binding.AsOf})
+}
+
+ 
+// Until sessions have a durable Run history, calendar-relative questions must
+// not be resolved against whichever single Run happens to be currently bound.
+func refersToHistoricalResearchDay(message string) bool {
+ for _,term:=range []string{"昨天","前天","上周","上个月","昨日","前日"} {
+  if strings.Contains(message,term) {return true}
+ }
+ return false
 }
