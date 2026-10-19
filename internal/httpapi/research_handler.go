@@ -98,6 +98,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   return
  }
  if r.URL.Path == "/api/v1/conversation/query" { h.conversationQuery(w, r); return }
+ if strings.HasPrefix(r.URL.Path,"/api/v1/conversation/sessions/") { h.conversationSessionRead(w,r); return }
  if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/research/runs")
 	if path == r.URL.Path {
