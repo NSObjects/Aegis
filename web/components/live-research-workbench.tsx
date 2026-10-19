@@ -111,12 +111,17 @@ export default function LiveResearchWorkbench() {
       }
     }
     if (!mounted.current) return;
-    setRuns(next);
+    // A newly created Run can be absent from a briefly stale or capped list.
+    // Retain its last known record and selection rather than switching to
+    // another Run without an explicit user action.
+    setRuns(current => {
+      const retained = current.filter(run => run.run_id === selectedId && !next.some(item => item.run_id === run.run_id));
+      return [...next, ...retained];
+    });
     setLastListSync(new Date().toISOString());
     setListSyncError(null);
-    setSelectedId(current => linked.runId ??
-      (current && next.some(run => run.run_id === current) ? current : next[0]?.run_id ?? null));
-  }, []);
+    setSelectedId(current => linked.runId ?? current ?? next[0]?.run_id ?? null);
+  }, [selectedId]);
 
   useEffect(() => {
     if (!session?.authenticated || view !== "history") return;
