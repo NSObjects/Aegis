@@ -66,7 +66,7 @@ concurrency:
 jobs:
   trading:
     name: Trading Agent
-    if: ${{ inputs.run_trading || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_trading || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -111,7 +111,7 @@ jobs:
 
   technical:
     name: Technical Agent
-    if: ${{ inputs.run_technical || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_technical || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -163,7 +163,7 @@ jobs:
 
   research:
     name: Full Stateless Hosted E2E
-    if: ${{ inputs.run_research || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_research || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -211,7 +211,7 @@ jobs:
 
   multi_agent:
     name: Full Multi-Agent Hosted E2E
-    if: ${{ inputs.run_multi_agent || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_multi_agent || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -259,7 +259,7 @@ jobs:
 
   risk_portfolio:
     name: Full Risk / Portfolio Hosted E2E
-    if: ${{ inputs.run_risk_portfolio || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_risk_portfolio || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -307,7 +307,7 @@ jobs:
 
   production_cli:
     name: Production CLI Portfolio Review E2E
-    if: ${{ inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -422,7 +422,7 @@ jobs:
 
   fundamental_cli:
     name: Fundamental Production CLI E2E
-    if: ${{ inputs.run_fundamental || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_fundamental || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -542,7 +542,7 @@ jobs:
 
   invalid_account_cli:
     name: Production CLI Invalid Account Fail-Closed
-    if: ${{ inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # No provider credentials: rejection must happen before model/source setup.
@@ -585,7 +585,7 @@ jobs:
 
   live_web_api:
     name: Real Go HTTP ResearchRun with Eino providers
-    if: ${{ inputs.run_live_web_api }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_live_web_api) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
