@@ -18,6 +18,10 @@ type ConversationSessionResolver interface {
  ResolveConversationSession(context.Context,string,string)(application.ConversationSessionBinding,error)
 }
 
+type ConversationSessionHistoryResolver interface {
+ ResolveConversationSessionHistory(context.Context,string,string)([]application.ConversationSessionBinding,error)
+}
+
 type ConfirmedResearchSessionBinder interface {
  BindCompletedConversationRun(context.Context,string,string,string)(application.ConversationSessionBinding,error)
 }
@@ -82,10 +86,19 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
    if !ok {http.Error(w,"conversation session unavailable",http.StatusServiceUnavailable);return}
    binding,resolveErr:=resolver.ResolveConversationSession(r.Context(),request.SessionID,"single-operator")
    if resolveErr!=nil {http.Error(w,"conversation session not found",http.StatusNotFound);return}
-   // A session currently stores one Run. Calendar-relative references require
-   // a historical index; never silently substitute the current Run.
+   if strings.Contains(request.Message,"上次") || strings.Contains(request.Message,"上一回") {
+    historyResolver,ok:=h.conversation.(ConversationSessionHistoryResolver)
+    if !ok {http.Error(w,"历史研究不可用，请指定 Run ID",http.StatusConflict);return}
+    history,historyErr:=historyResolver.ResolveConversationSessionHistory(r.Context(),request.SessionID,"single-operator")
+    if historyErr!=nil||len(history)<2||history[0].RunID!=binding.RunID {
+     http.Error(w,"未找到唯一的上次研究，请指定 Run ID",http.StatusConflict);return
+    }
+    binding=history[1]
+   }
+   // Calendar-date references remain ambiguous without an explicit timezone
+   // and date resolver; never silently substitute the currently bound Run.
    if refersToHistoricalResearchDay(request.Message) {
-    http.Error(w,"无法唯一定位历史研究，请指定对应 Run ID；当前会话仅绑定一个 Run",http.StatusConflict)
+    http.Error(w,"无法唯一定位历史研究，请指定对应 Run ID；当前无法按日期唯一定位",http.StatusConflict)
     return
    }
    request.Message="当前已授权的历史研究引用：run_id="+binding.RunID+"，symbol="+binding.Symbol+"，as_of="+binding.AsOf.Format(time.RFC3339)+"。仅可使用研究只读工具验证事实；不得启动新研究。用户问题："+request.Message
