@@ -2,6 +2,7 @@ package httpapi
 
 import (
  "context"
+ "encoding/json"
  "net/http"
  "strings"
  "testing"
@@ -73,4 +74,20 @@ func TestConversationSessionFollowupCannotAuthorizeNewResearch(t *testing.T) {
   if response.Code!=http.StatusBadRequest {t.Fatalf("mixed session/start accepted: %d %s",response.Code,response.Body.String())}
  }
  if fixture.calls!=0 {t.Fatalf("mixed requests reached model: %d",fixture.calls)}
+}
+
+func TestConversationSessionCalendarReferenceRequiresRunDisambiguation(t *testing.T) {
+ id:=strings.Repeat("a",32)
+ fixture:=&conversationSessionLookupFixture{binding:application.ConversationSessionBinding{
+  SessionID:id,OwnerID:"single-operator",RunID:strings.Repeat("b",32),Symbol:"600519.SH",
+  AsOf:time.Date(2026,10,19,0,0,0,0,time.UTC),
+ }}
+ handler:=mkHandler(t,&fakeRuns{},application.ModeDecision)
+ handler.WithConversationResponder(fixture)
+ for _,question:=range []string{"昨天的空头依据是什么？","前天研究结果","上周的报告呢？"} {
+  body,_:=json.Marshal(map[string]string{"message":question,"session_id":id})
+  response:=apiRequest(t,handler,http.MethodPost,"/api/v1/conversation/query",string(body),true,nil)
+  if response.Code!=http.StatusConflict {t.Fatalf("ambiguous date %q status=%d: %s",question,response.Code,response.Body.String())}
+ }
+ if fixture.calls!=0 {t.Fatalf("unresolved historical date reached model: %d",fixture.calls)}
 }
