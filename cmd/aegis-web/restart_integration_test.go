@@ -16,7 +16,8 @@ import (
 )
 
 // TestRealServerProcessRestart uses the actual cmd/aegis-web binary, HTTP API
-// and disk-backed RunStore. Invalid model config causes a deterministic\n// pre-agent failure; no provider calls occur.
+// and disk-backed RunStore. Invalid model config causes a deterministic
+// pre-agent failure; no provider calls occur.
 func TestRealServerProcessRestart(t *testing.T) {
  if testing.Short() { t.Skip("real process integration") }
  dir:=t.TempDir()
