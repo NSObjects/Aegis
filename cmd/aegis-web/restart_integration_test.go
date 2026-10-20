@@ -31,7 +31,8 @@ func TestRealServerProcessRestart(t *testing.T) {
   t.Helper()
   cmd:=exec.Command(binary,"-dev","-listen",addr,"-store",filepath.Join(dir,"runs"),
    "-credential-store",filepath.Join(dir,"credentials.enc"),
-   "-evidence-store",filepath.Join(dir,"evidence"),\n   "-config",filepath.Join(dir,"missing-model-config.yaml"))
+   "-evidence-store",filepath.Join(dir,"evidence"),
+   "-config",filepath.Join(dir,"missing-model-config.yaml"))
   // Explicitly remove any runner-supplied provider or auth environment.
   for _,env:=range os.Environ(){
    key:=strings.SplitN(env,"=",2)[0]
