@@ -58,7 +58,7 @@ func TestRealServerProcessRestart(t *testing.T) {
   _=cmd.Process.Kill()
   _=cmd.Wait()
  }
- first,_:=start()
+ first,firstLogs:=start()
  payload:=strings.NewReader(`{"symbol":"600519.SH","mode":"PORTFOLIO_REVIEW","portfolio":{"state":"NOT_PROVIDED"}}`)
  response,err:=client.Post(root,"application/json",payload)
  if err!=nil {stop(first);t.Fatal(err)}
@@ -68,17 +68,18 @@ func TestRealServerProcessRestart(t *testing.T) {
  if response.StatusCode!=202||len(created.RunID)!=32{stop(first);t.Fatalf("submit status %d run %q",response.StatusCode,created.RunID)}
  statusURL:=root+"/"+created.RunID
  var before map[string]any
+ var lastState string
  deadline:=time.Now().Add(15*time.Second)
  for time.Now().Before(deadline) {
   resp,e:=client.Get(statusURL)
   if e==nil {
    var data map[string]any
    e=json.NewDecoder(resp.Body).Decode(&data);resp.Body.Close()
-   if e==nil&&data["state"]=="FAILED" {before=data;break}
+   if e==nil {lastState=fmt.Sprint(data["state"]); if data["state"]=="FAILED" {before=data;break}}
   }
   time.Sleep(80*time.Millisecond)
  }
- if before==nil{stop(first);t.Fatal("expected invalid-config run to fail before restart")}
+ if before==nil{stop(first);t.Fatalf("expected invalid-config run to fail before restart; last_state=%q; logs=%s",lastState,firstLogs.String())}
  stop(first)
  second,logs:=start()
  resp,err:=client.Get(statusURL);if err!=nil{t.Fatal(err)}
