@@ -687,6 +687,8 @@ func researchErrorCategory(err error) string {
 		return "EVENT_MODEL_EMPTY"
 	case strings.Contains(msg, "invalid event context:") || strings.Contains(msg, "validate event analyst context:"):
 		return "EVENT_CONTEXT_VALIDATION"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "normalize event analyst synthesis:"):
+		return "EVENT_ANALYST_SYNTHESIS_VALIDATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "normalize event analyst synthesis"):
 		return "EVENT_SYNTHESIS_VALIDATION"
 	// Match specific round failures before the broad evidence-loop fallback.
@@ -712,8 +714,6 @@ func researchErrorCategory(err error) string {
 		return "EVENT_ANALYSIS_NORMALIZATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "synthesize event analyst conclusion:"):
 		return "EVENT_ANALYST_SYNTHESIS"
-	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "normalize event analyst synthesis:"):
-		return "EVENT_ANALYST_SYNTHESIS_VALIDATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "validate event context:"):
 		return "EVENT_ANALYST_CONTEXT_VALIDATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:"):
