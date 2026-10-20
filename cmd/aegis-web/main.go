@@ -36,6 +36,10 @@ func (e *liveExecutor) Run(ctx context.Context, request application.ResearchRequ
 		return nil, fmt.Errorf("load live research credentials: %w", err)
 	}
 	opts := e.options
+	// The Conversation endpoint always submits DECISION research, independently
+	// of the HTTP server's default Portfolio Review mode.
+	// Construct the runner for the persisted request, not a startup default.
+	opts.PortfolioReview = request.Mode == application.ModePortfolio
 	opts.Credentials = values
 	service, err := application.NewLiveResearchService(ctx, opts)
 	if err != nil {
