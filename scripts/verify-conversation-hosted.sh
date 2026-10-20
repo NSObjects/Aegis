@@ -54,10 +54,15 @@ if [ "$state" != COMPLETED ]; then
   exit 1
 fi
 curl -fsS --max-time 20 "$base/api/v1/research/runs/$run_id/artifact" >"$data_dir/artifact.json"
-jq -e 'type=="object" and (length>0)' "$data_dir/artifact.json" >/dev/null
+jq -e '
+  .symbol=="600519.SH" and
+  (.market_view | type=="string" and length>0) and
+  (.action=="WATCH" or .action=="AVOID" or .action=="CANDIDATE") and
+  (.evidence | type=="array" and length>0)
+' "$data_dir/artifact.json" >/dev/null
 
 # Follow-up may invoke a model, but MUST NOT create another research Run.
-# The only read-side reference is the server-owned session_id.
+# This main-branch read-only query explicitly names the persisted Run ID.\n# Session-ID-based follow-up is separately developed in R2-02 (#203).
 jq -nc --arg id "$run_id" '{message:("请只读查询已有 Run ID "+$id+" 的空头依据；如无空头辩论产物，请明确说明缺失。不要启动新的研究。")}' >"$data_dir/followup-request.json"
 followup_http=$(curl -sS --max-time 65 -o "$data_dir/followup.json" -w '%{http_code}' \
   -H 'Content-Type: application/json' -X POST \
@@ -66,4 +71,4 @@ if [ "$followup_http" != 200 ]; then echo "::error::Read-only follow-up HTTP $fo
 jq -e '.answer | type=="string" and length>0' "$data_dir/followup.json" >/dev/null
 curl -fsS --max-time 10 "$base/api/v1/research/runs" >"$data_dir/list.json"
 jq -e --arg id "$run_id" '.runs | length==1 and .[0].run_id==$id' "$data_dir/list.json" >/dev/null
-echo "PASS: one confirmed Conversation Run completed; persisted artifact and read-only follow-up verified."
+echo "PASS: one confirmed Conversation Run completed; DECISION artifact contract and no-second-Run follow-up verified. Answer citations still require separate evidence review."
