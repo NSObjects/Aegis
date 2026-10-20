@@ -80,6 +80,7 @@ func TestRealServerProcessRestart(t *testing.T) {
   time.Sleep(80*time.Millisecond)
  }
  if before==nil{stop(first);t.Fatalf("expected invalid-config run to fail before restart; last_state=%q; logs=%s",lastState,firstLogs.String())}
+ if before["failure_category"]!="RESEARCH_SERVICE_INIT" {stop(first);t.Fatalf("expected classified service initialization failure; got category=%v",before["failure_category"])}
  stop(first)
  second,logs:=start()
  resp,err:=client.Get(statusURL);if err!=nil{t.Fatal(err)}
