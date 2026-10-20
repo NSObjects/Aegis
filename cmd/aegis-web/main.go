@@ -33,13 +33,13 @@ type liveExecutor struct {
 func (e *liveExecutor) Run(ctx context.Context, request application.ResearchRequest) (*application.ResearchResponse, error) {
 	values, err := e.credentials.Load(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load live research credentials: %w", err)
 	}
 	opts := e.options
 	opts.Credentials = values
 	service, err := application.NewLiveResearchService(ctx, opts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialize live research service: %w", err)
 	}
 	return service.Run(ctx, request)
 }
