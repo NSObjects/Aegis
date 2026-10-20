@@ -6,7 +6,7 @@ data_dir="$RUNNER_TEMP/aegis-conversation-hosted"
 mkdir -p "$data_dir"
 chmod 700 "$data_dir"
 unset AEGIS_WEB_API_TOKEN AEGIS_CREDENTIAL_MASTER_KEY || true
-"$RUNNER_TEMP/aegis-web" -dev -listen 127.0.0.1:18686 \
+"$RUNNER_TEMP/aegis-web" -dev -portfolio-review=false -listen 127.0.0.1:18686 \
   -store "$data_dir/runs" -credential-store "$data_dir/credentials.enc" \
   -evidence-store "$data_dir/evidence" >"$data_dir/server.log" 2>&1 &
 server_pid=$!
