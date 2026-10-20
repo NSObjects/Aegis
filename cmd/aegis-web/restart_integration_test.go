@@ -16,7 +16,7 @@ import (
 )
 
 // TestRealServerProcessRestart uses the actual cmd/aegis-web binary, HTTP API
-// and disk-backed RunStore. No keys are supplied and no paid research succeeds.
+// and disk-backed RunStore. Invalid model config causes a deterministic\n// pre-agent failure; no provider calls occur.
 func TestRealServerProcessRestart(t *testing.T) {
  if testing.Short() { t.Skip("real process integration") }
  dir:=t.TempDir()
@@ -31,7 +31,7 @@ func TestRealServerProcessRestart(t *testing.T) {
   t.Helper()
   cmd:=exec.Command(binary,"-dev","-listen",addr,"-store",filepath.Join(dir,"runs"),
    "-credential-store",filepath.Join(dir,"credentials.enc"),
-   "-evidence-store",filepath.Join(dir,"evidence"))
+   "-evidence-store",filepath.Join(dir,"evidence"),\n   "-config",filepath.Join(dir,"missing-model-config.yaml"))
   // Explicitly remove any runner-supplied provider or auth environment.
   for _,env:=range os.Environ(){
    key:=strings.SplitN(env,"=",2)[0]
@@ -76,7 +76,7 @@ func TestRealServerProcessRestart(t *testing.T) {
   }
   time.Sleep(80*time.Millisecond)
  }
- if before==nil{stop(first);t.Fatal("expected no-credential run to fail before restart")}
+ if before==nil{stop(first);t.Fatal("expected invalid-config run to fail before restart")}
  stop(first)
  second,logs:=start()
  resp,err:=client.Get(statusURL);if err!=nil{t.Fatal(err)}
