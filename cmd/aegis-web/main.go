@@ -35,17 +35,20 @@ func (e *liveExecutor) Run(ctx context.Context, request application.ResearchRequ
 	if err != nil {
 		return nil, fmt.Errorf("load live research credentials: %w", err)
 	}
-	opts := e.options
-	// The Conversation endpoint always submits DECISION research, independently
-	// of the HTTP server's default Portfolio Review mode.
-	// Construct the runner for the persisted request, not a startup default.
-	opts.PortfolioReview = request.Mode == application.ModePortfolio
+	opts := liveOptionsForRequest(e.options, request)
 	opts.Credentials = values
 	service, err := application.NewLiveResearchService(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("initialize live research service: %w", err)
 	}
 	return service.Run(ctx, request)
+}
+
+// liveOptionsForRequest binds the live graph type to the durable request mode,
+// not to the handler's configurable default route mode.
+func liveOptionsForRequest(base application.LiveServiceOptions, request application.ResearchRequest) application.LiveServiceOptions {
+	base.PortfolioReview = request.Mode == application.ModePortfolio
+	return base
 }
 
 func main() {
