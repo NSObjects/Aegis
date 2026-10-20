@@ -673,6 +673,10 @@ func researchErrorCategory(err error) string {
 	if err == nil { return "NONE" }
 	msg := strings.ToLower(err.Error())
 	switch {
+	case strings.Contains(msg, "load live research credentials:"):
+		return "RESEARCH_CREDENTIAL_LOAD"
+	case strings.Contains(msg, "initialize live research service:"):
+		return "RESEARCH_SERVICE_INIT"
 	// Event categories are matched against stable wrapper context, never persisted raw text.
 	// Tool completion alone is not evidence that the Event agent succeeded.
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "decode strict json"):
