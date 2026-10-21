@@ -16,6 +16,10 @@ type ConversationRunIDArgs struct {
  RunID string `json:"run_id" jsonschema:"required,description=Existing persisted Aegis research Run ID"`
 }
 type ConversationListArgs struct { }
+type ConversationCompareArgs struct {
+ LeftRunID string `json:"left_run_id" jsonschema:"required,description=First completed Run ID"`
+ RightRunID string `json:"right_run_id" jsonschema:"required,description=Second completed Run ID"`
+}
 type ConversationArtifactResult struct {
  RunID string `json:"run_id"`
  Artifact json.RawMessage `json:"artifact"`
@@ -50,5 +54,9 @@ func (t *ConversationResearchTools) EinoReadTools() ([]tool.InvokableTool, error
   return ConversationDebateResult{RunID:arg.RunID,Debate:data},nil
  })
  if err!=nil{return nil,fmt.Errorf("read debate tool: %w",err)}
- return []tool.InvokableTool{get,list,artifact,debate},nil
+ compare,err:=utils.InferTool("CompareResearchRuns","Compare two completed DECISION research runs for the same symbol and mode. Returns persisted conclusion differences and PIT caveats; never infer causal explanations.",func(ctx context.Context,arg ConversationCompareArgs)(ConversationRunComparison,error){
+  return t.CompareResearchRuns(ctx,arg.LeftRunID,arg.RightRunID)
+ })
+ if err!=nil{return nil,fmt.Errorf("compare runs tool: %w",err)}
+ return []tool.InvokableTool{get,list,artifact,debate,compare},nil
 }

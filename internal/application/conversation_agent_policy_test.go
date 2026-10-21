@@ -22,7 +22,7 @@ func TestConversationAgentToolPolicyExcludesUnapprovedResearchStart(t *testing.T
  a,err:=NewConversationAgent(context.Background(),model,research,nil)
  if err!=nil||a==nil{t.Fatalf("read-only agent: %v",err)}
  drainConversationTestAgent(a)
- if len(model.tools)!=4{t.Fatalf("default agent exposes %d tools, expected only four reads",len(model.tools))}
+ if len(model.tools)!=5{t.Fatalf("default agent exposes %d tools, expected five read-only tools",len(model.tools))}
  for _,info:=range model.tools{
   if info.Name=="StartResearch"{t.Fatal("default read-only agent offered a potentially paid research tool")}
  }
@@ -30,8 +30,8 @@ func TestConversationAgentToolPolicyExcludesUnapprovedResearchStart(t *testing.T
  a,err=NewConversationAgent(context.Background(),authorized,research,&ConversationStartPolicy{Cutoff:time.Date(2026,10,15,0,0,0,0,time.UTC),Lookback:24*time.Hour})
  if err!=nil||a==nil{t.Fatalf("authorized agent: %v",err)}
  drainConversationTestAgent(a)
- if len(authorized.tools)!=5{t.Fatalf("authorized agent has %d tools, expected five",len(authorized.tools))}
- if authorized.tools[4].Name!="StartResearch"{t.Fatalf("authorized tool mismatch: %s",authorized.tools[4].Name)}
+ if len(authorized.tools)!=6{t.Fatalf("authorized agent has %d tools, expected six",len(authorized.tools))}
+ if authorized.tools[5].Name!="StartResearch"{t.Fatalf("authorized tool mismatch: %s",authorized.tools[5].Name)}
 }
 
 // Eino binds ToolCallingChatModel tools lazily when Run executes, not at construction.
