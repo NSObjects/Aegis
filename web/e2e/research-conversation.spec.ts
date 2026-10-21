@@ -150,3 +150,41 @@ test("binding failure preserves created Run ID and warns against duplicate resea
   await panel.getByRole("button", { name: "发送问题" }).click();
   expect((await followup).postDataJSON()).toEqual({ message: "刚才的研究依据是什么？" });
 });
+
+test("conversation Run opens the corresponding workspace deep link", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await panel.getByLabel("询问已有研究").fill("研究 600519.SH");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  await expect(panel.getByRole("button", { name: "在研究工作台打开此 Run" })).toBeVisible();
+  await panel.getByRole("button", { name: "在研究工作台打开此 Run" }).click();
+  await expect(page).toHaveURL(/\\?run=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
+});
+
+test("selected report follow-up is explicitly read-only and references exactly that Run", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await panel.getByLabel("询问已有研究").fill("研究 600519.SH");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  await panel.getByRole("button", { name: "在研究工作台打开此 Run" }).click();
+  const selected = panel.getByRole("checkbox", { name: /针对当前研究 Run/ });
+  await expect(selected).toBeVisible();
+  await selected.check();
+  await panel.getByLabel("询问已有研究").fill("有哪些反对依据？");
+  const pending = page.waitForRequest(r => r.url().endsWith("/api/workbench/conversation") && r.method() === "POST" && r.postDataJSON()?.message?.includes("反对依据"));
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  const data = (await pending).postDataJSON();
+  expect(data).toMatchObject({ session_id: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" });
+  expect(data.confirm_start).toBeUndefined();
+  expect(data.start_symbol).toBeUndefined();
+  expect(data.message).toContain("Run ID aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  expect(data.message).toContain("不要启动新的研究");
+});
