@@ -54,7 +54,7 @@ func (t *ConversationResearchTools) EinoReadTools() ([]tool.InvokableTool, error
   return ConversationDebateResult{RunID:arg.RunID,Debate:data},nil
  })
  if err!=nil{return nil,fmt.Errorf("read debate tool: %w",err)}
- compare,err:=utils.InferTool("CompareResearchRuns","Compare two completed DECISION research runs for the same symbol and mode. Returns persisted conclusion differences and PIT caveats; never infer causal explanations.",func(ctx context.Context,arg ConversationCompareArgs)(ConversationRunComparison,error){
+ compare,err:=utils.InferTool("CompareResearchRuns","Compare two completed research runs for the same symbol and mode, including DECISION or PORTFOLIO_REVIEW. Returns saved typed field differences and PIT caveats; missing fields are unknown, never infer causal explanations.",func(ctx context.Context,arg ConversationCompareArgs)(ConversationRunComparison,error){
   return t.CompareResearchRuns(ctx,arg.LeftRunID,arg.RightRunID)
  })
  if err!=nil{return nil,fmt.Errorf("compare runs tool: %w",err)}
