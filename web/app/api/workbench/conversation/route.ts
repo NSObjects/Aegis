@@ -20,9 +20,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid conversation request" }, { status: 400, headers });
   const data = payload as Record<string, unknown>;
   const keys = Object.keys(data);
-  if (keys.some(key => !["message", "start_symbol", "confirm_start"].includes(key)) ||
+  if (keys.some(key => !["message", "start_symbol", "confirm_start", "session_id"].includes(key)) ||
       typeof data.message !== "string" || !data.message.trim() || data.message.length > 2048)
     return NextResponse.json({ error: "invalid conversation message" }, { status: 400, headers });
+  if ("session_id" in data && (typeof data.session_id !== "string" || !/^[a-f0-9]{32}$/.test(data.session_id)))
+    return NextResponse.json({ error: "invalid conversation session" }, { status: 400, headers });
   const authorized = "start_symbol" in data || "confirm_start" in data;
   if (authorized && (data.confirm_start !== true || typeof data.start_symbol !== "string" ||
       !/^(?:(?:600|601|603|605|688)[0-9]{3}\.SH|(?:000|001|002|003|300|301|302)[0-9]{3}\.SZ)$/.test(data.start_symbol)))
@@ -39,6 +41,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid backend conversation response" }, { status: 502, headers });
     if (authorized && (typeof (data as { run_id?: unknown }).run_id !== "string" || !/^[a-f0-9]{32}$/.test((data as { run_id: string }).run_id)))
       return NextResponse.json({ error: "backend did not create a valid research run" }, { status: 502, headers });
-    return NextResponse.json(authorized ? { answer: (data as { answer: string }).answer, run_id: (data as { run_id: string }).run_id, symbol: (payload as { start_symbol: string }).start_symbol, session_id: typeof (data as { session_id?: unknown }).session_id === "string" && /^[a-f0-9]{32}$/.test((data as { session_id: string }).session_id) ? (data as { session_id: string }).session_id : undefined, state: (data as { state?: unknown }).state } : { answer: (data as { answer: string }).answer }, { headers });
+    return NextResponse.json(authorized ? { answer: (data as { answer: string }).answer, run_id: (data as { run_id: string }).run_id, symbol: (payload as { start_symbol: string }).start_symbol, session_id: typeof (data as { session_id?: unknown }).session_id === "string" && /^[a-f0-9]{32}$/.test((data as { session_id: string }).session_id) ? (data as { session_id: string }).session_id : undefined, state: (data as { state?: unknown }).state, session_binding: (data as { session_binding?: unknown }).session_binding } : { answer: (data as { answer: string }).answer }, { headers });
   } catch { return NextResponse.json({ error: "conversation unavailable" }, { status: 503, headers }); }
 }

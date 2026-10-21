@@ -75,3 +75,78 @@ test("confirmed research session is recovered after a browser reload", async ({ 
   const restored = page.getByRole("region", { name: "研究对话" });
   await expect(restored).toContainText("已恢复研究 600519.SH · Run ID: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 });
+
+test("follow-up sends restored session reference without authorizing a new research", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await panel.getByLabel("询问已有研究").fill("研究600519.SH");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  const first = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  expect((await first).status()).toBe(200);
+  await page.reload();
+  await expect(page.getByRole("region", { name: "研究对话" })).toContainText("已恢复研究 600519.SH");
+  const followup = page.getByRole("region", { name: "研究对话" });
+  await followup.getByLabel("询问已有研究").fill("刚才那次研究有什么空头依据？");
+  const second = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
+  await followup.getByRole("button", { name: "发送问题" }).click();
+  const result = await second;
+  expect(result.status()).toBe(200);
+  expect(result.request().postDataJSON()).toEqual({ message: "刚才那次研究有什么空头依据？", session_id: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" });
+});
+
+test("second confirmed research reuses the restored conversation session", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  for (let i=0;i<2;i++) {
+    await panel.getByLabel("询问已有研究").fill(i===0 ? "第一次研究" : "第二次研究");
+    await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+    await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+    const pending = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
+    await panel.getByRole("button", { name: "发送问题" }).click();
+    const response = await pending;
+    expect(response.status()).toBe(200);
+    const sent = response.request().postDataJSON();
+    expect(sent.confirm_start).toBe(true);
+    if (i===0) expect(sent.session_id).toBeUndefined();
+    else expect(sent.session_id).toBe("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+  }
+});
+
+test("binding failure preserves created Run ID and warns against duplicate research", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  // Establish a real fixture-backed session first: binding failure must
+  // not leave a stale session attached to the newly created Run.
+  const existing = page.getByRole("region", { name: "研究对话" });
+  await existing.getByLabel("询问已有研究").fill("第一次研究");
+  await existing.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await existing.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  await existing.getByRole("button", { name: "发送问题" }).click();
+  await expect(existing).toContainText("当前研究 · Run ID");
+  await page.route("**/api/workbench/conversation", async route => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      answer: "研究任务已创建，但会话关联失败。请保存 Run ID；不要重复启动研究。",
+      run_id: "c".repeat(32), symbol: "600519.SH", state: "PENDING", session_binding: "FAILED",
+    }) });
+  });
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await panel.getByLabel("询问已有研究").fill("请研究 600519.SH");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  await expect(panel).toContainText("c".repeat(32));
+  await expect(panel.getByRole("alert")).toContainText("勿重复启动");
+  await expect(panel).not.toContainText("当前研究 · Run ID");
+  expect(await page.evaluate(() => sessionStorage.getItem("aegis-conversation-session"))).toBeNull();
+  await panel.getByLabel("询问已有研究").fill("刚才的研究依据是什么？");
+  const followup = page.waitForRequest(r => r.url().endsWith("/api/workbench/conversation") && r.method() === "POST");
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  expect((await followup).postDataJSON()).toEqual({ message: "刚才的研究依据是什么？" });
+});

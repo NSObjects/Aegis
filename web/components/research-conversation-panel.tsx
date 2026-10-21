@@ -14,6 +14,7 @@ export default function ResearchConversationPanel() {
   const [confirmStart, setConfirmStart] = useState(false);
   const [error, setError] = useState("");
   const [restored, setRestored] = useState("");
+  const [currentSession, setCurrentSession] = useState("");
   useEffect(() => {
     const id = window.sessionStorage.getItem("aegis-conversation-session");
     if (!id || !/^[a-f0-9]{32}$/.test(id)) return;
@@ -21,7 +22,7 @@ export default function ResearchConversationPanel() {
     fetch("/api/workbench/conversation/session?session_id=" + id, { credentials: "same-origin", cache: "no-store", signal: controller.signal })
       .then(async r => { if (!r.ok) throw Error("unavailable"); return r.json(); })
       .then((v: { run_id?: string; symbol?: string }) => {
-        if (v.run_id && /^[a-f0-9]{32}$/.test(v.run_id)) setRestored("已恢复研究 " + (v.symbol ?? "") + " · Run ID: " + v.run_id);
+        if (v.run_id && /^[a-f0-9]{32}$/.test(v.run_id)) { setCurrentSession(id); setRestored("已恢复研究 " + (v.symbol ?? "") + " · Run ID: " + v.run_id); }
       }).catch(() => { /* Missing or expired sessions are never fabricated. */ });
     return () => controller.abort();
   }, []);
@@ -39,15 +40,26 @@ export default function ResearchConversationPanel() {
       const response = await fetch("/api/workbench/conversation", {
         method: "POST", credentials: "same-origin", cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(starting ? { message: question, start_symbol: startSymbol.trim().toUpperCase(), confirm_start: true } : { message: question }),
+        body: JSON.stringify(starting ? { message: question, start_symbol: startSymbol.trim().toUpperCase(), confirm_start: true, ...(currentSession ? { session_id: currentSession } : {}) } : currentSession ? { message: question, session_id: currentSession } : { message: question }),
       });
       if (!response.ok) throw Error(response.status === 401 ? "登录已过期，请重新登录" : "对话服务暂不可用，请检查模型配置");
       const data: unknown = await response.json();
       if (!data || typeof data !== "object" || typeof (data as { answer?: unknown }).answer !== "string")
         throw Error("对话返回格式错误");
-      const body = data as { answer: string; run_id?: string; session_id?: string };
-      if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setRestored("当前研究 · Run ID: " + body.run_id); }
-      if (starting && (!body.run_id || !/^[a-f0-9]{32}$/.test(body.run_id))) throw Error("研究启动失败：未返回有效 Run ID");
+      const body = data as { answer: string; run_id?: string; session_id?: string; session_binding?: string };
+      if (starting && (!body.run_id || !/^[a-f0-9]{32}$/.test(body.run_id))) throw Error("研究启动响应无有效 Run ID，请到研究列表核实，勿重复启动");
+      if (starting && body.session_binding === "FAILED") {
+        window.sessionStorage.removeItem("aegis-conversation-session");
+        setCurrentSession("");
+        setRestored("");
+        setExchanges(current => [...current, { question, answer: body.answer + " Run ID: " + body.run_id }]);
+        setMessage("");
+        setConfirmStart(false);
+        setStartSymbol("");
+        setError("研究已创建，但历史会话关联失败。请保留 Run ID，勿重复启动。");
+        return;
+      }
+      if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setRestored("当前研究 · Run ID: " + body.run_id); }
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
       setMessage("");
       setConfirmStart(false);
