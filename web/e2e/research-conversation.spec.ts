@@ -182,7 +182,7 @@ test("selected report follow-up is explicitly read-only and references exactly t
   const pending = page.waitForRequest(r => r.url().endsWith("/api/workbench/conversation") && r.method() === "POST" && r.postDataJSON()?.message?.includes("反对依据"));
   await panel.getByRole("button", { name: "发送问题" }).click();
   const data = (await pending).postDataJSON();
-  expect(data).toMatchObject({ session_id: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" });
+  expect(data.session_id).toBeUndefined(); // Explicit Run must not inherit an unrelated session.
   expect(data.confirm_start).toBeUndefined();
   expect(data.start_symbol).toBeUndefined();
   expect(data.message).toContain("Run ID aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
