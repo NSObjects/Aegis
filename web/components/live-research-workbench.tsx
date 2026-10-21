@@ -360,6 +360,6 @@ export default function LiveResearchWorkbench() {
         </details>
       </div>
     </div>}
-    {session?.authenticated && <ResearchConversationPanel />}
+    {session?.authenticated && <ResearchConversationPanel onOpenRun={id => { navigate("workspace", id); setError(""); void refresh().catch(e => setError((e as Error).message)); }} />}
     <footer className="live-footer">AEGIS RESEARCH · 研究结果仅供分析，不包含交易执行</footer></div></main></div>;
 }
