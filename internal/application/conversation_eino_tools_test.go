@@ -4,6 +4,7 @@ import (
  "context"
  "encoding/json"
  "testing"
+ "time"
 )
 
 func TestConversationEinoReadToolsExecutePersistedFacts(t *testing.T) {
@@ -37,4 +38,23 @@ func containsJSONField(data,key,want string) bool {
  if json.Unmarshal([]byte(data),&v)!=nil{return false}
  var actual string
  return json.Unmarshal(v[key],&actual)==nil&&actual==want
+}
+
+func TestConversationComparisonToolInvokesPersistedRunGuard(t *testing.T) {
+ now:=time.Date(2026,10,20,0,0,0,0,time.UTC)
+ stub:=&conversationRunsStub{records:map[string]RunRecord{
+  "left":{ID:"left",Symbol:"600519.SH",Mode:ModeDecision,State:RunCompleted,RequestedAsOf:now,Artifact:json.RawMessage(`{"symbol":"600519.SH","action":"WATCH","market_view":"MIXED"}`)},
+  "right":{ID:"right",Symbol:"600519.SH",Mode:ModeDecision,State:RunCompleted,RequestedAsOf:now.Add(24*time.Hour),Artifact:json.RawMessage(`{"symbol":"600519.SH","action":"AVOID","market_view":"RISK_OFF"}`)},
+  "failed":{ID:"failed",Symbol:"600519.SH",Mode:ModeDecision,State:RunFailed},
+ }}
+ tools,err:=(&ConversationResearchTools{runs:stub}).EinoReadTools()
+ if err!=nil{t.Fatal(err)}
+ out,err:=tools[4].InvokableRun(context.Background(),`{"left_run_id":"left","right_run_id":"right"}`)
+ if err!=nil{t.Fatal(err)}
+ var result ConversationRunComparison
+ if json.Unmarshal([]byte(out),&result)!=nil || len(result.Differences)!=2 || result.SameResearchDate || result.LeftRunID!="left" || result.RightRunID!="right" {t.Fatalf("comparison tool omitted persisted differences/PIT: %s",out)}
+ for _,args:=range []string{`{"left_run_id":"left","right_run_id":"failed"}`,`{"left_run_id":"left","right_run_id":"missing"}`,`{"left_run_id":"left","right_run_id":"left"}`} {
+  if _,err:=tools[4].InvokableRun(context.Background(),args);err==nil{t.Fatalf("comparison accepted invalid args: %s",args)}
+ }
+ if _,err:=tools[5].InvokableRun(context.Background(),`{"run_id":"left"}`);err==nil{t.Fatal("decision-only Run exposed invented evidence index")}
 }
