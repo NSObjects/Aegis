@@ -58,5 +58,9 @@ func (t *ConversationResearchTools) EinoReadTools() ([]tool.InvokableTool, error
   return t.CompareResearchRuns(ctx,arg.LeftRunID,arg.RightRunID)
  })
  if err!=nil{return nil,fmt.Errorf("compare runs tool: %w",err)}
- return []tool.InvokableTool{get,list,artifact,debate,compare},nil
+ evidence,err:=utils.InferTool("ReadEvidenceIndex","Read canonical event and document IDs, time bounds and recorded source metadata from a completed portfolio research Run. Identifiers are not proof of source authenticity.",func(ctx context.Context,arg ConversationRunIDArgs)(*RunEvidenceIndex,error){
+  return t.ReadEvidenceIndex(ctx,arg.RunID)
+ })
+ if err!=nil{return nil,fmt.Errorf("evidence index tool: %w",err)}
+ return []tool.InvokableTool{get,list,artifact,debate,compare,evidence},nil
 }

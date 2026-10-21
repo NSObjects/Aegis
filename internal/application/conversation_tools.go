@@ -87,3 +87,17 @@ func (t *ConversationResearchTools) ReadDebate(ctx context.Context, id string) (
  if root.PortfolioReview.Debate[0]!='{' { return nil, errors.New("invalid persisted debate state") }
  return append(json.RawMessage(nil),root.PortfolioReview.Debate...),nil
 }
+
+ 
+// ReadEvidenceIndex retrieves only canonical references persisted alongside the
+// completed Portfolio Review artifact. IDs are not proof of source authenticity.
+func (t *ConversationResearchTools) ReadEvidenceIndex(ctx context.Context,id string)(*RunEvidenceIndex,error){
+ if t==nil || t.runs==nil{return nil,errors.New("conversation tools unavailable")}
+ rec,err:=t.runs.Get(ctx,id);if err!=nil{return nil,err}
+ if rec.State!=RunCompleted || rec.Mode!=ModePortfolio || rec.EvidenceIndex==nil{return nil,errors.New("validated evidence index unavailable")}
+ if err:=checkRunEvidenceIndex(rec);err!=nil{return nil,errors.New("persisted evidence index validation failed")}
+ raw,err:=json.Marshal(rec.EvidenceIndex);if err!=nil{return nil,errors.New("evidence index unavailable")}
+ var copied RunEvidenceIndex
+ if json.Unmarshal(raw,&copied)!=nil{return nil,errors.New("evidence index unavailable")}
+ return &copied,nil
+}
