@@ -144,11 +144,21 @@ func (h *Handler) conversationSessionRead(w http.ResponseWriter,r *http.Request)
 }
 
  
-// Until sessions have a durable Run history, calendar-relative questions must
-// not be resolved against whichever single Run happens to be currently bound.
-// Date references use the A-share market calendar, not the host timezone.
+// Resolve one unambiguous reference from server-owned Run history.
+// Relative dates use Asia/Shanghai calendar days, not exchange trading days.
 func selectConversationHistoricalRun(message string,history []application.ConversationSessionBinding,now time.Time)(application.ConversationSessionBinding,error) {
  if len(history)==0{return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
+ previous:=strings.Contains(message,"上次") || strings.Contains(message,"上一回")
+ yesterday:=strings.Contains(message,"昨天") || strings.Contains(message,"昨日")
+ beforeYesterday:=strings.Contains(message,"前天") || strings.Contains(message,"前日")
+ periods:=0
+ for _,present:=range []bool{previous,yesterday,beforeYesterday} {if present {periods++}}
+ if periods!=1 || strings.Contains(message,"上周") || strings.Contains(message,"上个月") {
+  return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable
+ }
+ // Exclude the current Run before filtering by ticker. Otherwise a current
+ // Run for a different ticker incorrectly skips that ticker's latest history.
+ if previous {history=history[1:]}
  symbols:=conversationMentionedSymbol.FindAllString(strings.ToUpper(message),-1)
  if len(symbols)>0 {
   ticker:=symbols[0]
@@ -158,8 +168,8 @@ func selectConversationHistoricalRun(message string,history []application.Conver
   history=filtered
   if len(history)==0{return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable}
  }
- if strings.Contains(message,"上次") || strings.Contains(message,"上一回") {
-  if len(history)>1{return history[1],nil}
+ if previous {
+  if len(history)>0{return history[0],nil}
   return application.ConversationSessionBinding{},application.ErrConversationSessionUnavailable
  }
  days:=0

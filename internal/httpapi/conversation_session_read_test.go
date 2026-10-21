@@ -166,3 +166,19 @@ func TestSelectConversationHistoricalRunByDateAndTicker(t *testing.T) {
  history=append(history,makeBinding("d","600519.SH",1))
  if _,err:=selectConversationHistoricalRun("昨天600519.SH的研究",history,now);err==nil{t.Fatal("duplicate same-day ticker accepted")}
 }
+
+func TestHistoricalReferenceRejectsMixedPeriodsAndUsesPreviousMatchingRun(t *testing.T) {
+ now:=time.Date(2026,10,21,4,0,0,0,time.UTC)
+ history:=[]application.ConversationSessionBinding{
+  {RunID:strings.Repeat("a",32),Symbol:"000001.SZ",AsOf:now},
+  {RunID:strings.Repeat("b",32),Symbol:"600519.SH",AsOf:now.AddDate(0,0,-1)},
+  {RunID:strings.Repeat("c",32),Symbol:"600519.SH",AsOf:now.AddDate(0,0,-2)},
+ }
+ for _,message:=range []string{"昨天和前天的研究", "上周和昨天的研究", "上次和昨天的研究"} {
+  if got,err:=selectConversationHistoricalRun(message,history,now);err==nil {
+   t.Fatalf("ambiguous period %q silently selected %s",message,got.RunID)
+  }
+ }
+ got,err:=selectConversationHistoricalRun("上次600519.SH的研究",history,now)
+ if err!=nil||got.RunID!=history[1].RunID {t.Fatalf("previous ticker Run skipped: %+v %v",got,err)}
+}

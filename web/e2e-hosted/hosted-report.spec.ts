@@ -34,7 +34,7 @@ test("completed hosted Go/Eino research remains readable in the actual Web workb
 
   // Reuse this exact completed and already-paid Run for narrow-screen reading checks.
   await page.setViewportSize({ width: 375, height: 812 });
-  await expect(page.getByRole("heading", { name: "结构化研究报告" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "600519.SH 的研究判断" })).toBeVisible({ timeout: 30000 });
   await expect(page.locator(".live-brief-lead")).toBeVisible();
   await expect(page.locator(".live-brief-appendix")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "研究报告章节目录" })).toBeVisible();

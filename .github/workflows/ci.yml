@@ -34,6 +34,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Hosted conversation gate static preflight (no providers)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/verify-conversation-hosted.sh
+          grep -Fq -- '-dev -portfolio-review=false -listen' scripts/verify-conversation-hosted.sh
+          grep -Fq -- '"confirm_start":true' scripts/verify-conversation-hosted.sh
+          grep -Fq -- 'run_conversation_hosted && !inputs.run_live_web_api' .github/workflows/integration.yml
+          echo "Conversation Hosted gate syntax and DECISION mode verified without external API requests"
+          bash scripts/test-conversation-http-no-provider.sh
+
       - name: Download modules
         run: go mod download
 

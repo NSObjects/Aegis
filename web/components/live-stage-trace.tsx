@@ -2,7 +2,7 @@
 
 import { Activity, Clock3, Copy, Wifi, WifiOff } from "lucide-react";
 import { useState } from "react";
-import { formatFailureDiagnostic } from "@/lib/failure-diagnostic";
+import { formatFailureDiagnostic, eventAnalysisFailureDescriptions } from "@/lib/failure-diagnostic";
 import type { LiveArtifact, LiveRun, LiveStageEvent } from "@/lib/live-contract";
 import { readLiveReport } from "@/lib/live-report";
 import { buildRunTrace, stageLabels, stageReportId, type StagePhase } from "@/lib/stage-trace";
@@ -10,6 +10,7 @@ import { buildRunTrace, stageLabels, stageReportId, type StagePhase } from "@/li
 type StreamStatus = "connected" | "disconnected" | "idle";
 
 const failureDescriptions: Record<string, string> = {
+  ...eventAnalysisFailureDescriptions,
   TECHNICAL_MODEL_EMPTY: "技术分析 Agent 没有返回可解析的内容",
   TECHNICAL_JSON_DECODE: "技术分析上下文 JSON 解析失败",
   TECHNICAL_CONTEXT_VALIDATION: "技术分析的标的、研究日期或结构校验失败",

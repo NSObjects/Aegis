@@ -40,6 +40,11 @@ on:
         required: true
         default: false
         type: boolean
+      run_conversation_hosted:
+        description: "One paid Conversation confirmation → real Run → read-only follow-up (single opt-in)"
+        required: true
+        default: false
+        type: boolean
       run_live_web_api:
         description: "Paid real Go HTTP ResearchRun and Eino provider E2E"
         required: true
@@ -61,7 +66,7 @@ concurrency:
 jobs:
   trading:
     name: Trading Agent
-    if: ${{ inputs.run_trading || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_trading || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -106,7 +111,7 @@ jobs:
 
   technical:
     name: Technical Agent
-    if: ${{ inputs.run_technical || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_technical || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -158,7 +163,7 @@ jobs:
 
   research:
     name: Full Stateless Hosted E2E
-    if: ${{ inputs.run_research || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_research || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -206,7 +211,7 @@ jobs:
 
   multi_agent:
     name: Full Multi-Agent Hosted E2E
-    if: ${{ inputs.run_multi_agent || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_multi_agent || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -254,7 +259,7 @@ jobs:
 
   risk_portfolio:
     name: Full Risk / Portfolio Hosted E2E
-    if: ${{ inputs.run_risk_portfolio || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_risk_portfolio || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -302,7 +307,7 @@ jobs:
 
   production_cli:
     name: Production CLI Portfolio Review E2E
-    if: ${{ inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -417,7 +422,7 @@ jobs:
 
   fundamental_cli:
     name: Fundamental Production CLI E2E
-    if: ${{ inputs.run_fundamental || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_fundamental || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -537,7 +542,7 @@ jobs:
 
   invalid_account_cli:
     name: Production CLI Invalid Account Fail-Closed
-    if: ${{ inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]')) }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # No provider credentials: rejection must happen before model/source setup.
@@ -580,7 +585,7 @@ jobs:
 
   live_web_api:
     name: Real Go HTTP ResearchRun with Eino providers
-    if: ${{ inputs.run_live_web_api }}
+    if: ${{ !inputs.run_conversation_hosted && (inputs.run_live_web_api) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -661,3 +666,49 @@ jobs:
           # must never create a second provider request.
           cd web
           npx playwright test --config playwright.hosted.config.ts
+
+  conversation_hosted:
+    name: Real Conversation → ResearchRun Hosted E2E (one paid Run)
+    # Never run alongside another paid Integration job. Never triggered by push.
+    if: ${{ inputs.run_conversation_hosted && !inputs.run_live_web_api && !inputs.run_trading && !inputs.run_technical && !inputs.run_research && !inputs.run_multi_agent && !inputs.run_risk_portfolio && !inputs.run_fundamental && !inputs.run_production_cli }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      DEEPSEEK_STRONG_MODEL: ${{ vars.DEEPSEEK_STRONG_MODEL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Web dependencies and Chromium (before paid request)
+        shell: bash
+        run: |
+          cd web
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Verify repository credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEEPSEEK_API_KEY" || { echo "::error::DEEPSEEK_API_KEY missing"; exit 1; }
+          test -n "$TUSHARE_TOKEN" || { echo "::error::TUSHARE_TOKEN missing"; exit 1; }
+          test -n "$TAVILY_API_KEY" || { echo "::error::TAVILY_API_KEY missing"; exit 1; }
+      - name: Prepare research dependencies and binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
+          go build -o "$RUNNER_TEMP/aegis-web" ./cmd/aegis-web
+      - name: Verify one Conversation Run and read-only follow-up (no retries)
+        shell: bash
+        run: bash scripts/verify-conversation-hosted.sh

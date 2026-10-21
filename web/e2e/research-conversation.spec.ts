@@ -122,6 +122,14 @@ test("binding failure preserves created Run ID and warns against duplicate resea
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  // Establish a real fixture-backed session first: binding failure must
+  // not leave a stale session attached to the newly created Run.
+  const existing = page.getByRole("region", { name: "研究对话" });
+  await existing.getByLabel("询问已有研究").fill("第一次研究");
+  await existing.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await existing.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  await existing.getByRole("button", { name: "发送问题" }).click();
+  await expect(existing).toContainText("当前研究 · Run ID");
   await page.route("**/api/workbench/conversation", async route => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
       answer: "研究任务已创建，但会话关联失败。请保存 Run ID；不要重复启动研究。",
@@ -136,4 +144,9 @@ test("binding failure preserves created Run ID and warns against duplicate resea
   await expect(panel).toContainText("c".repeat(32));
   await expect(panel.getByRole("alert")).toContainText("勿重复启动");
   await expect(panel).not.toContainText("当前研究 · Run ID");
+  expect(await page.evaluate(() => sessionStorage.getItem("aegis-conversation-session"))).toBeNull();
+  await panel.getByLabel("询问已有研究").fill("刚才的研究依据是什么？");
+  const followup = page.waitForRequest(r => r.url().endsWith("/api/workbench/conversation") && r.method() === "POST");
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  expect((await followup).postDataJSON()).toEqual({ message: "刚才的研究依据是什么？" });
 });

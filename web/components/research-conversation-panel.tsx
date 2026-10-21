@@ -49,6 +49,9 @@ export default function ResearchConversationPanel() {
       const body = data as { answer: string; run_id?: string; session_id?: string; session_binding?: string };
       if (starting && (!body.run_id || !/^[a-f0-9]{32}$/.test(body.run_id))) throw Error("研究启动响应无有效 Run ID，请到研究列表核实，勿重复启动");
       if (starting && body.session_binding === "FAILED") {
+        window.sessionStorage.removeItem("aegis-conversation-session");
+        setCurrentSession("");
+        setRestored("");
         setExchanges(current => [...current, { question, answer: body.answer + " Run ID: " + body.run_id }]);
         setMessage("");
         setConfirmStart(false);

@@ -33,15 +33,22 @@ type liveExecutor struct {
 func (e *liveExecutor) Run(ctx context.Context, request application.ResearchRequest) (*application.ResearchResponse, error) {
 	values, err := e.credentials.Load(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load live research credentials: %w", err)
 	}
-	opts := e.options
+	opts := liveOptionsForRequest(e.options, request)
 	opts.Credentials = values
 	service, err := application.NewLiveResearchService(ctx, opts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialize live research service: %w", err)
 	}
 	return service.Run(ctx, request)
+}
+
+// liveOptionsForRequest binds the live graph type to the durable request mode,
+// not to the handler's configurable default route mode.
+func liveOptionsForRequest(base application.LiveServiceOptions, request application.ResearchRequest) application.LiveServiceOptions {
+	base.PortfolioReview = request.Mode == application.ModePortfolio
+	return base
 }
 
 func main() {
