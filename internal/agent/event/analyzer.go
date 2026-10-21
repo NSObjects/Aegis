@@ -209,7 +209,7 @@ func (a Analyzer) Analyze(
 	if extraction.Confidence < 0 ||
 		extraction.Confidence > 1 {
 		return nil, fmt.Errorf(
-			"event extraction confidence must be between 0 and 1: %f",
+			"extract event facts: confidence must be between 0 and 1: %f",
 			extraction.Confidence,
 		)
 	}
@@ -219,7 +219,7 @@ func (a Analyzer) Analyze(
 		documentByID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extract event facts: validate extracted facts: %w", err)
 	}
 
 	if len(facts) == 0 {
@@ -257,7 +257,7 @@ func (a Analyzer) Analyze(
 		clusterResult.Clusters,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cluster event facts: validate cluster coverage: %w", err)
 	}
 	if a.Materiality == nil {
 		return nil, errors.New(
@@ -402,7 +402,7 @@ func (a Analyzer) Analyze(
 			materiality,
 		); err != nil {
 			return nil, fmt.Errorf(
-				"event %q materiality: %w",
+				"analyze event %q materiality: validate result: %w",
 				eventID,
 				err,
 			)

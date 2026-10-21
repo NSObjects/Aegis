@@ -687,6 +687,8 @@ func researchErrorCategory(err error) string {
 		return "EVENT_MODEL_EMPTY"
 	case strings.Contains(msg, "invalid event context:") || strings.Contains(msg, "validate event analyst context:"):
 		return "EVENT_CONTEXT_VALIDATION"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "normalize event analyst synthesis:"):
+		return "EVENT_ANALYST_SYNTHESIS_VALIDATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "normalize event analyst synthesis"):
 		return "EVENT_SYNTHESIS_VALIDATION"
 	// Match specific round failures before the broad evidence-loop fallback.
@@ -700,6 +702,20 @@ func researchErrorCategory(err error) string {
 		return "EVENT_EVIDENCE_LOOP"
 	case strings.Contains(msg, "event research:") && (strings.Contains(msg, "capture live event evidence:") || strings.Contains(msg, "live event capture completed without")):
 		return "EVENT_CAPTURE"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "extract event facts:"):
+		return "EVENT_FACT_EXTRACTION"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "cluster event facts:"):
+		return "EVENT_FACT_CLUSTERING"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "detect event "):
+		return "EVENT_EVENT_RELATION"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "analyze event "):
+		return "EVENT_IMPACT_OR_MATERIALITY"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "normalize event "):
+		return "EVENT_ANALYSIS_NORMALIZATION"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "synthesize event analyst conclusion:"):
+		return "EVENT_ANALYST_SYNTHESIS"
+	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:") && strings.Contains(msg, "validate event context:"):
+		return "EVENT_ANALYST_CONTEXT_VALIDATION"
 	case strings.Contains(msg, "event research:") && strings.Contains(msg, "analyze researched event evidence:"):
 		return "EVENT_ANALYSIS"
 	case strings.Contains(msg, "event research:") && (strings.Contains(msg, "index cited event sources:") || strings.Contains(msg, "validate cited event sources:")):

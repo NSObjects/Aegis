@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatFailureDiagnostic } from "./failure-diagnostic";
+import { formatFailureDiagnostic, eventAnalysisFailureDescriptions } from "./failure-diagnostic";
 import type { LiveRun, LiveStageEvent } from "./live-contract";
 
 const run: LiveRun = {
@@ -29,6 +29,21 @@ describe("failure diagnostic export", () => {
       expect(output).toContain(`错误类别: ${category}`);
       expect(output).toContain("失败阶段: Event");
     }
+  });
+  it.each([
+    ["EVENT_FACT_EXTRACTION", "事件事实抽取失败"],
+    ["EVENT_FACT_CLUSTERING", "事件事实聚类失败"],
+    ["EVENT_EVENT_RELATION", "事件关系分析失败"],
+    ["EVENT_IMPACT_OR_MATERIALITY", "事件影响机制或重要性分析失败"],
+    ["EVENT_ANALYSIS_NORMALIZATION", "事件分析结果规范化校验失败"],
+    ["EVENT_ANALYST_SYNTHESIS", "事件分析结论生成失败"],
+    ["EVENT_ANALYST_SYNTHESIS_VALIDATION", "事件分析结论规范化校验失败"],
+    ["EVENT_ANALYST_CONTEXT_VALIDATION", "事件分析上下文校验失败"],
+  ])("preserves %s in copied diagnostics with a Chinese description", (category, description) => {
+    const output = formatFailureDiagnostic({ ...run, failure_stage: "Event", failure_category: category }, []);
+    expect(output).toContain(`错误类别: ${category}`);
+    expect(output).toContain("失败阶段: Event");
+    expect(eventAnalysisFailureDescriptions[category]).toBe(description);
   });
   it("omits untrusted text and unknown diagnostic categories", () => {
     const hostile = { ...run, failure_category: "SECRET_KEY=123", failure_stage: "bad\nsecret" };
