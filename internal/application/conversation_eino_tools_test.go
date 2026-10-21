@@ -12,9 +12,9 @@ func TestConversationEinoReadToolsExecutePersistedFacts(t *testing.T) {
   "failed":{ID:"failed",Symbol:"000001.SZ",State:RunFailed},
  }}
  tools,err:=(&ConversationResearchTools{runs:stub}).EinoReadTools()
- if err!=nil||len(tools)!=5{t.Fatalf("Eino tools: %d %v",len(tools),err)}
+ if err!=nil||len(tools)!=6{t.Fatalf("Eino tools: %d %v",len(tools),err)}
  ctx:=context.Background()
- names:=[]string{"GetResearchRun","ListResearchRuns","ReadArtifact","ReadDebate","CompareResearchRuns"}
+ names:=[]string{"GetResearchRun","ListResearchRuns","ReadArtifact","ReadDebate","CompareResearchRuns","ReadEvidenceIndex"}
  for i,tool:=range tools{
   info,e:=tool.Info(ctx)
   if e!=nil||info.Name!=names[i]{t.Fatalf("unexpected tool %d: %+v %v",i,info,e)}
