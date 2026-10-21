@@ -6,7 +6,7 @@ type Exchange = { question: string; answer: string };
 
 // The first R2 chat surface is deliberately stateless: every answer must be
 // grounded in tools from persisted Runs, not fabricated browser-side history.
-export default function ResearchConversationPanel() {
+export default function ResearchConversationPanel({ onOpenRun }: { onOpenRun?: (runId: string) => void }) {
   const [message, setMessage] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [busy, setBusy] = useState(false);
@@ -15,6 +15,7 @@ export default function ResearchConversationPanel() {
   const [error, setError] = useState("");
   const [restored, setRestored] = useState("");
   const [currentSession, setCurrentSession] = useState("");
+  const [currentRunId, setCurrentRunId] = useState("");
   useEffect(() => {
     const id = window.sessionStorage.getItem("aegis-conversation-session");
     if (!id || !/^[a-f0-9]{32}$/.test(id)) return;
@@ -22,7 +23,7 @@ export default function ResearchConversationPanel() {
     fetch("/api/workbench/conversation/session?session_id=" + id, { credentials: "same-origin", cache: "no-store", signal: controller.signal })
       .then(async r => { if (!r.ok) throw Error("unavailable"); return r.json(); })
       .then((v: { run_id?: string; symbol?: string }) => {
-        if (v.run_id && /^[a-f0-9]{32}$/.test(v.run_id)) { setCurrentSession(id); setRestored("已恢复研究 " + (v.symbol ?? "") + " · Run ID: " + v.run_id); }
+        if (v.run_id && /^[a-f0-9]{32}$/.test(v.run_id)) { setCurrentSession(id); setCurrentRunId(v.run_id); setRestored("已恢复研究 " + (v.symbol ?? "") + " · Run ID: " + v.run_id); }
       }).catch(() => { /* Missing or expired sessions are never fabricated. */ });
     return () => controller.abort();
   }, []);
@@ -51,6 +52,7 @@ export default function ResearchConversationPanel() {
       if (starting && body.session_binding === "FAILED") {
         window.sessionStorage.removeItem("aegis-conversation-session");
         setCurrentSession("");
+        setCurrentRunId(body.run_id ?? "");
         setRestored("");
         setExchanges(current => [...current, { question, answer: body.answer + " Run ID: " + body.run_id }]);
         setMessage("");
@@ -59,7 +61,7 @@ export default function ResearchConversationPanel() {
         setError("研究已创建，但历史会话关联失败。请保留 Run ID，勿重复启动。");
         return;
       }
-      if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setRestored("当前研究 · Run ID: " + body.run_id); }
+      if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setCurrentRunId(body.run_id); setRestored("当前研究 · Run ID: " + body.run_id); }
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
       setMessage("");
       setConfirmStart(false);
@@ -72,6 +74,7 @@ export default function ResearchConversationPanel() {
     <h2 style={{ fontWeight: 700 }}>研究对话</h2>
     <p style={{ marginBlock: 8, opacity: .75 }}>可询问已有 Run 的研究结论或多空依据。默认只读。只有填写股票代码并确认后，才允许对话 Agent 发起新的研究任务；模型回答及新研究都可能产生费用。</p>
     {restored && <p aria-live="polite">{restored}</p>}
+    {onOpenRun && /^[a-f0-9]{32}$/.test(currentRunId) && <button type="button" onClick={() => onOpenRun(currentRunId)}>在研究工作台打开此 Run</button>}
     <div aria-live="polite">
       {exchanges.map((entry, index) => <div key={index} style={{ paddingBlock: 12, borderBottom: "1px solid var(--line, #ddd)" }}>
         <p><strong>你：</strong>{entry.question}</p>
