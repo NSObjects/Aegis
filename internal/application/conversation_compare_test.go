@@ -47,3 +47,16 @@ func TestConversationComparePortfolioReview(t *testing.T){
  stub.records["r"]=bad
  if _,err:=tools.CompareResearchRuns(context.Background(),"l","r");err==nil{t.Fatal("cross symbol plan accepted")}
 }
+
+func TestConversationComparePortfolioRejectsNullSections(t *testing.T) {
+ for _,raw:=range []string{
+  "null",
+  `{"research_artifact":null,"portfolio_review":{}}`,
+  `{"research_artifact":{"symbol":"600519.SH"},"portfolio_review":null}`,
+  `{"research_artifact":{"symbol":"600519.SH"}}`,
+ } {
+  if _,err:=parsePortfolioCompare(json.RawMessage(raw),"600519.SH");err==nil {
+   t.Fatalf("accepted absent or null required portfolio sections: %s",raw)
+  }
+ }
+}
