@@ -2,7 +2,7 @@ package pullback
 
 import (
  "testing"
- "fmt"
+ "time"
 
  "Aegis/internal/capability/technical"
 )
@@ -10,7 +10,7 @@ func risingBars() []technical.HistoricalBar {
  bars:=make([]technical.HistoricalBar,65)
  for i:=range bars {
   price:=100+float64(i)*0.5
-  bars[i]=technical.HistoricalBar{TradeDate:fmt.Sprintf("202607%02d",i+1),Open:price,High:price+1,Low:price-1,Close:price,Volume:1000,Amount:100000}
+  bars[i]=technical.HistoricalBar{TradeDate:time.Date(2026,1,1,0,0,0,0,time.UTC).AddDate(0,0,i).Format("20060102"),Open:price,High:price+1,Low:price-1,Close:price,Volume:1000,Amount:100000}
  }
  return bars
 }
@@ -18,7 +18,6 @@ func TestEvaluateDeterminismAndSafety(t *testing.T){
  bars:=risingBars()
  // Use actual chronological calendar dates rather than manufactured days.
  // 65 trading-session samples; the algorithm requires only ordered observations.
- for i:=range bars {bars[i].TradeDate=fmt.Sprintf("%08d",20260101+i)}
  asOf:=bars[len(bars)-1].TradeDate
  got,err:=Evaluate("600519.SH",asOf,bars)
  if err!=nil {t.Fatal(err)}
