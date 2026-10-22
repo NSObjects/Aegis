@@ -1,6 +1,6 @@
 # Aegis 开发路线图（唯一开发导航）
 
-> 更新：2026-10-14。目的：当前阶段结束后，打开本文件即可找到**下一项应实施的任务**、实施范围、验收条件、完成证据；不需要重新讨论产品方向。
+> 更新：2026-10-22。目的：当前阶段结束后，打开本文件即可找到**下一项应实施的任务**、实施范围、验收条件、完成证据；不需要重新讨论产品方向。
 >
 > V1 内核完成证据：2026-10-11 [PR #142](https://github.com/NSObjects/Aegis/pull/142) 的固定 head `61de58d0c0812de5d98c35e481491355debdff4f` 运行 [Integration #38098687921](https://github.com/NSObjects/Aegis/actions/runs/38098687921)：8/8 真实 Hosted Job 均 SUCCESS；[CI #38098690842](https://github.com/NSObjects/Aegis/actions/runs/38098690842) SUCCESS。合并后 `main` merge SHA 为 `b6ab9b688450c8f62f40483e0b5ccd870a3614ca`，[main CI #38098968618](https://github.com/NSObjects/Aegis/actions/runs/38098968618) SUCCESS。详见 [V1 验收记录](V1_ACCEPTANCE.md)。
 >
@@ -12,7 +12,7 @@
 
 **现在：R2 — 对话研究与深入交互（R1 Web 研究工作台已完成 Exit Gate）。**
 
-**下一项：R2-01 / Issue #202 — Conversation Agent 复用既有 ResearchRun/Application Service，通过最小 typed tools 启动真实研究和只读已有研究事实；先查 main 与开放 PR，避免重建内核。**
+**下一项：R2-05 / Issue #206 — 固定 SHA 对话研究综合验收：浏览器发起→等待→追问→比较→回看，工具失败/超时/鉴权和 Risk Gate；对话模型实际工具选择与证据引用另需真实执行证据。不要重复实现 #202–#205，也不要将单元测试等同于模型执行验收。**
 
 **R0 Exit Gate：已满足。R1-01、R1-02 的已有运行闭环已核实。** `internal/application/research_service.go` 和 `live_factory.go` 统一装配与执行路径，CLI `cmd/aegis/main.go`、HTTP `cmd/aegis-web/main.go` 都复用此入口；现有 `research_service_test.go` 验证 typed 输出及原 CLI JSON 形状，V1 Hosted 验证正式 CLI。R1-02 的并发、取消、重启和幂等由已合并 PR #145 验证；R1-03 的 Artifact 完整性由 PR #147 验证；不重复搭建 Eino Graph。
 
@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | **R0** | 当前 V1：Multi-Agent 研究内核实际跑通 | **DONE**（固定 SHA 全量 Hosted 8/8 + 合并后 main CI） | **R1-01** |
 | **R1** | **研究工作台 V1**：API/任务/实时过程/Web/研究报告/历史 | **DONE**（#201 Exit Gate 已完成，明确记录未覆盖场景） | **R2-01** |
-| **R2** | 对话研究：Conversation Agent、追问、跨运行比较 | PLANNED | R3-01 |
+| **R2** | 对话研究：Conversation Agent、追问、跨运行比较 | **IN_PROGRESS**（#202–#205 已关闭；#206 待 Exit Gate） | R3-01 |
 | **R3** | 研究发现：确定性选股、Watchlist、横向比较 | PLANNED | R4-01 |
 | **R4** | 自动研究：监控、触发、增量复查、定期报告 | PLANNED | R5-01 |
 | **R5** | 持续研究：假设验证、错误反思、研究 Memory | PLANNED | R6-01 |
@@ -171,23 +171,25 @@ R1 不包含 Watchlist 智能扫描（R3）、自动监控（R4）、研究 Memo
 
 **完成体验**：工作台可像聊天一样提问，但所有需要事实和研究的回答都会引用真实 run/artifact；不会另造独立研究流程。
 
-- [ ] **R2-01 Conversation Agent 接入现有应用服务**
+- [x] **R2-01 Conversation Agent 接入现有应用服务**
   - Eino Agent-as-Tools；最小 typed tools：`StartResearch`、`GetResearchRun`、`ReadArtifact`、`ReadDebate`、`ListResearchRuns`。不凭聊天文本创建金融事实。
   - **验收**：问「研究 600519.SH」可启动真实 Run；问「空头依据？」只查询对应已验证 Artifact，不重复全量付费研究。
-- [ ] **R2-02 会话上下文及多轮引用**
+- [x] **R2-02 会话上下文及多轮引用**
   - session_id、run_id、symbol、as_of 持久关联；解析「它、刚才、昨天、上次」；跨会话访问按授权处理。
   - **验收**：跨轮定位正确；日历日/交易日不会混淆；数据不足时说明而非编造。
-- [ ] **R2-03 对话与工作台状态联动**
+- [x] **R2-03 对话与工作台状态联动**
   - 聊天触发的运行进入研究列表；页面选择的报告能直接追问；支持工具状态/失败、附件式证据引用。
   - **验收**：聊天、页面、API 对同一 Run 的事实一致。
-- [ ] **R2-04 研究比较和分析型问答**
+- [x] **R2-04 研究比较和分析型问答**
   - 对齐两次研究截止日、证据和结论差异；给用户解释新增信息/失效论点，不把旧行情说成现价。
   - **验收**：比较有 typed Artifact 的出处；在两个数据集不可比时输出不可比原因。
 - [ ] **R2-05 对话 E2E 验收**
   - 浏览器连续完成「发起 → 等待 → 追问 → 比较 → 回看」，并验证鉴权、调用超时、工具失败和不能绕过 Risk Gate。
   - **验收**：不依赖长期 Memory/RAG 即可稳定操作研究。
 
-**R2 Exit Gate**：日常研究可以通过页面或对话完成；下一项 **R3-01**。
+**R2 验收记录（2026-10-22）**：#202–#205 已关闭；PR #368 合并 main `600b327ff1dffa4fcc486a598586f8385d07212a`（Go CI #39585698583 SUCCESS）；PR #369 合并 `2a067a045a290fe51e9005814e8ec54cf0c8d016`（Go #39711981390、Web #39711981533 SUCCESS）；PR #370 合并 `5c4e6f5977bb0c40ca4ef1bc1a7b17f35fbab6c7`（Go #39713870930、Web #39713870917 SUCCESS）。合并后 main Go #39714427439 和 Web #39714427433 均 SUCCESS。现有浏览器测试已覆盖提交/SSE/Artifact/历史、两 Run 比较/刷新/回看，以及会话绑定、匿名与过期鉴权等路径。**尚未独立证实** LLM 实际选择比较/证据工具时的金融事实引用质量、综合超时与 Risk Gate；不得用 fixture 或确定性单元测试代替这部分声明。
+
+**R2 Exit Gate**：#206 完成并记录固定 SHA、缺口边界后，才标记 R2 DONE；随后进入 **R3-01**。
 
 ---
 
