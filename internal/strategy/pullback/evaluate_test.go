@@ -14,30 +14,30 @@ func risingBars() []technical.HistoricalBar {
  }
  return bars
 }
-func TestEvaluateDeterminismAndSafety(t *testing.T){
+func sameFactors(bars []technical.HistoricalBar) []AdjustmentFactor {\n result:=make([]AdjustmentFactor,len(bars));for i,b:=range bars{result[i]=AdjustmentFactor{TradeDate:b.TradeDate,Factor:1}};return result\n}\nfunc TestEvaluateDeterminismAndSafety(t *testing.T){
  bars:=risingBars()
  // Use actual chronological calendar dates rather than manufactured days.
  // 65 trading-session samples; the algorithm requires only ordered observations.
  asOf:=bars[len(bars)-1].TradeDate
- got,err:=Evaluate("600519.SH",asOf,bars)
+ got,err:=Evaluate("600519.SH",asOf,bars,sameFactors(bars))
  if err!=nil {t.Fatal(err)}
- again,err:=Evaluate("600519.SH",asOf,bars)
+ again,err:=Evaluate("600519.SH",asOf,bars,sameFactors(bars))
  if err!=nil||got!=again {t.Fatalf("not deterministic: %+v %+v %v",got,again,err)}
  if got.Version!=StrategyVersion {t.Fatal("unversioned result")}
  stopped:=append([]technical.HistoricalBar(nil),bars...)
  stopped[len(stopped)-1].Volume=0
- result,err:=Evaluate("600519.SH",asOf,stopped)
+ result,err:=Evaluate("600519.SH",asOf,stopped,sameFactors(stopped))
  if err!=nil||result.Verdict!=InsufficientData {t.Fatalf("zero volume accepted: %+v %v",result,err)}
- missing,err:=Evaluate("600519.SH",asOf,bars[:64])
+ missing,err:=Evaluate("600519.SH",asOf,bars[:64],sameFactors(bars[:64]))
  if err!=nil||missing.Verdict!=InsufficientData {t.Fatalf("missing cutoff selected: %+v %v",missing,err)}
- if _,err:=Evaluate("600519.SH",asOf,bars[:64]);err!=nil {t.Fatal(err)}
+ if _,err:=Evaluate("600519.SH",asOf,bars[:64],sameFactors(bars[:64]));err!=nil {t.Fatal(err)}
  future:=append([]technical.HistoricalBar(nil),bars...)
  future[len(future)-1].TradeDate="20280101"
- if _,err:=Evaluate("600519.SH",asOf,future);err==nil {t.Fatal("future bar accepted")}
+ if _,err:=Evaluate("600519.SH",asOf,future,sameFactors(future));err==nil {t.Fatal("future bar accepted")}
  invalid:=append([]technical.HistoricalBar(nil),bars...)
  invalid[5].TradeDate=invalid[4].TradeDate
- if _,err:=Evaluate("600519.SH",asOf,invalid);err==nil {t.Fatal("duplicate date accepted")}
- excluded,err:=Evaluate("300001.SZ",asOf,bars)
+ if _,err:=Evaluate("600519.SH",asOf,invalid,sameFactors(invalid));err==nil {t.Fatal("duplicate date accepted")}
+ excluded,err:=Evaluate("300001.SZ",asOf,bars,sameFactors(bars))
  if err!=nil||excluded.Reason!="OUTSIDE_STOCK_UNIVERSE" {t.Fatalf("universe breach: %+v %v",excluded,err)}
 }
 
@@ -49,9 +49,23 @@ func TestEvaluateSelectsObservedPullback(t *testing.T) {
  bars[last].Low=128
  bars[last].Close=129
  asOf:=bars[last].TradeDate
- result,err:=Evaluate("600519.SH",asOf,bars)
+ result,err:=Evaluate("600519.SH",asOf,bars,sameFactors(bars))
  if err!=nil||result.Verdict!=Selected||result.Reason!="TREND_PULLBACK_V1" {
   t.Fatalf("valid upward trend pullback not selected: %+v %v",result,err)
  }
- if _,err:=Evaluate("600abc.SH",asOf,bars);err==nil {t.Fatal("non-numeric symbol accepted")}
+ if _,err:=Evaluate("600abc.SH",asOf,bars,sameFactors(bars));err==nil {t.Fatal("non-numeric symbol accepted")}
+}
+
+func TestEvaluateRequiresPITAdjustment(t *testing.T){
+ bars:=risingBars();last:=len(bars)-1;asOf:=bars[last].TradeDate
+ missing,err:=Evaluate("600519.SH",asOf,bars,nil)
+ if err!=nil || missing.Verdict!=InsufficientData || missing.Reason!="MISSING_PIT_ADJUSTMENT"{t.Fatalf("missing factors: %+v %v",missing,err)}
+ factors:=sameFactors(bars)
+ factors[0].Factor=0
+ invalid,err:=Evaluate("600519.SH",asOf,bars,factors)
+ if err!=nil || invalid.Verdict!=InsufficientData || invalid.Reason!="INVALID_PIT_ADJUSTMENT"{t.Fatalf("bad factor: %+v %v",invalid,err)}
+ factors=sameFactors(bars)
+ factors[0].TradeDate="20200101"
+ invalid,err=Evaluate("600519.SH",asOf,bars,factors)
+ if err!=nil || invalid.Verdict!=InsufficientData{t.Fatalf("misaligned factor: %+v %v",invalid,err)}
 }
