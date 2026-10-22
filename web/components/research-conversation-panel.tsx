@@ -63,7 +63,14 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
         setError("研究已创建，但历史会话关联失败。请保留 Run ID，勿重复启动。");
         return;
       }
-      // A Run exists even if the session binding is unavailable; keep its deep link.
+      // Never retain an earlier session when the newly-created Run has no binding.
+      // The Run itself remains accessible by its explicit ID; no paid retry.
+      if (starting && (!body.session_id || !/^[a-f0-9]{32}$/.test(body.session_id))) {
+        window.sessionStorage.removeItem("aegis-conversation-session");
+        setCurrentSession("");
+        setRestored("");
+        setError("研究已创建，但未返回有效会话关联。请保存 Run ID，勿重复启动。");
+      }
       if (starting && body.run_id) setCurrentRunId(body.run_id);
       if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setCurrentRunId(body.run_id ?? ""); setRestored("当前研究 · Run ID: " + body.run_id); }
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
