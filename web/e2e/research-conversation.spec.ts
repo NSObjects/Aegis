@@ -216,3 +216,20 @@ test("successful research without a session ID clears previous binding but retai
   await panel.getByRole("button", { name: "发送问题" }).click();
   expect((await followup).postDataJSON()).toEqual({ message: "这次研究的依据是什么？" });
 });
+
+test("expired authentication rejects read-only follow-up without sending research consent", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await page.route("**/api/workbench/conversation", async route => {
+    await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "unauthorized" }) });
+  });
+  await panel.getByLabel("询问已有研究").fill("请回看已有研究的依据");
+  const request = page.waitForRequest(r => r.url().endsWith("/api/workbench/conversation") && r.method() === "POST");
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  const body = (await request).postDataJSON();
+  expect(body).toEqual({ message: "请回看已有研究的依据" });
+  await expect(panel.getByRole("alert")).toContainText("登录已过期");
+  await expect(panel).not.toContainText("Aegis：");
+});
