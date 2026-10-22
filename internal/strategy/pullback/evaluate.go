@@ -20,7 +20,7 @@ const (
  InsufficientData Verdict = "INSUFFICIENT_DATA"
 )
 
-type Result struct {
+// AdjustmentFactor is an observed provider factor for the exact bar date.\n// Factors must be PIT-known at asOf and aligned one-for-one with raw bars.\ntype AdjustmentFactor struct { TradeDate string; Factor float64 }\n\ntype Result struct {
  Symbol string `json:"symbol"`
  AsOf string `json:"as_of"`
  Version string `json:"version"`
@@ -28,12 +28,12 @@ type Result struct {
  Reason string `json:"reason"`
 }
 
-// Evaluate requires chronological, unadjusted observed bars and an exact
+// Evaluate requires chronological raw bars plus point-in-time adjustment factors and an exact
 // as-of trading date; no inference about missing, halted or future candles.
 // SMA20 > SMA60, SMA60 rising over five observed sessions, and close within
 // [SMA20, SMA20*1.03] define this explicit first candidate rule.
-// Raw prices may not be mixed with adjusted prices in a single evaluation.
-func Evaluate(symbol, asOf string, bars []technical.HistoricalBar) (Result,error) {
+// Factor visibility at asOf must be guaranteed by the provider; no future factors.
+func Evaluate(symbol, asOf string, bars []technical.HistoricalBar, factors []AdjustmentFactor) (Result,error) {
  out:=Result{Symbol:symbol,AsOf:asOf,Version:StrategyVersion,Verdict:InsufficientData,Reason:"MISSING_BARS"}
  if _,err:=time.Parse("20060102",asOf);err!=nil || len(asOf)!=8{return out,errors.New("invalid as-of date")}
  if len(symbol)!=9 || (!strings.HasSuffix(symbol,".SH") && !strings.HasSuffix(symbol,".SZ")) {return out,errors.New("invalid stock symbol")}
@@ -51,10 +51,10 @@ func Evaluate(symbol, asOf string, bars []technical.HistoricalBar) (Result,error
   }
   if b.Open<=0||b.Close<=0||b.Low<=0||b.High<b.Low||b.High<math.Max(b.Open,b.Close)||b.Low>math.Min(b.Open,b.Close) {return out,errors.New("inconsistent OHLC")}
  }
- if len(bars)<65 || bars[len(bars)-1].TradeDate!=asOf {return out,nil}
+ if len(bars)<65 || bars[len(bars)-1].TradeDate!=asOf {return out,nil}\n if len(factors)!=len(bars) {out.Reason="MISSING_PIT_ADJUSTMENT";return out,nil}\n for i,a:=range factors {\n  if a.TradeDate!=bars[i].TradeDate || math.IsNaN(a.Factor) || math.IsInf(a.Factor,0) || a.Factor<=0 {out.Reason="INVALID_PIT_ADJUSTMENT";return out,nil}\n }
  last:=bars[len(bars)-1]
  if last.Volume==0 {out.Reason="HALTED_OR_NO_VOLUME";return out,nil}
- sma:=func(end,n int)float64{v:=0.0;for _,b:=range bars[end-n:end]{v+=b.Close};return v/float64(n)}
+ anchor:=factors[len(factors)-1].Factor\n sma:=func(end,n int)float64{v:=0.0;for i:=end-n;i<end;i++{v+=bars[i].Close*factors[i].Factor/anchor};return v/float64(n)}
  n:=len(bars);ma20:=sma(n,20);ma60:=sma(n,60);old60:=sma(n-5,60)
  out.Verdict=Rejected
  if ma20<=ma60 || ma60<=old60 {out.Reason="TREND_NOT_UP";return out,nil}
