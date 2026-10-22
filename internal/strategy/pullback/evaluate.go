@@ -37,6 +37,7 @@ func Evaluate(symbol, asOf string, bars []technical.HistoricalBar) (Result,error
  out:=Result{Symbol:symbol,AsOf:asOf,Version:StrategyVersion,Verdict:InsufficientData,Reason:"MISSING_BARS"}
  if _,err:=time.Parse("20060102",asOf);err!=nil || len(asOf)!=8{return out,errors.New("invalid as-of date")}
  if len(symbol)!=9 || (!strings.HasSuffix(symbol,".SH") && !strings.HasSuffix(symbol,".SZ")) {return out,errors.New("invalid stock symbol")}
+ for i:=0;i<6;i++ {if symbol[i]<'0' || symbol[i]>'9' {return out,errors.New("invalid stock symbol")}}
  if !(strings.HasPrefix(symbol,"600")||strings.HasPrefix(symbol,"601")||strings.HasPrefix(symbol,"603")||strings.HasPrefix(symbol,"605")||strings.HasPrefix(symbol,"000")||strings.HasPrefix(symbol,"001")||strings.HasPrefix(symbol,"002")||strings.HasPrefix(symbol,"003")) {
   out.Verdict=Rejected;out.Reason="OUTSIDE_STOCK_UNIVERSE";return out,nil
  }
