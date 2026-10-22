@@ -40,3 +40,18 @@ func TestEvaluateDeterminismAndSafety(t *testing.T){
  excluded,err:=Evaluate("300001.SZ",asOf,bars)
  if err!=nil||excluded.Reason!="OUTSIDE_STOCK_UNIVERSE" {t.Fatalf("universe breach: %+v %v",excluded,err)}
 }
+
+func TestEvaluateSelectsObservedPullback(t *testing.T) {
+ bars:=risingBars()
+ last:=len(bars)-1
+ bars[last].Open=129
+ bars[last].High=130
+ bars[last].Low=128
+ bars[last].Close=129
+ asOf:=bars[last].TradeDate
+ result,err:=Evaluate("600519.SH",asOf,bars)
+ if err!=nil||result.Verdict!=Selected||result.Reason!="TREND_PULLBACK_V1" {
+  t.Fatalf("valid upward trend pullback not selected: %+v %v",result,err)
+ }
+ if _,err:=Evaluate("600abc.SH",asOf,bars);err==nil {t.Fatal("non-numeric symbol accepted")}
+}
