@@ -188,3 +188,31 @@ test("selected report follow-up is explicitly read-only and references exactly t
   expect(data.message).toContain("Run ID aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   expect(data.message).toContain("不要启动新的研究");
 });
+
+test("successful research without a session ID clears previous binding but retains Run navigation", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
+  await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  const panel = page.getByRole("region", { name: "研究对话" });
+  await panel.getByLabel("询问已有研究").fill("第一次研究");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  await expect(panel).toContainText("当前研究 · Run ID");
+  await page.route("**/api/workbench/conversation", async route => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      answer: "研究任务已创建", run_id: "c".repeat(32), symbol: "600519.SH", state: "PENDING"
+    }) });
+  });
+  await panel.getByLabel("询问已有研究").fill("第二次研究");
+  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  await expect(panel.getByRole("alert")).toContainText("未返回有效会话关联");
+  await expect(panel.getByRole("button", { name: "在研究工作台打开此 Run" })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("aegis-conversation-session"))).toBeNull();
+  await panel.getByLabel("询问已有研究").fill("这次研究的依据是什么？");
+  const followup = page.waitForRequest(r => r.url().endsWith("/api/workbench/conversation") && r.method() === "POST");
+  await panel.getByRole("button", { name: "发送问题" }).click();
+  expect((await followup).postDataJSON()).toEqual({ message: "这次研究的依据是什么？" });
+});
