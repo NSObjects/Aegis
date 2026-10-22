@@ -58,13 +58,13 @@ func (t *ConversationResearchTools) CompareResearchRuns(ctx context.Context, lef
 
 func parsePortfolioCompare(raw json.RawMessage,symbol string)(map[string]string,error){
  var root map[string]json.RawMessage
- if json.Unmarshal(raw,&root)!=nil{return nil,errors.New("invalid portfolio artifact")}
+ if json.Unmarshal(raw,&root)!=nil || root==nil{return nil,errors.New("invalid portfolio artifact")}
  var research map[string]json.RawMessage
- if json.Unmarshal(root["research_artifact"],&research)!=nil{return nil,errors.New("missing research artifact")}
+ if json.Unmarshal(root["research_artifact"],&research)!=nil || research==nil{return nil,errors.New("missing research artifact")}
  var got string
  if json.Unmarshal(research["symbol"],&got)!=nil || got!=symbol{return nil,errors.New("research symbol mismatch")}
  var review map[string]json.RawMessage
- if json.Unmarshal(root["portfolio_review"],&review)!=nil{return nil,errors.New("missing portfolio review")}
+ if json.Unmarshal(root["portfolio_review"],&review)!=nil || review==nil{return nil,errors.New("missing portfolio review")}
  var plan map[string]json.RawMessage
  if json.Unmarshal(review["research_plan"],&plan)==nil {
   var planSymbol string
