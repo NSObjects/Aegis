@@ -14,7 +14,10 @@ func risingBars() []technical.HistoricalBar {
  }
  return bars
 }
-func sameFactors(bars []technical.HistoricalBar) []AdjustmentFactor {\n result:=make([]AdjustmentFactor,len(bars));for i,b:=range bars{result[i]=AdjustmentFactor{TradeDate:b.TradeDate,Factor:1}};return result\n}\nfunc TestEvaluateDeterminismAndSafety(t *testing.T){
+func sameFactors(bars []technical.HistoricalBar) []AdjustmentFactor {
+ result:=make([]AdjustmentFactor,len(bars));for i,b:=range bars{result[i]=AdjustmentFactor{TradeDate:b.TradeDate,Factor:1}};return result
+}
+func TestEvaluateDeterminismAndSafety(t *testing.T){
  bars:=risingBars()
  // Use actual chronological calendar dates rather than manufactured days.
  // 65 trading-session samples; the algorithm requires only ordered observations.
