@@ -38,9 +38,8 @@ func (m *ScanManager) Submit(ctx context.Context,asOf,source string,symbols []st
  record:=ScanRecord{ID:id,AsOf:asOf,StrategyVersion:pullback.StrategyVersion,State:ScanPending,UniverseSource:source,Symbols:sorted,CreatedAt:now,UpdatedAt:now}
  if err:=m.store.Save(record);err!=nil{m.busy=false;m.mu.Unlock();return ScanRecord{},err}
  m.mu.Unlock()
- // Execute using the caller's context so cancellation never silently starts
- // another provider request after the initiating HTTP request expires.
- go m.execute(ctx,record)
+ // The asynchronous task survives HTTP request completion but has a bounded lifetime.
+ go func(){runCtx,cancel:=context.WithTimeout(context.WithoutCancel(ctx),3*time.Minute);defer cancel();m.execute(runCtx,record)}()
  return record,nil
 }
 
