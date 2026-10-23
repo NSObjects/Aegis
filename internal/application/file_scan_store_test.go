@@ -2,12 +2,13 @@ package application
 
 import (
  "testing"
+ "path/filepath"
  "time"
 
  "Aegis/internal/strategy/pullback"
 )
 func TestFileScanStoreLifecycleAndReopen(t *testing.T){
- dir:=t.TempDir();store,err:=NewFileScanStore(dir);if err!=nil{t.Fatal(err)}
+ dir:=filepath.Join(t.TempDir(),"private-scans");store,err:=NewFileScanStore(dir);if err!=nil{t.Fatal(err)}
  id,err:=NewScanID();if err!=nil{t.Fatal(err)}
  now:=time.Now().UTC()
  r:=ScanRecord{ID:id,AsOf:"20261022",StrategyVersion:pullback.StrategyVersion,State:ScanPending,UniverseSource:"TUSHARE_STOCK_BASIC_L_D_P",Symbols:[]string{"000001.SZ","600519.SH"},CreatedAt:now,UpdatedAt:now}
