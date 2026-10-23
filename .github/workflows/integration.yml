@@ -710,7 +710,7 @@ jobs:
   conversation_hosted:
     name: Real Conversation → ResearchRun Hosted E2E (one paid Run)
     # Never run alongside another paid Integration job. Never triggered by push.
-    if: ${{ inputs.run_conversation_hosted && !inputs.run_pullback_scan && !inputs.run_live_web_api && !inputs.run_trading && !inputs.run_technical && !inputs.run_research && !inputs.run_multi_agent && !inputs.run_risk_portfolio && !inputs.run_fundamental && !inputs.run_production_cli }}
+    if: ${{ inputs.run_conversation_hosted && !inputs.run_live_web_api && !inputs.run_pullback_scan && !inputs.run_trading && !inputs.run_technical && !inputs.run_research && !inputs.run_multi_agent && !inputs.run_risk_portfolio && !inputs.run_fundamental && !inputs.run_production_cli }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
