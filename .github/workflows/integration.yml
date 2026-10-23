@@ -10,6 +10,11 @@ on:
       - test/v1-integrated-acceptance
   workflow_dispatch:
     inputs:
+      run_pullback_scan:
+        description: "R3-01 real Tushare pullback scan (no LLM, 2 symbols)"
+        required: true
+        default: false
+        type: boolean
       run_trading:
         description: "Run the Trading Agent integration test"
         required: true
@@ -64,9 +69,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
+  pullback_scan:
+    name: R3-01 Real Tushare Pullback Scan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_pullback_scan }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify Tushare secret without exposing it
+        shell: bash
+        run: |
+          test -n "$TUSHARE_TOKEN" || { echo "::error::TUSHARE_TOKEN secret is missing"; exit 1; }
+      - name: Build real scanner
+        run: go build -o "$RUNNER_TEMP/pullback-scan" ./cmd/aegis-pullback-scan
+      - name: Run real Tushare scan and validate bounded output
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/pullback-scan" --as-of 20261022 --symbols 600519.SH,000001.SZ --timeout 6m > "$RUNNER_TEMP/pullback-results.json"
+          jq -e '
+            .strategy_version == "trend-pullback-v1" and
+            .as_of == "20261022" and
+            (.results | length) == 2 and
+            [.results[].symbol] == ["000001.SZ","600519.SH"] and
+            all(.results[]; (.version == "trend-pullback-v1") and (.as_of == "20261022") and
+              (.verdict == "SELECTED" or .verdict == "REJECTED" or .verdict == "INSUFFICIENT_DATA"))
+          ' "$RUNNER_TEMP/pullback-results.json" >/dev/null
+          jq -c '{strategy_version,as_of,results:[.results[] | {symbol,verdict,reason}]}' "$RUNNER_TEMP/pullback-results.json"
+
   trading:
     name: Trading Agent
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_trading || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_trading || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -111,7 +151,7 @@ jobs:
 
   technical:
     name: Technical Agent
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_technical || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_technical || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -163,7 +203,7 @@ jobs:
 
   research:
     name: Full Stateless Hosted E2E
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_research || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_research || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -211,7 +251,7 @@ jobs:
 
   multi_agent:
     name: Full Multi-Agent Hosted E2E
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_multi_agent || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_multi_agent || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -259,7 +299,7 @@ jobs:
 
   risk_portfolio:
     name: Full Risk / Portfolio Hosted E2E
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_risk_portfolio || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_risk_portfolio || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -307,7 +347,7 @@ jobs:
 
   production_cli:
     name: Production CLI Portfolio Review E2E
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -422,7 +462,7 @@ jobs:
 
   fundamental_cli:
     name: Fundamental Production CLI E2E
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_fundamental || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_fundamental || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -542,7 +582,7 @@ jobs:
 
   invalid_account_cli:
     name: Production CLI Invalid Account Fail-Closed
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_production_cli || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[v1-gate]'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # No provider credentials: rejection must happen before model/source setup.
@@ -585,7 +625,7 @@ jobs:
 
   live_web_api:
     name: Real Go HTTP ResearchRun with Eino providers
-    if: ${{ !inputs.run_conversation_hosted && (inputs.run_live_web_api) }}
+    if: ${{ !inputs.run_conversation_hosted && !inputs.run_pullback_scan && (inputs.run_live_web_api) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -670,7 +710,7 @@ jobs:
   conversation_hosted:
     name: Real Conversation → ResearchRun Hosted E2E (one paid Run)
     # Never run alongside another paid Integration job. Never triggered by push.
-    if: ${{ inputs.run_conversation_hosted && !inputs.run_live_web_api && !inputs.run_trading && !inputs.run_technical && !inputs.run_research && !inputs.run_multi_agent && !inputs.run_risk_portfolio && !inputs.run_fundamental && !inputs.run_production_cli }}
+    if: ${{ inputs.run_conversation_hosted && !inputs.run_live_web_api && !inputs.run_pullback_scan && !inputs.run_trading && !inputs.run_technical && !inputs.run_research && !inputs.run_multi_agent && !inputs.run_risk_portfolio && !inputs.run_fundamental && !inputs.run_production_cli }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
