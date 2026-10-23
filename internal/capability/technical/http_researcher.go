@@ -44,7 +44,7 @@ func (r *HTTPResearcher) Research(ctx context.Context,req Request)(map[string]an
  warns:=[]string{};if fallback!=""{warns=append(warns,fallback)};if historyErr!=nil{warns=append(warns,"historical_ohlcv_unavailable: invalid or duplicate observed trading dates");history=nil};if len(bars)<requiredBars{warns=append(warns,fmt.Sprintf("insufficient_history: %d trading bars available; %d required",len(bars),requiredBars))}
  return map[string]any{"symbol":symbol,"requested_as_of":asof,"effective_as_of":latest.Date,"last_trade_date":latest.Date,"status":"NORMAL",
   "price_basis":map[string]any{"snapshot":"RAW","technical":"PIT_QFQ","pit_anchor":latest.Date,"anchor_adj_factor":round(anchor,6)},
-  "historical_ohlcv":map[string]any{"version":1,"price_basis":"RAW","bars":history},
+  "historical_ohlcv":map[string]any{"version":1,"price_basis":"RAW","bars":history,"pit_adjustment_factors":historicalPITFactors(bars)},
   "snapshot":map[string]any{"open":latest.Open,"high":latest.High,"low":latest.Low,"close":latest.Close,"pre_close":latest.PreClose,"change_percent":latest.Pct,"volume":latest.Vol,"amount":latest.Amount,"turnover_rate":turnover},
   "returns":map[string]any{"return_1d":ret(q,1),"return_5d":ret(q,5),"return_10d":ret(q,10),"return_20d":ret(q,20),"return_60d":ret(q,60)},
   "moving_averages":map[string]any{"ma5":ma(q,5),"ma10":ma(q,10),"ma20":ma(q,20),"ma60":ma(q,60)},
@@ -63,3 +63,9 @@ func ema(x []float64,n int)[]float64{o:=make([]float64,len(x));if len(x)==0{retu
 func macd(x []float64)map[string]any{if len(x)==0{return map[string]any{"dif":nil,"dea":nil,"hist":nil}};a,b:=ema(x,12),ema(x,26);dif:=make([]float64,len(x));for i:=range x{dif[i]=a[i]-b[i]};dea:=ema(dif,9);i:=len(x)-1;return map[string]any{"dif":round(dif[i],4),"dea":round(dea[i],4),"hist":round(2*(dif[i]-dea[i]),4)}}
 func rsi(x []float64,n int)any{if len(x)<=n{return nil};g,l:=0.0,0.0;for i:=1;i<=n;i++{d:=x[i]-x[i-1];if d>0{g+=d}else{l-=d}};g/=float64(n);l/=float64(n);for i:=n+1;i<len(x);i++{d:=x[i]-x[i-1];up,dn:=0.0,0.0;if d>0{up=d}else{dn=-d};g=(g*float64(n-1)+up)/float64(n);l=(l*float64(n-1)+dn)/float64(n)};if l==0{return 100.0};return round(100-100/(1+g/l),4)}
 func volumeMetrics(b []bar)map[string]any{vals:=func(n int,amount bool)any{if len(b)<n{return nil};s:=0.0;for _,x:=range b[len(b)-n:]{if amount{s+=x.Amount}else{s+=x.Vol}};return round(s/float64(n),4)};vm5,vm20:=vals(5,false),vals(20,false);am5,am20:=vals(5,true),vals(20,true);latest:=b[len(b)-1];ratio:=func(v float64,m any)any{x,ok:=m.(float64);if !ok||x==0{return nil};return round(v/x,4)};return map[string]any{"volume_ma5":vm5,"volume_ma20":vm20,"volume_vs_ma5":ratio(latest.Vol,vm5),"volume_vs_ma20":ratio(latest.Vol,vm20),"amount_ma5":am5,"amount_ma20":am20,"amount_vs_ma5":ratio(latest.Amount,am5),"amount_vs_ma20":ratio(latest.Amount,am20)}}
+
+func historicalPITFactors(bars []bar) []PITAdjustmentFactor {
+ factors:=make([]PITAdjustmentFactor,len(bars))
+ for i,b:=range bars { factors[i]=PITAdjustmentFactor{TradeDate:b.Date,Factor:b.Adj} }
+ return factors
+}

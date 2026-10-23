@@ -3,16 +3,20 @@ package technical
 import (
  "context"
  "errors"
+ "math"
 )
 
 // HistoricalObservation is a copied, validated observation from a real technical
 // tool invocation. It is not an LLM-generated response or a trading signal.
+type PITAdjustmentFactor struct { TradeDate string `json:"trade_date"`; Factor float64 `json:"factor"` }
+
 type HistoricalObservation struct {
  Symbol string `json:"symbol"`
  RequestedAsOf string `json:"requested_as_of"`
  EffectiveAsOf string `json:"effective_as_of"`
  PriceBasis string `json:"price_basis"`
  Bars []HistoricalBar `json:"bars"`
+ PITFactors []PITAdjustmentFactor `json:"pit_adjustment_factors,omitempty"`
 }
 
 type historicalObserverKey struct{}
@@ -38,8 +42,16 @@ func reportHistoricalObservation(ctx context.Context, req Request, result map[st
  if symbol!=req.Symbol || asof!=req.AsOf || effective=="" || bars[len(bars)-1].TradeDate!=effective || effective>asof {
   return errors.New("historical observation identity mismatch")
  }
+ rawFactors,present:=raw["pit_adjustment_factors"]
+ factors,hasFactors:=rawFactors.([]PITAdjustmentFactor)
+ if present && !hasFactors {return errors.New("invalid historical PIT factor encoding")}
+ if hasFactors {
+  if len(factors)!=len(bars){return errors.New("historical PIT factors incomplete")}
+  for i,v:=range factors {if v.TradeDate!=bars[i].TradeDate || v.Factor<=0 || math.IsNaN(v.Factor) || math.IsInf(v.Factor,0){return errors.New("invalid historical PIT factors")}}
+ }
+ // Legacy historical observations may not carry factors; consumers must not infer them.
  // Never share the mutable tool result backing array with durable observers.
  cloned:=append([]HistoricalBar(nil),bars...)
- sink(HistoricalObservation{Symbol:symbol,RequestedAsOf:asof,EffectiveAsOf:effective,PriceBasis:"RAW",Bars:cloned})
+ sink(HistoricalObservation{Symbol:symbol,RequestedAsOf:asof,EffectiveAsOf:effective,PriceBasis:"RAW",Bars:cloned,PITFactors:append([]PITAdjustmentFactor(nil),factors...)})
  return nil
 }
