@@ -10,6 +10,11 @@ on:
       - test/v1-integrated-acceptance
   workflow_dispatch:
     inputs:
+      pullback_use_universe:
+        description: "Use PIT Tushare universe first 5 symbols instead of 2 fixed symbols (requires run_pullback_scan)"
+        required: true
+        default: false
+        type: boolean
       run_pullback_scan:
         description: "R3-01 real Tushare pullback scan (no LLM, 2 symbols)"
         required: true
@@ -93,16 +98,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/pullback-scan" --as-of 20261022 --symbols 600519.SH,000001.SZ --timeout 6m > "$RUNNER_TEMP/pullback-results.json"
-          jq -e '
-            .strategy_version == "trend-pullback-v1" and
-            .as_of == "20261022" and
-            (.results | length) == 2 and
-            [.results[].symbol] == ["000001.SZ","600519.SH"] and
-            all(.results[]; (.version == "trend-pullback-v1") and (.as_of == "20261022") and
-              (.verdict == "SELECTED" or .verdict == "REJECTED" or .verdict == "INSUFFICIENT_DATA"))
-          ' "$RUNNER_TEMP/pullback-results.json" >/dev/null
-          jq -c '{strategy_version,as_of,results:[.results[] | {symbol,verdict,reason}]}' "$RUNNER_TEMP/pullback-results.json"
+          if [ "${{ inputs.pullback_use_universe }}" = "true" ]; then
+            "$RUNNER_TEMP/pullback-scan" --as-of 20261022 --universe --offset 0 --limit 5 --timeout 6m > "$RUNNER_TEMP/pullback-results.json"
+            jq -e '
+              .strategy_version == "trend-pullback-v1" and
+              .universe.as_of == "20261022" and
+              .universe.source == "TUSHARE_STOCK_BASIC_L_D_P" and
+              (.results | length) == 5 and
+              all(.results[]; (.version == "trend-pullback-v1") and (.as_of == "20261022") and
+                (.verdict == "SELECTED" or .verdict == "REJECTED" or .verdict == "INSUFFICIENT_DATA"))
+            ' "$RUNNER_TEMP/pullback-results.json" >/dev/null
+          else
+            "$RUNNER_TEMP/pullback-scan" --as-of 20261022 --symbols 600519.SH,000001.SZ --timeout 6m > "$RUNNER_TEMP/pullback-results.json"
+            jq -e '
+              .strategy_version == "trend-pullback-v1" and
+              .as_of == "20261022" and
+              (.results | length) == 2 and
+              [.results[].symbol] == ["000001.SZ","600519.SH"] and
+              all(.results[]; (.version == "trend-pullback-v1") and (.as_of == "20261022") and
+                (.verdict == "SELECTED" or .verdict == "REJECTED" or .verdict == "INSUFFICIENT_DATA"))
+            ' "$RUNNER_TEMP/pullback-results.json" >/dev/null
+          fi
+          jq -c '{strategy_version,as_of:(.as_of // .universe.as_of),universe_source:(.universe.source // null),results:[.results[] | {symbol,verdict,reason}]}' "$RUNNER_TEMP/pullback-results.json"
 
   trading:
     name: Trading Agent
