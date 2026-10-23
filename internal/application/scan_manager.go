@@ -62,3 +62,8 @@ func (m *ScanManager) Get(id string)(ScanRecord,error){
  if m==nil{return ScanRecord{},errors.New("nil scan manager")}
  return m.store.Get(id)
 }
+
+func (m *ScanManager) List(limit int)([]ScanRecord,error){
+ if m==nil{return nil,errors.New("nil scan manager")}
+ return m.store.List(limit)
+}
