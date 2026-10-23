@@ -19,3 +19,11 @@ func TestRunRequiresValidInputsBeforeProvider(t *testing.T){
  if err:=run(context.Background(),"20261388","600519.SH");err==nil{t.Fatal("invalid date accepted")}
  if err:=run(context.Background(),"20261023","bad");err==nil{t.Fatal("invalid stock accepted")}
 }
+
+func TestRunUniverseRejectsInvalidBoundsBeforeProvider(t *testing.T){
+ t.Setenv("TUSHARE_TOKEN","")
+ for _,tc:=range []struct{offset,limit int}{{-1,10},{0,0},{0,21}}{
+  if err:=runUniverse(context.Background(),"20261022",tc.offset,tc.limit);err==nil||!strings.Contains(err.Error(),"batch size"){t.Fatalf("invalid bounds %+v: %v",tc,err)}
+ }
+ if err:=runUniverse(context.Background(),"20261022",0,20);err==nil||!strings.Contains(err.Error(),"TUSHARE_TOKEN"){t.Fatalf("missing credentials: %v",err)}
+}
