@@ -55,3 +55,17 @@ func reportHistoricalObservation(ctx context.Context, req Request, result map[st
  sink(HistoricalObservation{Symbol:symbol,RequestedAsOf:asof,EffectiveAsOf:effective,PriceBasis:"RAW",Bars:cloned,PITFactors:append([]PITAdjustmentFactor(nil),factors...)})
  return nil
 }
+
+ // ObserveHistorical invokes the existing researcher and applies the same
+ // validation path used by stock_technical_research. Non-NORMAL results
+ // return no observation; callers must not manufacture candles or factors.
+func ObserveHistorical(ctx context.Context, researcher Researcher, req Request) (HistoricalObservation, bool, error) {
+ if researcher==nil{return HistoricalObservation{},false,errors.New("technical researcher is required")}
+ var observed HistoricalObservation
+ found:=false
+ watched:=WithHistoricalObserver(ctx,func(o HistoricalObservation){observed=o;found=true})
+ result,err:=researcher.Research(watched,req)
+ if err!=nil{return HistoricalObservation{},false,err}
+ if err:=reportHistoricalObservation(watched,req,result);err!=nil{return HistoricalObservation{},false,err}
+ return observed,found,nil
+}
