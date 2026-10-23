@@ -20,7 +20,11 @@ const (
  InsufficientData Verdict = "INSUFFICIENT_DATA"
 )
 
-// AdjustmentFactor is an observed provider factor for the exact bar date.\n// Factors must be PIT-known at asOf and aligned one-for-one with raw bars.\ntype AdjustmentFactor struct { TradeDate string; Factor float64 }\n\ntype Result struct {
+// AdjustmentFactor is an observed provider factor for the exact bar date.
+// Factors must be PIT-known at asOf and aligned one-for-one with raw bars.
+type AdjustmentFactor struct { TradeDate string; Factor float64 }
+
+type Result struct {
  Symbol string `json:"symbol"`
  AsOf string `json:"as_of"`
  Version string `json:"version"`
@@ -51,10 +55,15 @@ func Evaluate(symbol, asOf string, bars []technical.HistoricalBar, factors []Adj
   }
   if b.Open<=0||b.Close<=0||b.Low<=0||b.High<b.Low||b.High<math.Max(b.Open,b.Close)||b.Low>math.Min(b.Open,b.Close) {return out,errors.New("inconsistent OHLC")}
  }
- if len(bars)<65 || bars[len(bars)-1].TradeDate!=asOf {return out,nil}\n if len(factors)!=len(bars) {out.Reason="MISSING_PIT_ADJUSTMENT";return out,nil}\n for i,a:=range factors {\n  if a.TradeDate!=bars[i].TradeDate || math.IsNaN(a.Factor) || math.IsInf(a.Factor,0) || a.Factor<=0 {out.Reason="INVALID_PIT_ADJUSTMENT";return out,nil}\n }
+ if len(bars)<65 || bars[len(bars)-1].TradeDate!=asOf {return out,nil}
+ if len(factors)!=len(bars) {out.Reason="MISSING_PIT_ADJUSTMENT";return out,nil}
+ for i,a:=range factors {
+  if a.TradeDate!=bars[i].TradeDate || math.IsNaN(a.Factor) || math.IsInf(a.Factor,0) || a.Factor<=0 {out.Reason="INVALID_PIT_ADJUSTMENT";return out,nil}
+ }
  last:=bars[len(bars)-1]
  if last.Volume==0 {out.Reason="HALTED_OR_NO_VOLUME";return out,nil}
- anchor:=factors[len(factors)-1].Factor\n sma:=func(end,n int)float64{v:=0.0;for i:=end-n;i<end;i++{v+=bars[i].Close*factors[i].Factor/anchor};return v/float64(n)}
+ anchor:=factors[len(factors)-1].Factor
+ sma:=func(end,n int)float64{v:=0.0;for i:=end-n;i<end;i++{v+=bars[i].Close*factors[i].Factor/anchor};return v/float64(n)}
  n:=len(bars);ma20:=sma(n,20);ma60:=sma(n,60);old60:=sma(n-5,60)
  out.Verdict=Rejected
  if ma20<=ma60 || ma60<=old60 {out.Reason="TREND_NOT_UP";return out,nil}
