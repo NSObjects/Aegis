@@ -29,12 +29,12 @@ func (h *Handler) scanRoute(w http.ResponseWriter,r *http.Request){
    UniverseSource string `json:"universe_source"`
    Symbols []string `json:"symbols"`
   }
-  decoder:=json.NewDecoder(io.LimitReader(r.Body,16<<10+1))
+  decoder:=json.NewDecoder(io.LimitReader(r.Body,(16<<10)+1))
   decoder.DisallowUnknownFields()
   if err:=decoder.Decode(&req);err!=nil {http.Error(w,"invalid scan request",http.StatusBadRequest);return}
   var extra any
   if err:=decoder.Decode(&extra);!errors.Is(err,io.EOF){http.Error(w,"invalid scan request",http.StatusBadRequest);return}
-  if req.UniverseSource==""||len(req.Symbols)==0||len(req.Symbols)>20 {
+  if req.UniverseSource!="USER_SUPPLIED"||len(req.Symbols)==0||len(req.Symbols)>20 {
    http.Error(w,"invalid scan inputs",http.StatusBadRequest);return
   }
   result,err:=h.scans.Submit(r.Context(),req.AsOf,req.UniverseSource,req.Symbols)
