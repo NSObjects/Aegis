@@ -8,6 +8,7 @@ import (
  "fmt"
  "os"
  "path/filepath"
+ "sort"
  "strings"
  "sync"
  "time"
@@ -101,4 +102,33 @@ func (s *FileScanStore) Get(id string)(ScanRecord,error){
  var r ScanRecord;if err=json.Unmarshal(raw,&r);err!=nil{return ScanRecord{},err}
  if err=validateScanRecord(r);err!=nil{return ScanRecord{},err}
  return r,nil
+}
+
+// ReconcileInterrupted marks unfinished records from a previous process as
+// failed. Call at single-process startup, before accepting new scans.
+// Corrupt records fail startup rather than being silently skipped.
+func (s *FileScanStore) ReconcileInterrupted() (int,error) {
+ if s==nil{return 0,errors.New("nil scan store")}
+ entries,err:=os.ReadDir(s.dir);if err!=nil{return 0,err}
+ ids:=make([]string,0,len(entries))
+ for _,entry:=range entries{
+  if entry.IsDir()||!strings.HasSuffix(entry.Name(),".json"){continue}
+  id:=strings.TrimSuffix(entry.Name(),".json")
+  if !validScanID(id){return 0,fmt.Errorf("invalid scan filename %q",entry.Name())}
+  ids=append(ids,id)
+ }
+ sort.Strings(ids)
+ changed:=0
+ for _,id:=range ids{
+  record,err:=s.Get(id);if err!=nil{return changed,fmt.Errorf("read scan %s: %w",id,err)}
+  if record.ID!=id{return changed,fmt.Errorf("scan filename/id mismatch %s",id)}
+  if record.State!=ScanPending&&record.State!=ScanRunning{continue}
+  record.State=ScanFailed
+  record.FailureCode="PROCESS_INTERRUPTED"
+  record.UpdatedAt=time.Now().UTC()
+  if record.UpdatedAt.Before(record.CreatedAt){record.UpdatedAt=record.CreatedAt}
+  if err:=s.Save(record);err!=nil{return changed,err}
+  changed++
+ }
+ return changed,nil
 }
