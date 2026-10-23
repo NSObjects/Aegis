@@ -7,6 +7,7 @@ import (
  "io"
  "net/http"
  "os"
+ "strconv"
  "strings"
 
  "Aegis/internal/application"
@@ -16,13 +17,20 @@ import (
 type ScanController interface {
  Submit(context.Context,string,string,[]string)(application.ScanRecord,error)
  Get(string)(application.ScanRecord,error)
+ List(int)([]application.ScanRecord,error)
 }
 func (h *Handler) WithScanController(scans ScanController) *Handler {h.scans=scans;return h}
 
 func (h *Handler) scanRoute(w http.ResponseWriter,r *http.Request){
  if h.scans==nil{http.Error(w,"scan service unavailable",http.StatusServiceUnavailable);return}
  if r.URL.Path=="/api/v1/scans"{
-  if r.Method!=http.MethodPost{methodNotAllowed(w,"POST");return}
+  if r.Method==http.MethodGet{
+   limit:=20
+   if raw:=r.URL.Query().Get("limit");raw!="" {n,err:=strconv.Atoi(raw);if err!=nil||n<1||n>100{http.Error(w,"invalid limit",http.StatusBadRequest);return};limit=n}
+   records,err:=h.scans.List(limit);if err!=nil{http.Error(w,"scan store unavailable",http.StatusInternalServerError);return}
+   sendJSON(w,http.StatusOK,map[string]any{"scans":records});return
+  }
+  if r.Method!=http.MethodPost{methodNotAllowed(w,"GET, POST");return}
   defer r.Body.Close()
   var req struct{
    AsOf string `json:"as_of"`
