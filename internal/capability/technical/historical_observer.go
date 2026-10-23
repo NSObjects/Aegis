@@ -42,7 +42,9 @@ func reportHistoricalObservation(ctx context.Context, req Request, result map[st
  if symbol!=req.Symbol || asof!=req.AsOf || effective=="" || bars[len(bars)-1].TradeDate!=effective || effective>asof {
   return errors.New("historical observation identity mismatch")
  }
- factors,hasFactors:=raw["pit_adjustment_factors"].([]PITAdjustmentFactor)
+ rawFactors,present:=raw["pit_adjustment_factors"]
+ factors,hasFactors:=rawFactors.([]PITAdjustmentFactor)
+ if present && !hasFactors {return errors.New("invalid historical PIT factor encoding")}
  if hasFactors {
   if len(factors)!=len(bars){return errors.New("historical PIT factors incomplete")}
   for i,v:=range factors {if v.TradeDate!=bars[i].TradeDate || v.Factor<=0 || math.IsNaN(v.Factor) || math.IsInf(v.Factor,0){return errors.New("invalid historical PIT factors")}}
