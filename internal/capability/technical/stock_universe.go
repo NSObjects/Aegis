@@ -28,7 +28,7 @@ func (c *TushareClient) ListStockUniverse(ctx context.Context, asOf string)(Stoc
  for _,status:=range []string{"L","D","P"} {
   rows,err:=c.query(ctx,"stock_basic",map[string]any{"exchange":"","list_status":status},"ts_code","list_date","delist_date","list_status")
   if err!=nil{return out,fmt.Errorf("stock universe %s: %w",status,err)}
-  if len(rows)==0{return out,fmt.Errorf("stock universe partition %s empty; cannot assert completeness",status)}
+  // A valid empty listing-status partition is not a transport failure.
   for _,row:=range rows {
    symbol:=str(row["ts_code"])
    listed:=str(row["list_date"]);delisted:=str(row["delist_date"])
