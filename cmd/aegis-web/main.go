@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"Aegis/internal/application"
+ "Aegis/internal/capability/technical"
 	"Aegis/internal/httpapi"
 	"Aegis/internal/settings"
 )
@@ -125,6 +126,17 @@ func main() {
 		log.Fatal(err)
 	}
 	handler.WithCredentialStore(credentialStore)
+ // Scans remain opt-in: without TUSHARE_TOKEN the research API stays
+ // available while scan routes explicitly report service unavailable.
+ if scanToken:=strings.TrimSpace(os.Getenv("TUSHARE_TOKEN"));scanToken!="" {
+  scanStore,err:=application.NewFileScanStore(filepath.Join(filepath.Dir(*path),"scans"))
+  if err!=nil{log.Fatal(err)}
+  researcher,err:=technical.NewHTTPResearcher(scanToken)
+  if err!=nil{log.Fatal(err)}
+  scans,err:=application.NewScanManager(scanStore,researcher)
+  if err!=nil{log.Fatal(err)}
+  handler.WithScanController(scans)
+ }
 	bindingStore, err := application.NewFileConversationBindingStore(filepath.Join(filepath.Dir(*path), "conversation-sessions"), runs)
 	if err != nil {
 		log.Fatal(err)

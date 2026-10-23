@@ -47,6 +47,7 @@ type Handler struct {
 	poll     time.Duration
 	localDev bool
 	credentials *settings.Store
+ scans ScanController
  conversation ConversationResponder
  rateMu sync.Mutex
  windowStart time.Time
@@ -97,6 +98,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   http.Error(w, "request rate limit exceeded", http.StatusTooManyRequests)
   return
  }
+ if r.URL.Path == "/api/v1/scans" || strings.HasPrefix(r.URL.Path,"/api/v1/scans/") { h.scanRoute(w,r); return }
  if r.URL.Path == "/api/v1/conversation/query" { h.conversationQuery(w, r); return }
  if strings.HasPrefix(r.URL.Path,"/api/v1/conversation/sessions/") { h.conversationSessionRead(w,r); return }
  if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
