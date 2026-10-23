@@ -22,6 +22,7 @@ type ScanManager struct {
 
 func NewScanManager(store *FileScanStore,researcher technical.Researcher)(*ScanManager,error){
  if store==nil||researcher==nil{return nil,errors.New("scan store and researcher required")}
+ if _,err:=store.ReconcileInterrupted();err!=nil{return nil,err}
  return &ScanManager{store:store,researcher:researcher},nil
 }
 
