@@ -116,6 +116,52 @@ curl -N http://127.0.0.1:8686/api/v1/research/runs/$RUN_ID/stream \
   -H 'Last-Event-ID: 0'
 ```
 
+## Strategy scans (deterministic, offline rules)
+
+`/api/v1/scans` runs the versioned offline screening rule (`trend-pullback-v1`)
+over market-wide daily bars. A scan never invokes an LLM and never places
+orders. Data is fetched once per trading day (not per symbol), and every
+symbol's exact observed input bars are persisted as a reviewable snapshot
+anchored by SHA-256. Replaying the same as-of date and universe reproduces the
+same outcomes; missing data is an explicit `INSUFFICIENT_DATA` verdict, never
+a satisfied rule.
+
+| Method | Route | Result |
+| --- | --- | --- |
+| POST | `/api/v1/scans` | `202` with persisted `PENDING` scan and `Location` |
+| GET | `/api/v1/scans` | scan metadata list (`state`/`limit`/`offset` filters, no per-symbol results) |
+| GET | `/api/v1/scans/{scan_id}` | scan state, progress, summary and per-symbol results |
+| POST | `/api/v1/scans/{scan_id}/cancel` | `202` cancellation requested |
+| GET | `/api/v1/scans/{scan_id}/results/{symbol}` | one symbol's verdict and reason |
+| GET | `/api/v1/scans/{scan_id}/results/{symbol}/snapshot` | the exact RAW input bars behind the verdict (terminal scans only, else `409`) |
+
+```sh
+curl -sS -X POST http://127.0.0.1:8686/api/v1/scans \
+  -H "Authorization: Bearer $AEGIS_WEB_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: scan-20261024-0001" \
+  -d '{"as_of":"20261023"}'
+```
+
+- `as_of` is `YYYYMMDD` and must be an open trading day (default: the current
+  Asia/Shanghai date); a non-trading as-of fails the scan as
+  `NOT_A_TRADING_DAY` rather than evaluating stale bars.
+- `symbols` is optional; omitting it scans the full listed SH/SZ market.
+  Explicit symbols must be currently listed, else `UNKNOWN_SYMBOL`.
+- Scan states: `PENDING -> RUNNING -> COMPLETED | FAILED | CANCELLED`. A
+  failed or cancelled scan keeps its already-written snapshots and partial
+  results queryable. Failure codes: `DATA_UNAVAILABLE`, `NOT_A_TRADING_DAY`,
+  `UNKNOWN_SYMBOL`, `CREDENTIAL_UNAVAILABLE`, `PERSISTENCE_FAILED`,
+  `SCAN_TIMEOUT`, `PROCESS_INTERRUPTED`.
+- Verdicts: `SELECTED`, `REJECTED`, `INSUFFICIENT_DATA`, `ERROR` with fixed
+  reason codes (`TREND_PULLBACK_V1`, `TREND_NOT_UP`, `NOT_NEAR_MA20`,
+  `OUTSIDE_STOCK_UNIVERSE`, `HALTED_OR_NO_VOLUME`, `MISSING_BARS`,
+  `EVALUATION_FAILED`). Reasons are stable identifiers, never provider text.
+- `Idempotency-Key` (8–128 ASCII) is optional; reusing a key with different
+  parameters returns `409`.
+- The lookback window (90 trading days) and strategy version are frozen in
+  each scan's request snapshot so any verdict can be re-verified offline.
+
 ## Boundaries and next steps
 
 - This slice depends on **PR #130** (shared live ResearchService) and

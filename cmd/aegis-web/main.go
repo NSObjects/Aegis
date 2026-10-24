@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"Aegis/internal/application"
+	"Aegis/internal/capability/technical"
 	"Aegis/internal/httpapi"
 	"Aegis/internal/settings"
 )
@@ -51,6 +52,22 @@ func liveOptionsForRequest(base application.LiveServiceOptions, request applicat
 	return base
 }
 
+// liveScanSource resolves the batch market data source from the latest
+// encrypted credentials each time a scan starts, mirroring liveExecutor.
+func liveScanSource(credentials *settings.Store) application.ScanSourceFactory {
+	return func(ctx context.Context) (technical.BatchMarketSource, error) {
+		values, err := credentials.Load(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("load scan credentials: %w", err)
+		}
+		source, err := technical.NewTushareBatchSource(strings.TrimSpace(values["TUSHARE_TOKEN"]))
+		if err != nil {
+			return nil, fmt.Errorf("create tushare batch source: %w", err)
+		}
+		return source, nil
+	}
+}
+
 func main() {
 	addr := flag.String("listen", "127.0.0.1:8686", "bind address (loopback by default)")
 	dev := flag.Bool("dev", false, "local-only debug mode without API authentication")
@@ -63,6 +80,8 @@ func main() {
 	parallel := flag.Int("max-parallel", 1, "simultaneous research workflows")
 	maxActive := flag.Int("max-active", 4, "running plus queued research")
 	runTimeout := flag.Duration("run-timeout", 20*time.Minute, "maximum wall-clock time for a queued or running research task")
+	scanMaxActive := flag.Int("scan-max-active", 2, "running plus queued deterministic strategy scans")
+	scanTimeout := flag.Duration("scan-timeout", 20*time.Minute, "maximum wall-clock time for a queued or running strategy scan")
 	lookback := flag.Duration("event-lookback", 7*24*time.Hour, "live event evidence lookback")
 	full := flag.Bool("portfolio-review", true, "full research with explicit account state")
 	flag.Parse()
@@ -125,6 +144,25 @@ func main() {
 		log.Fatal(err)
 	}
 	handler.WithCredentialStore(credentialStore)
+	scanStore, err := application.NewFileScanStore(filepath.Join(filepath.Dir(*path), "scans"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	scanManager, err := application.NewScanManager(liveScanSource(credentialStore), scanStore, *scanMaxActive)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := scanManager.SetScanTimeout(*scanTimeout); err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := scanManager.CloseContext(shutdownCtx); err != nil {
+			log.Printf("AEGIS_SHUTDOWN_WARNING component=scan_manager category=SCAN_NOT_DRAINED")
+		}
+	}()
+	handler.WithScanController(scanManager)
 	bindingStore, err := application.NewFileConversationBindingStore(filepath.Join(filepath.Dir(*path), "conversation-sessions"), runs)
 	if err != nil {
 		log.Fatal(err)

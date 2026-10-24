@@ -40,6 +40,7 @@ type RunController interface {
 // through a server-side Next.js adapter, never expose it in client JS.
 type Handler struct {
 	runs     RunController
+	scans    ScanController
 	token    string
 	mode     application.ResearchMode
 	lookback time.Duration
@@ -100,6 +101,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
  if r.URL.Path == "/api/v1/conversation/query" { h.conversationQuery(w, r); return }
  if strings.HasPrefix(r.URL.Path,"/api/v1/conversation/sessions/") { h.conversationSessionRead(w,r); return }
  if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
+ if strings.HasPrefix(r.URL.Path, "/api/v1/scans") { h.scanRoutes(w, r); return }
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/research/runs")
 	if path == r.URL.Path {
 		http.NotFound(w, r)
