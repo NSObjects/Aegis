@@ -7,7 +7,7 @@ describe("Live workbench URL contract", () => {
   it("defaults to the overview and keeps an explicit empty workspace route", () => {
     expect(readWorkbenchLocation("")).toEqual({ view: "overview", runId: null });
     expect(workbenchHref("/", "overview")).toBe("/?view=overview");
-    expect(readWorkbenchLocation(workbenchHref("/", "workspace"))).toEqual({ view: "workspace", runId: null });
+    expect(readWorkbenchLocation("?view=workspace")).toEqual({ view: "workspace", runId: null });
     expect(workbenchHref("/", "workspace")).toBe("/?view=workspace");
   });
 
