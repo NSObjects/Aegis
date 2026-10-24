@@ -5,20 +5,20 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
-	"net"
-	"path/filepath"
-	"strings"
 	"flag"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"Aegis/internal/application"
- "Aegis/internal/capability/technical"
+	"Aegis/internal/capability/technical"
 	"Aegis/internal/httpapi"
 	"Aegis/internal/settings"
 )
@@ -105,7 +105,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := runs.SetRunTimeout(*runTimeout); err != nil { log.Fatal(err) }
+	if err := runs.SetRunTimeout(*runTimeout); err != nil {
+		log.Fatal(err)
+	}
 	// Bound process shutdown even when a provider ignores cancellation. This
 	// does not terminate a stuck worker or free its slot prematurely; the
 	// process is exiting after the grace period.
@@ -126,17 +128,58 @@ func main() {
 		log.Fatal(err)
 	}
 	handler.WithCredentialStore(credentialStore)
- // Scans remain opt-in: without TUSHARE_TOKEN the research API stays
- // available while scan routes explicitly report service unavailable.
- if scanToken:=strings.TrimSpace(os.Getenv("TUSHARE_TOKEN"));scanToken!="" {
-  scanStore,err:=application.NewFileScanStore(filepath.Join(filepath.Dir(*path),"scans"))
-  if err!=nil{log.Fatal(err)}
-  researcher,err:=technical.NewHTTPResearcher(scanToken)
-  if err!=nil{log.Fatal(err)}
-  scans,err:=application.NewScanManager(scanStore,researcher)
-  if err!=nil{log.Fatal(err)}
-  handler.WithScanController(scans)
- }
+	// Scans and the daily scheduler remain opt-in: without TUSHARE_TOKEN the
+	// research API stays available while scan routes explicitly report service
+	// unavailable, and there is no verifiable trading calendar so the scheduler
+	// stays off rather than guessing holidays.
+	if scanToken := strings.TrimSpace(os.Getenv("TUSHARE_TOKEN")); scanToken != "" {
+		scanStore, err := application.NewFileScanStore(filepath.Join(filepath.Dir(*path), "scans"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		researcher, err := technical.NewHTTPResearcher(scanToken)
+		if err != nil {
+			log.Fatal(err)
+		}
+		scans, err := application.NewScanManager(scanStore, researcher)
+		if err != nil {
+			log.Fatal(err)
+		}
+		handler.WithScanController(scans)
+		// The scheduler triggers the existing engines on trading days only. Its
+		// persisted (task, day) records make every trigger at-most-once per day,
+		// and interrupted RUNNING work is never silently re-triggered.
+		scheduleStore, err := application.NewFileScheduleStore(filepath.Join(filepath.Dir(*path), "schedules"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if interrupted, err := scheduleStore.ReconcileInterrupted(); err != nil {
+			log.Fatal(err)
+		} else if interrupted > 0 {
+			log.Printf("AEGIS_SCHEDULER_RECONCILED interrupted=%d", interrupted)
+		}
+		tushareClient, err := technical.NewTushareClient(scanToken)
+		if err != nil {
+			log.Fatal(err)
+		}
+		calendar, err := technical.NewTushareTradingCalendar(tushareClient)
+		if err != nil {
+			log.Fatal(err)
+		}
+		location, err := time.LoadLocation(*zone)
+		if err != nil {
+			log.Fatal(err)
+		}
+		scheduler, err := application.NewScheduler(scheduleStore, calendar, &webScheduleRunner{scans: scans, runs: runs, mode: mode, lookback: *lookback}, &webScheduleTracker{scans: scans, runs: runs}, location)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := scheduler.Start(time.Minute); err != nil {
+			log.Fatal(err)
+		}
+		defer scheduler.Stop()
+		handler.WithScheduleController(scheduleStore)
+	}
 	// The watchlist is pure local curation: no provider token required, and it
 	// persists across restarts beside the run store.
 	watchlistStore, err := application.NewFileWatchlistStore(filepath.Join(filepath.Dir(*path), "watchlist"))
@@ -148,7 +191,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	handler.WithConversationResponder(&conversationRuntime{runs:runs,credentials:credentialStore,configPath:*cfg,bindings:bindingStore})
+	handler.WithConversationResponder(&conversationRuntime{runs: runs, credentials: credentialStore, configPath: *cfg, bindings: bindingStore})
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 16 << 10}
 	go func() {
 		<-ctx.Done()
