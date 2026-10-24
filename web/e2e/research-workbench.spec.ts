@@ -22,7 +22,9 @@ async function signIn(page: Page) {
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.status(), "login POST must succeed before showing the Live workspace").toBe(200);
-  await expect(page.getByRole("heading", { name: "研究详情" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "发起新研究", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "研究详情", exact: true })).toBeVisible();
 }
 
 async function submit(page: Page, query = "") {
