@@ -3,6 +3,30 @@ import type { LiveReport, ReportCard, ReportField } from "./live-report";
 /** Presentation-only projection. All text remains directly traceable to a
  * field or entry in the same Go Run. No LLM rewriting or inferred advice. */
 export type BriefBlock = { title: string; lines: string[]; source: string };
+export type BriefBlockSummary = { blocks: BriefBlock[]; omittedLines: number };
+
+/** Select a small, source-diverse preview while preserving the complete source blocks for the appendix. */
+export function summarizeBriefBlocks(blocks: BriefBlock[], maxLines = 3): BriefBlockSummary {
+  const limit = Math.max(0, Math.floor(maxLines));
+  const totalLines = blocks.reduce((count, block) => count + block.lines.length, 0);
+  const visible = blocks.map(block => ({ ...block, lines: [] as string[] }));
+  let visibleLines = 0;
+  for (let lineIndex = 0; visibleLines < limit; lineIndex++) {
+    let foundLine = false;
+    for (let blockIndex = 0; blockIndex < blocks.length && visibleLines < limit; blockIndex++) {
+      const line = blocks[blockIndex].lines[lineIndex];
+      if (line === undefined) continue;
+      visible[blockIndex].lines.push(line);
+      visibleLines++;
+      foundLine = true;
+    }
+    if (!foundLine) break;
+  }
+  return {
+    blocks: visible.filter(block => block.lines.length > 0),
+    omittedLines: Math.max(0, totalLines - visibleLines),
+  };
+}
 export type ResearchBrief = {
   summary: string | null;
   conclusion: string | null;
