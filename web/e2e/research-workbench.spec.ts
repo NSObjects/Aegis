@@ -284,7 +284,7 @@ test("Live Run permalink, refresh and browser back/forward restore the correct w
 
   await page.goto("/?view=settings");
   await revealRunDiagnostics(page);
-  await expect(page.getByRole("heading", { name: "数据源与模型凭证" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "数据源设置", exact: true })).toBeVisible();
   await page.goto(`/?run=${id}`);
   await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
@@ -578,7 +578,9 @@ test("two completed research runs compare source-owned conclusion, market, techn
   page.on("request", req => {
     if (req.url().includes("/api/workbench/runs") && req.method() === "POST") methods.push("POST");
   });
-  await page.getByRole("button", { name: "研究对比", exact: true }).click();
+  await page.getByRole("button", { name: "工作台", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "对比研究", exact: true }).click();
   await expect(page.getByRole("heading", { name: "两次研究记录对比" })).toBeVisible();
   await page.getByLabel("基准研究").selectOption(baseline);
   await page.getByLabel("对比研究").selectOption(followup);
@@ -738,7 +740,7 @@ test("completed research defaults to a readable brief with expandable source cha
   await expect(evidence).toHaveAttribute("open");
   const followUp = page.locator("#research-follow-up");
   await expect(followUp).not.toHaveAttribute("open");
-  await followUp.locator("summary").click();
+  await followUp.locator(":scope > summary").click();
   await expect(followUp).toHaveAttribute("open");
   await expect(followUp.getByRole("checkbox", { name: /针对当前研究 Run/ })).toBeChecked();
   const manager = page.locator("#chapter-manager");
