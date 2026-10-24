@@ -11,6 +11,7 @@ import {
   type LiveArtifact, type LiveRun, type LiveSession, type LiveStageEvent,
 } from "@/lib/live-contract";
 import { cn } from "@/lib/utils";
+import { findPreviousComparableRun } from "@/lib/run-comparison";
 import { renderResearchMarkdown } from "@/lib/research-markdown";
 import ProviderSettings from "@/components/provider-settings";
 import ResearchConversationPanel from "@/components/research-conversation-panel";
@@ -96,6 +97,11 @@ export default function LiveResearchWorkbench() {
     setComparisonPair({leftId, rightId});
     setView("compare");
   }, []);
+
+  const compareWithPrevious = useCallback((runId: string) => {
+    const previous = findPreviousComparableRun(runs, runId);
+    openComparison(previous?.run_id ?? runId, previous ? runId : null);
+  }, [runs, openComparison]);
 
   const refresh = useCallback(async () => {
     const data = await jsonRequest<{ runs: unknown[] }>(`${base}/runs`);
@@ -316,9 +322,9 @@ export default function LiveResearchWorkbench() {
         <div className="live-current-run-main"><span className="eyebrow">当前研究</span><strong>{selected.symbol}</strong><small>研究时点 {formatDate(selected.requested_as_of)}</small></div>
         <span className={`badge ${statusColors[selected.state]}`}>{states[selected.state]}</span>
         <span className="live-current-run-note">研究结论优先展示 · 运行过程按需查看</span>
-        <div className="live-current-run-actions">{!isTerminal(selected.state)?<button type="button" className="btn danger" disabled={busy} onClick={()=>void cancelRun()}><Ban size={14}/>请求取消</button>:<button type="button" className="btn" disabled={busy} onClick={prepareRerun}><RotateCcw size={14}/>再次研究该标的</button>}{selected.state==="COMPLETED"&&<button type="button" className="btn" onClick={()=>openComparison(selected.run_id,null)}><ArrowLeftRight size={14}/>对比历史研究</button>}</div>
+        <div className="live-current-run-actions">{!isTerminal(selected.state)?<button type="button" className="btn danger" disabled={busy} onClick={()=>void cancelRun()}><Ban size={14}/>请求取消</button>:<button type="button" className="btn" disabled={busy} onClick={prepareRerun}><RotateCcw size={14}/>再次研究该标的</button>}{selected.state==="COMPLETED"&&<button type="button" className="btn" onClick={()=>compareWithPrevious(selected.run_id)}><ArrowLeftRight size={14}/>对比历史研究</button>}</div>
       </section>}
-      <div className="live-primary-report">{selected?.state==="COMPLETED"&&artifact?<LiveResearchReport artifact={artifact} run={selected} onCompare={()=>openComparison(selected.run_id,null)}/>:<section className="surface live-report-empty"><BookOpenText size={21}/><div><h2>研究结果</h2><p>{selected?.state==="COMPLETED"?"正在加载后端已完成工件…":selected?.state==="FAILED"||selected?.state==="CANCELLED"?"任务没有完成，研究报告不可用；不会显示上一次任务的结果。":"只有后端状态为 COMPLETED 才会展示真实报告。"}</p></div></section>}</div>
+      <div className="live-primary-report">{selected?.state==="COMPLETED"&&artifact?<LiveResearchReport artifact={artifact} run={selected} onCompare={()=>compareWithPrevious(selected.run_id)}/>:<section className="surface live-report-empty"><BookOpenText size={21}/><div><h2>研究结果</h2><p>{selected?.state==="COMPLETED"?"正在加载后端已完成工件…":selected?.state==="FAILED"||selected?.state==="CANCELLED"?"任务没有完成，研究报告不可用；不会显示上一次任务的结果。":"只有后端状态为 COMPLETED 才会展示真实报告。"}</p></div></section>}</div>
       <div className="live-secondary-grid">
         <details className="surface live-create" open={!selected || selected.state !== "COMPLETED"}>
           <summary>开始新的研究 <span>输入标的和本次关注点</span></summary>

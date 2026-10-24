@@ -568,6 +568,26 @@ test("NO_DATA never draws a synthetic OHLC candle", async ({ page }) => {
 });
 
 
+test("report shortcut compares the current Run with the nearest previous completed Run without starting another task", async ({ page }) => {
+  await signIn(page);
+  const previous = await submit(page, "technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const current = await submit(page, "historical comparison fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const posts: string[] = [];
+  page.on("request", req => {
+    if (req.url().includes("/api/workbench/runs") && req.method() === "POST") posts.push(req.url());
+  });
+  await page.getByRole("button", { name: "判断变化", exact: true }).click();
+  await expect(page).toHaveURL("/?view=compare&left=" + previous + "&right=" + current);
+  await expect(page.getByLabel("基准研究")).toHaveValue(previous);
+  await expect(page.getByLabel("对比研究")).toHaveValue(current);
+  const comparison = page.getByRole("region", { name: "历史研究对比" });
+  await expect(comparison.getByRole("table", { name: "市场环境对比" })).toContainText("MIXED");
+  await expect(comparison.getByRole("table", { name: "市场环境对比" })).toContainText("RISK_OFF");
+  expect(posts).toEqual([]);
+});
+
 test("two completed research runs compare source-owned conclusion, market, technical, event and risk facts", async ({ page }) => {
   await signIn(page);
   const baseline = await submit(page, "technical snapshot fixture");
