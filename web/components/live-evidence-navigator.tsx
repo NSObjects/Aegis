@@ -57,7 +57,12 @@ export default function LiveEvidenceNavigator({ artifact }: { artifact: LiveArti
       : evidence.insights[0] ? { kind: "insight", id: 0 } : null);
   const [eventId, setEventId] = useState<string | null>(null);
 
-  if (!evidence.arguments.length && !evidence.insights.length) return null;
+  if (!evidence.arguments.length && !evidence.insights.length) return <section className="surface live-evidence-navigator" aria-label="交互式证据与论点导航">
+    <div className="evidence-nav-heading">
+      <h3>本次工件没有结构化论点引用</h3>
+      <p>当前 Run 未提供可用于建立引用链的论点或研究经理观点。请查看完整研究章节与原始工件；不会从自由文本推导证据关系。</p>
+    </div>
+  </section>;
   const argument = selection?.kind === "argument"
     ? evidence.arguments.find(item => item.id === selection.id) ?? null : null;
   const insight = selection?.kind === "insight"
@@ -67,8 +72,8 @@ export default function LiveEvidenceNavigator({ artifact }: { artifact: LiveArti
 
   return <section className="surface live-evidence-navigator" aria-label="交互式证据与论点导航">
     <div className="evidence-nav-heading">
-      <div className="eyebrow">EvidenceLedger · 结构化引用追溯</div>
-      <h3>论点与事件证据导航</h3>
+      <div className="eyebrow">来源与引用追溯</div>
+      <h3>研究依据与事件引用</h3>
       <p>先选 Bull/Bear 论点或 Research Manager 观点，再打开明确引用的事件。这里展示的是后端已记录的关联，不是网页原文审计，也不是模型隐藏推理。</p>
     </div>
     <div className="evidence-nav-columns">

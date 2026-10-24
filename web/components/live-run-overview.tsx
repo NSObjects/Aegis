@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Activity, ArrowRight, ArrowUpRight, BarChart3, CircleAlert,
-  Clock3, FileCheck2, History, PlayCircle, RefreshCcw, Search, XCircle,
+  Clock3, FileCheck2, History, PlayCircle, RefreshCcw, Search,
 } from "lucide-react";
 import type { LiveRun } from "@/lib/live-contract";
 import { filterOverviewRuns, runStateLabel, summarizeRunOverview, type OverviewFilter } from "@/lib/run-overview";
@@ -13,7 +13,15 @@ const filters: Array<{ key: OverviewFilter; label: string }> = [
   { key: "completed", label: "已完成" }, { key: "failed", label: "失败" },
   { key: "cancelled", label: "已取消" },
 ];
-const ts = (value: string) => new Date(value).toLocaleString("zh-CN", { hour12: false });
+const ts = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "时间不可用" : date.toLocaleString("zh-CN", { hour12: false });
+};
+const modeLabel = (mode: string) => ({
+  DECISION: "个股决策研究",
+  PORTFOLIO_REVIEW: "组合复核",
+  RESEARCH: "研究分析",
+}[mode] ?? mode.replaceAll("_", " "));
 
 export default function LiveRunOverview({
   runs, syncedAt, syncError, onOpen, onNew, onCompare, onRefresh,
@@ -34,9 +42,9 @@ export default function LiveRunOverview({
   return <div className="run-overview" role="region" aria-label="研究任务概览">
     <section className="run-overview-hero">
       <div>
-        <div className="eyebrow">Operations center / Go ResearchRun</div>
-        <h2>研究任务总览</h2>
-        <p>研究进展、失败排查和历史报告，从这里进入。全部信息只读取服务端已保存的任务元数据。</p>
+        <div className="eyebrow">Aegis Research</div>
+        <h1>工作台</h1>
+        <p>查看最近研究、需要复核的任务，并继续发起研究。这里只呈现服务端已保存的结果，不填充模拟数据。</p>
       </div>
       <div className="run-overview-actions">
         <button className="btn" type="button" onClick={onCompare}><History size={15}/>对比研究</button>
@@ -47,7 +55,7 @@ export default function LiveRunOverview({
       <span className={syncError ? "run-overview-sync-error" : ""}>
         <Activity size={14}/>
         {!syncedAt && syncError ? "首次同步失败 · 暂无可靠任务数据" : !syncedAt ? "尚未获取服务端任务列表" : syncError ?
-          "最近一次同步失败 · 数据可能已过期" : "最近一次浏览器同步：" + ts(syncedAt)}
+          "最近一次同步失败 · 数据可能已过期" : "数据更新时间：" + ts(syncedAt)}
       </span>
       <button type="button" className="run-overview-refresh" onClick={onRefresh}><RefreshCcw size={13}/>立即刷新</button>
     </div>
@@ -56,28 +64,16 @@ export default function LiveRunOverview({
       {syncError ? <><h3>研究任务列表暂时不可用</h3><p>首次同步未成功，尚无可靠任务数据；不会把请求失败显示成零条任务。</p><button className="btn" type="button" onClick={onRefresh}><RefreshCcw size={14}/>重新获取任务列表</button></> : "正在获取 Go 研究任务列表；尚不显示统计，避免将未同步误报为 0 条任务。"}
     </section> : <>
       <div className="run-overview-metrics" aria-label="已返回任务样本状态分布">
-        <div className="run-overview-kpi"><div className="run-overview-kpi-top"><span>返回样本</span><BarChart3 size={18}/></div><strong>{overview.total}</strong><small>后端当前任务列表</small></div>
+        <div className="run-overview-kpi"><div className="run-overview-kpi-top"><span>研究任务</span><BarChart3 size={18}/></div><strong>{overview.total}</strong><small>当前已保存任务</small></div>
         <div className="run-overview-kpi active"><div className="run-overview-kpi-top"><span>等待 / 执行中</span><Clock3 size={18}/></div><strong>{overview.active}</strong><small>需要关注进度</small></div>
-        <div className="run-overview-kpi complete"><div className="run-overview-kpi-top"><span>已完成</span><FileCheck2 size={18}/></div><strong>{overview.completed}</strong><small>可查看原始报告</small></div>
-        <div className="run-overview-kpi failed"><div className="run-overview-kpi-top"><span>失败</span><CircleAlert size={18}/></div><strong>{overview.failed}</strong><small>点击查看真实失败代码</small></div>
-        <div className="run-overview-kpi"><div className="run-overview-kpi-top"><span>已取消</span><XCircle size={18}/></div><strong>{overview.cancelled}</strong><small>不会生成完成报告</small></div>
+        <div className="run-overview-kpi complete"><div className="run-overview-kpi-top"><span>已完成</span><FileCheck2 size={18}/></div><strong>{overview.completed}</strong><small>可查看研究结论</small></div>
+        <div className="run-overview-kpi failed"><div className="run-overview-kpi-top"><span>失败</span><CircleAlert size={18}/></div><strong>{overview.failed}</strong><small>查看失败详情</small></div>
       </div>
       <p className="run-overview-sample-note">以上仅统计当前 Go 列表返回的 <strong>{overview.total}</strong> 条有效唯一 Run，
         {overview.capped ? "列表已达到接口上限 100 条，历史实际数量可能更多。" : "不是全量历史计数或交易绩效。"}
         涉及 <strong>{overview.distinctSymbols}</strong> 个不同标的。样本最多 100 条。
       </p>
       <div className="run-overview-two-col">
-        <section className="surface run-overview-panel" aria-label="近七日任务活动">
-          <div className="run-overview-panel-title"><h3>近七日任务创建量</h3><span>UTC · 样本记录</span></div>
-          <div className="run-overview-week" role="img" aria-label={"最近七个 UTC 日、基于返回样本的新建任务量：" + overview.daily.map(d => d.utcDate + " " + d.count).join("；")}>
-            {overview.daily.map(day => <div key={day.utcDate} className="run-overview-day">
-              <strong>{day.count}</strong>
-              <div className="run-overview-bar-track"><span style={{height:(day.count / peak * 100)+"%"}}/></div>
-              <small>{day.utcDate.slice(5)}</small>
-            </div>)}
-          </div>
-          <p>仅统计任务创建数量，不代表研究有效性、模型成本或市场收益。</p>
-        </section>
         <section className="surface run-overview-panel run-overview-attention" aria-label="需要关注的任务">
           <div className="run-overview-panel-title"><h3>待关注</h3><span>最近失败任务</span></div>
           {overview.recentFailures.length === 0 ? <p className="run-overview-ok">当前返回样本中没有失败任务；这不保证历史没有失败。</p> :
@@ -86,12 +82,25 @@ export default function LiveRunOverview({
               <div><strong>{run.symbol}</strong><small>{ts(run.created_at)}</small></div>
               <code>{run.failure_code || "未提供失败代码"}</code><ArrowUpRight size={14}/>
             </button>)}</div>}
-          {overview.active > 0 && <p className="run-overview-active-hint"><Activity size={13}/>另有 {overview.active} 条等待或运行中的研究，点击下方对应任务追踪阶段。</p>}
+          {overview.active > 0 && <p className="run-overview-active-hint"><Activity size={13}/>另有 {overview.active} 条等待或运行中的研究，可从下方列表打开查看进度。</p>}
         </section>
+        <details className="surface run-overview-panel run-overview-activity-disclosure">
+          <summary>近七日任务创建量 <span>UTC · 当前返回样本</span></summary>
+          <div className="run-overview-activity-body">
+            <div className="run-overview-week" role="img" aria-label={"最近七个 UTC 日、基于返回样本的新建任务量：" + overview.daily.map(d => d.utcDate + " " + d.count).join("；")}>
+              {overview.daily.map(day => <div key={day.utcDate} className="run-overview-day">
+                <strong>{day.count}</strong>
+                <div className="run-overview-bar-track"><span style={{height:(day.count / peak * 100)+"%"}}/></div>
+                <small>{day.utcDate.slice(5)}</small>
+              </div>)}
+            </div>
+            <p>仅统计任务创建数量，不代表研究有效性、模型成本或市场收益。</p>
+          </div>
+        </details>
       </div>
       <section className="surface run-overview-list" aria-label="近期研究任务列表">
         <div className="run-overview-list-head">
-          <div><h3>近期研究任务</h3><p>按服务端创建时间倒序 · 可直接进入完整 Run 详情</p></div>
+          <div><h3>近期研究任务</h3><p>按创建时间排序 · 打开研究结果与运行记录</p></div>
           <label className="run-overview-search"><Search size={15}/><span className="sr-only">筛选股票或任务 ID</span>
             <input aria-label="筛选股票或任务 ID" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索股票 / Run ID"/></label>
         </div>
@@ -108,7 +117,7 @@ export default function LiveRunOverview({
         </div> : <div className="run-overview-rows">
           {visible.map(run => <button key={run.run_id} type="button" className="run-overview-row" onClick={()=>onOpen(run.run_id)}>
             <div className="run-overview-identity"><strong>{run.symbol}</strong><code>{run.run_id.slice(0,12)}…</code></div>
-            <div className="run-overview-meta"><span>{ts(run.created_at)}</span><small>{run.mode}</small></div>
+            <div className="run-overview-meta"><span>{ts(run.created_at)}</span><small>{modeLabel(run.mode)}</small></div>
             <span className={"run-overview-state state-"+run.state.toLowerCase()}>{runStateLabel(run.state)}</span>
             <span className="run-overview-action">{run.state==="COMPLETED"?"查看报告":run.state==="FAILED"?"排查失败":run.state==="CANCELLED"?"查看记录":"查看进度"} <ArrowUpRight size={13}/></span>
           </button>)}
