@@ -18,6 +18,7 @@ import (
 type ScheduleActionRunner interface {
 	RunScan(ctx context.Context, task ScheduleTask, tradeDate string) (string, error)
 	RunResearch(ctx context.Context, task ScheduleTask, tradeDate string) (string, error)
+	RunMonitor(ctx context.Context, task ScheduleTask, tradeDate string) (string, error)
 }
 
 // ScheduleRefTracker reports whether a triggered engine object reached a
@@ -168,6 +169,8 @@ func (s *Scheduler) processTask(ctx context.Context, task ScheduleTask, tradeDat
 		refID, runErr = s.runner.RunScan(ctx, task, tradeDate)
 	case ScheduleKindResearch:
 		refID, runErr = s.runner.RunResearch(ctx, task, tradeDate)
+	case ScheduleKindMonitor:
+		refID, runErr = s.runner.RunMonitor(ctx, task, tradeDate)
 	default:
 		runErr = errors.New("unknown schedule kind")
 	}
@@ -196,6 +199,15 @@ func scheduleFailureCode(err error) string {
 // advanceRunning polls the engine object and moves the record to its
 // terminal state. Poll errors keep the record RUNNING for the next tick.
 func (s *Scheduler) advanceRunning(ctx context.Context, task ScheduleTask, record ScheduleRun) error {
+	if task.Kind == ScheduleKindMonitor {
+		// The monitor pass is synchronous: a RUNNING record without a ref has
+		// finished by construction. The sentinel ref satisfies the completed
+		// record contract without inventing an engine object.
+		record.State = ScheduleCompleted
+		record.RefID = "MONITOR_PASS"
+		record.UpdatedAt = s.now().UTC()
+		return s.store.SaveRun(record)
+	}
 	if record.RefID == "" {
 		// A RUNNING record without a ref means the process died between
 		// reserving the day and receiving an engine object; reconciliation at

@@ -157,8 +157,9 @@ type calendarStub struct {
 func (c calendarStub) IsTradingDay(context.Context, string) (bool, error) { return c.open, c.err }
 
 type runnerStub struct {
-	scanErr, researchErr     error
-	scanCalls, researchCalls int
+	scanErr, researchErr                   error
+	scanCalls, researchCalls, monitorCalls int
+	monitorFn                              func(context.Context, ScheduleTask, string) error
 }
 
 func (r *runnerStub) RunScan(context.Context, ScheduleTask, string) (string, error) {
@@ -174,6 +175,15 @@ func (r *runnerStub) RunResearch(context.Context, ScheduleTask, string) (string,
 		return "", r.researchErr
 	}
 	return "run-ref-000000000000000000000000000000", nil
+}
+func (r *runnerStub) RunMonitor(ctx context.Context, task ScheduleTask, tradeDate string) (string, error) {
+	r.monitorCalls++
+	if r.monitorFn != nil {
+		if err := r.monitorFn(ctx, task, tradeDate); err != nil {
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 type trackerStub struct {
@@ -389,5 +399,50 @@ func TestSchedulerRestartDoesNotRepeatPaidTrigger(t *testing.T) {
 	sch2.Tick(context.Background())
 	if runner2.researchCalls != 1 {
 		t.Fatal("next trading day not triggered after interruption")
+	}
+}
+
+func TestSchedulerRunsMonitorPassOnTradingDays(t *testing.T) {
+	monitorStore, err := NewFileMonitorStore(filepath.Join(t.TempDir(), "monitor"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := &monitorSourceStub{obs: monitorBarsWithClose(100, 1000), obsOK: true}
+	monitor, err := NewMonitor(monitorStore, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &runnerStub{monitorFn: func(_ context.Context, _ ScheduleTask, tradeDate string) error {
+		return monitor.Tick(context.Background(), tradeDate)
+	}}
+	tracker := trackerStub{}
+	sch, store := newSchedulerTest(t, calendarStub{open: true}, runner, tracker, func() time.Time { return time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC) })
+	task := ScheduleTask{ID: "0123456789abcdef", Name: "观察池监控", Kind: ScheduleKindMonitor, Enabled: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := store.SaveTask(task); err != nil {
+		t.Fatal(err)
+	}
+	rule := monitorTestRule(MonitorPriceAbove, "ffffffffffffffff", 50)
+	if err := monitorStore.SaveRule(rule); err != nil {
+		t.Fatal(err)
+	}
+	sch.Tick(context.Background())
+	if runner.monitorCalls != 1 {
+		t.Fatalf("monitor pass not triggered: %d", runner.monitorCalls)
+	}
+	// The synchronous monitor pass completes on the next tick.
+	sch.Tick(context.Background())
+	got, err := store.GetRun(task.ID, "20261023")
+	if err != nil || got.State != ScheduleCompleted {
+		t.Fatalf("monitor run not completed: %+v %v", got, err)
+	}
+	// The monitor actually evaluated the rule (close 100 > 50 → FIRED).
+	event, err := monitorStore.GetEvent(rule.ID, "20261023")
+	if err != nil || event.Outcome != MonitorFired {
+		t.Fatalf("rule not evaluated: %+v %v", event, err)
+	}
+	// Repeat ticks consume the day: no second pass.
+	sch.Tick(context.Background())
+	if runner.monitorCalls != 1 {
+		t.Fatalf("day re-triggered: %d", runner.monitorCalls)
 	}
 }
