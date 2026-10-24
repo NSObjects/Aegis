@@ -20,7 +20,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
   const selectedRunAvailable = Boolean(selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId));
   const useSelectedRun = runScopePreference?.runId === (selectedRunId ?? null)
     ? runScopePreference.enabled
-    : selectedRunAvailable;
+    : selectedRunAvailable && !currentSession;
   useEffect(() => {
     const id = window.sessionStorage.getItem("aegis-conversation-session");
     if (!id || !/^[a-f0-9]{32}$/.test(id)) return;
@@ -34,7 +34,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
   }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const runContext = useSelectedRun && selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && !startSymbol.trim() ? selectedRunId : "";
+    const runContext = useSelectedRun && selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && !startSymbol.trim() && (!currentSession || selectedRunId !== currentRunId) ? selectedRunId : "";
     const question = runContext ? `请只读查询已有 Run ID ${runContext}。${message.trim()} 不要启动新的研究。` : message.trim();
     if (!question || busy || question.length > 2048) return;
     const starting = startSymbol.trim().length > 0;
