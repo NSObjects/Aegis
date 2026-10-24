@@ -19,7 +19,6 @@ test("mobile cancelled research stays cancelled after deep-link reload", async (
   await page.getByRole("button", { name: "请求取消" }).click();
   await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
   await expect(page.locator("details.live-export-menu")).toHaveCount(0);
-  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "结构化研究报告" })).toHaveCount(0);
 
   await page.goto("/?run=" + id);
