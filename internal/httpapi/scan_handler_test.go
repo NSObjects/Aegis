@@ -22,6 +22,8 @@ type fakeScans struct {
 	snapErr       error
 	comparison    application.ScanComparison
 	comparisonErr error
+	replay        application.ScanReplay
+	replayErr     error
 }
 
 func (f *fakeScans) Submit(_ context.Context, asOf, source string, symbols []string) (application.ScanRecord, error) {
@@ -37,6 +39,12 @@ func (f *fakeScans) GetSnapshot(_, symbol string) (technical.HistoricalObservati
 		return technical.HistoricalObservation{}, f.snapErr
 	}
 	return f.snapshot, nil
+}
+func (f *fakeScans) Replay(string) (application.ScanReplay, error) {
+	if f.replayErr != nil {
+		return application.ScanReplay{}, f.replayErr
+	}
+	return f.replay, nil
 }
 func (f *fakeScans) Comparison(string) (application.ScanComparison, error) {
 	if f.comparisonErr != nil {
@@ -184,4 +192,35 @@ func TestScanComparisonEndpoint(t *testing.T) {
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("method status=%d", rec.Code)
 	}
+}
+
+func TestScanReplayEndpoint(t *testing.T){
+ id:="0123456789abcdef0123456789abcdef"
+ base:=application.ScanReplay{ScanID:id,AsOf:"20261022",StrategyVersion:pullback.StrategyVersion,Replayable:true,Matches:true,
+  Rows:[]application.ScanReplayRow{{Symbol:"600519.SH",Match:true,Source:application.ScanComparisonSource{SHA256:"a"}}},
+  Unreplayable:[]application.ScanReplayUnreplayable{{Symbol:"000001.SZ",Reason:"NO_COMMITTED_SNAPSHOT"}},
+ }
+ cases:=[]struct{name string;fake *fakeScans;want int}{
+  {"serves replay",&fakeScans{replay:base},http.StatusOK},
+  {"unfinished scan",&fakeScans{replayErr:application.ErrScanNotCompleted},http.StatusConflict},
+  {"missing scan",&fakeScans{replayErr:os.ErrNotExist},http.StatusNotFound},
+  {"store failure",&fakeScans{replayErr:errors.New("snapshot digest mismatch")},http.StatusInternalServerError},
+ }
+ for _,tc:=range cases{
+  h:=&Handler{localDev:true,scans:tc.fake}
+  w:=httptest.NewRecorder()
+  h.ServeHTTP(w,httptest.NewRequest(http.MethodGet,"/api/v1/scans/"+id+"/replay",nil))
+  if w.Code!=tc.want{t.Errorf("%s status=%d expected=%d",tc.name,w.Code,tc.want)}
+ }
+ h:=&Handler{localDev:true,scans:&fakeScans{replay:base}}
+ w:=httptest.NewRecorder()
+ h.ServeHTTP(w,httptest.NewRequest(http.MethodGet,"/api/v1/scans/"+id+"/replay",nil))
+ var got application.ScanReplay
+ if err:=json.Unmarshal(w.Body.Bytes(),&got);err!=nil||got.ScanID!=id||!got.Matches||len(got.Rows)!=1{t.Fatalf("replay payload %+v %v",got,err)}
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/v1/scans/"+id+"/replay",nil))
+ if rec.Code!=http.StatusMethodNotAllowed{t.Fatalf("method status=%d",rec.Code)}
+ rec=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/v1/scans/bad-id/replay",nil))
+ if rec.Code!=http.StatusNotFound{t.Fatalf("bad id status=%d",rec.Code)}
 }

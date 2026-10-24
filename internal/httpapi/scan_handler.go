@@ -21,6 +21,7 @@ type ScanController interface {
 	List(int) ([]application.ScanRecord, error)
 	GetSnapshot(scanID, symbol string) (technical.HistoricalObservation, error)
 	Comparison(scanID string) (application.ScanComparison, error)
+	Replay(scanID string) (application.ScanReplay, error)
 }
 
 func (h *Handler) WithScanController(scans ScanController) *Handler { h.scans = scans; return h }
@@ -116,6 +117,19 @@ func (h *Handler) scanRoute(w http.ResponseWriter, r *http.Request) {
 		h.scanComparison(w, r, parts[0])
 		return
 	}
+	// GET /replay re-derives the persisted results from the persisted inputs.
+	if len(parts) == 2 && parts[1] == "replay" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w, "GET")
+			return
+		}
+		if !isRunID(parts[0]) {
+			http.NotFound(w, r)
+			return
+		}
+		h.scanReplay(w, r, parts[0])
+		return
+	}
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w, "GET")
 		return
@@ -177,4 +191,23 @@ func (h *Handler) scanComparison(w http.ResponseWriter, r *http.Request, scanID 
 		return
 	}
 	sendJSON(w, http.StatusOK, comparison)
+}
+
+// scanReplay serves the replay verdict over persisted inputs. A tampered
+// record reports matches=false rather than a fabricated reproduction.
+func (h *Handler) scanReplay(w http.ResponseWriter, r *http.Request, scanID string) {
+	replay, err := h.scans.Replay(scanID)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		if errors.Is(err, application.ErrScanNotCompleted) {
+			http.Error(w, "scan replay requires a completed scan", http.StatusConflict)
+			return
+		}
+		http.Error(w, "scan replay unavailable", http.StatusInternalServerError)
+		return
+	}
+	sendJSON(w, http.StatusOK, replay)
 }
