@@ -34,7 +34,6 @@ test("real Go run fails closed without provider credentials and remains inspecta
   const artifact = await page.request.get(`/api/workbench/runs/${runId}/artifact`);
   expect(artifact.status()).not.toBe(200);
   await expect(page.locator("details.live-export-menu")).toHaveCount(0);
-  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 
   await page.goto(href!);
   await expect(page.locator(".live-run-fields")).toContainText("失败", { timeout: 15_000 });
@@ -79,7 +78,6 @@ test("unknown Run deep link never renders another Run or exposes artifact", asyn
   expect(missing.status()).toBe(404);
   const artifact = await page.request.get("/api/workbench/runs/" + unknown + "/artifact");
   expect(artifact.status()).not.toBe(200);
-  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
   await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 });
 
