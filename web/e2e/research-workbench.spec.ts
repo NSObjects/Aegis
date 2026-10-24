@@ -576,8 +576,10 @@ test("report shortcut compares the current Run with the nearest previous complet
   const current = await submit(page, "historical comparison fixture");
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
   const posts: string[] = [];
+  const historyQueries: string[] = [];
   page.on("request", req => {
     if (req.url().includes("/api/workbench/runs") && req.method() === "POST") posts.push(req.url());
+    if (req.url().includes("/api/workbench/runs?") && req.method() === "GET") historyQueries.push(req.url());
   });
   await page.getByRole("button", { name: "判断变化", exact: true }).click();
   await expect(page).toHaveURL("/?view=compare&left=" + previous + "&right=" + current);
@@ -586,6 +588,7 @@ test("report shortcut compares the current Run with the nearest previous complet
   const comparison = page.getByRole("region", { name: "历史研究对比" });
   await expect(comparison.getByRole("table", { name: "市场环境对比" })).toContainText("MIXED");
   await expect(comparison.getByRole("table", { name: "市场环境对比" })).toContainText("RISK_OFF");
+  expect(historyQueries.some(url => url.includes("symbol=600519.SH") && url.includes("state=COMPLETED"))).toBe(true);
   expect(posts).toEqual([]);
 });
 
