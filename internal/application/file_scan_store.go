@@ -90,6 +90,9 @@ func validateScanRecord(r ScanRecord)error{
 }
 func (s *FileScanStore) Save(r ScanRecord)error{
  if s==nil{return errors.New("nil scan store")}
+ // Populate the deterministic snapshot for callers using the original record contract.
+ // Existing-record immutability checks below prevent changing inputs mid-lifecycle.
+ if r.InputSnapshotSHA256=="" {r.InputSnapshotSHA256=ScanInputSnapshotSHA256(r)}
  if err:=validateScanRecord(r);err!=nil{return err}
  s.mu.Lock();defer s.mu.Unlock()
  path:=filepath.Join(s.dir,r.ID+".json")
