@@ -22,7 +22,7 @@ async function signIn(page: Page) {
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.status(), "login POST must succeed before showing the Live workspace").toBe(200);
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "研究详情" })).toBeVisible();
 }
 
 async function submit(page: Page, query = "") {
@@ -189,8 +189,8 @@ test("real browser submits a run, receives stage SSE, reads artifact, and restor
   expect(replayed).toContain("event: research_stage");
   await page.reload();
   await revealRunDiagnostics(page);
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await expect(page.getByRole("heading", { name: "研究详情" })).toBeVisible();
+  await page.getByRole("button", { name: "研究档案" }).click();
   await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0,12) }).first()).toBeVisible();
   await page.locator(".live-history-row").filter({ hasText: id.slice(0,12) }).click();
   await expect(page.locator(".live-run-fields")).toContainText(id);
@@ -224,7 +224,7 @@ test("provider failure is terminal and cannot be presented as success", async ({
 
 test("settings lets a signed-in operator save provider credentials without echoing keys", async ({ page }) => {
   await signIn(page);
-  await page.getByRole("button", { name: "凭证设置" }).click();
+  await page.getByRole("button", { name: "数据源设置" }).click();
   await expect(page.getByRole("heading", { name: "模型与数据源凭证" })).toBeVisible();
   const groups = page.locator(".provider-settings-group");
   await expect(groups).toHaveCount(3);
@@ -250,7 +250,7 @@ test("settings lets a signed-in operator save provider credentials without echoi
 
   await page.reload();
   await revealRunDiagnostics(page);
-  await page.getByRole("button", { name: "凭证设置" }).click();
+  await page.getByRole("button", { name: "数据源设置" }).click();
   await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
   await expect(page.getByLabel("TuShare Token")).toHaveValue("");
   await expect(page.locator(".provider-settings-row").filter({ hasText: "DeepSeek" })).toContainText("已配置");
@@ -264,15 +264,15 @@ test("Live Run permalink, refresh and browser back/forward restore the correct w
   await expect(page).toHaveURL(new RegExp(`\\?run=${id}$`));
   await expect(page.locator(".live-run-fields")).toContainText(id);
 
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await page.getByRole("button", { name: "研究档案" }).click();
   await expect(page).toHaveURL(/\?view=history$/);
-  await expect(page.getByRole("heading", { name: "研究历史" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "研究档案" })).toBeVisible();
 
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`\\?run=${id}$`));
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await page.goForward();
-  await expect(page.getByRole("heading", { name: "研究历史" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "研究档案" })).toBeVisible();
 
   await page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) }).click();
   await page.reload();
@@ -642,11 +642,14 @@ test("overview is authenticated, URL-addressable and opens the same completed Ru
   await signIn(page);
   const id = await submit(page, "technical snapshot fixture");
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
-  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  await page.getByRole("button", { name: "工作台", exact: true }).click();
   await expect(page).toHaveURL("/?view=overview");
   const overview = page.getByRole("region", { name: "研究任务概览" });
-  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "工作台" })).toBeVisible();
   await expect(overview.getByText("样本最多 100 条", { exact: false })).toBeVisible();
+  const activity = overview.locator(".run-overview-activity-disclosure");
+  await expect(activity).not.toHaveAttribute("open");
+  await activity.locator("summary").click();
   await expect(overview.getByRole("img", { name: "最近七个 UTC 日", exact: false })).toBeVisible();
   const list = overview.getByRole("region", { name: "近期研究任务列表" });
   await list.getByRole("textbox", { name: "筛选股票或任务 ID" }).fill(id);
@@ -658,10 +661,10 @@ test("overview is authenticated, URL-addressable and opens the same completed Ru
   await expect(page.getByRole("heading", { name: /的研究判断$/ })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL("/?view=overview");
-  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "工作台" })).toBeVisible();
   await page.reload();
   await revealRunDiagnostics(page);
-  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "工作台" })).toBeVisible();
   await overview.getByRole("button", { name: "对比研究" }).click();
   await expect(page).toHaveURL("/?view=compare");
 });
@@ -672,7 +675,7 @@ test("overview active and failed filters open live progress or exact failure, wi
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
   const held = await submit(page, "hold fixture");
   await expect(page.locator(".live-run-fields")).toContainText(held);
-  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  await page.getByRole("button", { name: "工作台", exact: true }).click();
   const overview = page.getByRole("region", { name: "研究任务概览" });
   const list = overview.getByRole("region", { name: "近期研究任务列表" });
   const filter = overview.getByRole("group", { name: "研究任务状态筛选" });
@@ -686,7 +689,7 @@ test("overview active and failed filters open live progress or exact failure, wi
   await expect(page.getByRole("region", { name: "Agent 执行轨迹" })).toBeVisible();
   await page.getByRole("button", { name: "请求取消" }).click();
   await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
-  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  await page.getByRole("button", { name: "工作台", exact: true }).click();
   await filter.getByRole("button", { name: "失败" }).click();
   await list.getByRole("textbox", { name: "筛选股票或任务 ID" }).fill(failed);
   await expect(list.locator(".run-overview-row")).toHaveCount(1);
@@ -708,11 +711,11 @@ test("overview with a list of no records shows an empty state, not fabricated KP
   await page.getByLabel("工作台访问口令").fill(password);
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
   const overview = page.getByRole("region", { name: "研究任务概览" });
-  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "工作台" })).toBeVisible();
   await expect(overview.getByText("暂无已保存的研究任务")).toBeVisible();
   await expect(overview.locator(".run-overview-row")).toHaveCount(0);
   await overview.getByRole("button", { name: "发起第一项研究" }).click();
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "研究详情" })).toBeVisible();
   await expect(page.getByLabel("股票代码")).toBeVisible();
 });
 
@@ -726,6 +729,15 @@ test("completed research defaults to a readable brief with expandable source cha
   await expect(overview.getByRole("region",{name:"研究关键依据"})).toBeVisible();
   await expect(overview.getByRole("region",{name:"研究风险与不确定性"})).toBeVisible();
   await expect(page.getByRole("heading",{name:"完整研究章节"})).toBeVisible();
+  const evidence = page.locator("#report-evidence");
+  await expect(evidence).not.toHaveAttribute("open");
+  await page.getByRole("button", { name: "完整依据" }).click();
+  await expect(evidence).toHaveAttribute("open");
+  const followUp = page.locator("#research-follow-up");
+  await expect(followUp).not.toHaveAttribute("open");
+  await followUp.locator("summary").click();
+  await expect(followUp).toHaveAttribute("open");
+  await expect(followUp.getByRole("checkbox", { name: /针对当前研究 Run/ })).toBeChecked();
   const manager = page.locator("#chapter-manager");
   await expect(manager).not.toHaveAttribute("open");
   await manager.locator("summary").click();
@@ -742,7 +754,7 @@ test("research history filters loaded runs without hiding source data or inventi
   await signIn(page);
   const id = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await page.getByRole("button", { name: "研究档案" }).click();
   const rows = page.locator(".live-history-row");
   await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
   await page.getByLabel("按股票代码筛选").fill("000000");
@@ -761,7 +773,7 @@ test("history uses server paging and keeps a selected Run separate from the list
   await signIn(page);
   const id = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await page.getByRole("button", { name: "研究档案" }).click();
   await expect(page.getByRole("button", { name: "上一页" })).toBeDisabled();
   // The fixture persists runs created by earlier tests, so additional pages may exist.
   await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) })).toBeVisible();
@@ -776,7 +788,7 @@ test("research history displays the persisted failure code for the correct run",
   await signIn(page);
   const failedId = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await page.getByRole("button", { name: "研究档案" }).click();
   const failedRow = page.locator(".live-history-row").filter({ hasText: failedId.slice(0, 12) });
   await expect(failedRow).toContainText("失败");
   await expect(failedRow.locator(".live-history-failure")).toContainText("RESEARCH_FAILED");
