@@ -19,6 +19,7 @@ func (f *fakeScans) Submit(_ context.Context,asOf,source string,symbols []string
  return f.last,nil
 }
 func (f *fakeScans) Get(id string)(application.ScanRecord,error){return f.last,nil}
+func (f *fakeScans) List(limit int)([]application.ScanRecord,error){return []application.ScanRecord{f.last},nil}
 func TestScanHTTPRoutesWithAuthAndInputValidation(t *testing.T){
  fake:=&fakeScans{}
  h:=&Handler{token:strings.Repeat("x",32),scans:fake}
@@ -39,4 +40,19 @@ func TestScanHTTPRoutesWithAuthAndInputValidation(t *testing.T){
  req.Header.Set("Authorization","Bearer "+strings.Repeat("x",32))
  w=httptest.NewRecorder();h.ServeHTTP(w,req)
  if w.Code!=http.StatusBadRequest{t.Fatalf("unknown field accepted %d",w.Code)}
+}
+
+func TestScanHistoryQuery(t *testing.T){
+ h:=&Handler{localDev:true,scans:&fakeScans{}}
+ for _,tc:=range []struct{path string;want int}{
+  {"/api/v1/scans",http.StatusOK},
+  {"/api/v1/scans?limit=1",http.StatusOK},
+  {"/api/v1/scans?limit=0",http.StatusBadRequest},
+  {"/api/v1/scans?limit=101",http.StatusBadRequest},
+  {"/api/v1/scans?limit=bogus",http.StatusBadRequest},
+ }{
+  w:=httptest.NewRecorder()
+  h.ServeHTTP(w,httptest.NewRequest(http.MethodGet,tc.path,nil))
+  if w.Code!=tc.want{t.Errorf("%s status=%d expected=%d",tc.path,w.Code,tc.want)}
+ }
 }
