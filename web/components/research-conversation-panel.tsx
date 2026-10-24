@@ -16,7 +16,11 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
   const [restored, setRestored] = useState("");
   const [currentSession, setCurrentSession] = useState("");
   const [currentRunId, setCurrentRunId] = useState("");
-  const [useSelectedRun, setUseSelectedRun] = useState(false);
+  const [runScopePreference, setRunScopePreference] = useState<{ runId: string | null; enabled: boolean } | null>(null);
+  const selectedRunAvailable = Boolean(selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId));
+  const useSelectedRun = runScopePreference?.runId === (selectedRunId ?? null)
+    ? runScopePreference.enabled
+    : selectedRunAvailable;
   useEffect(() => {
     const id = window.sessionStorage.getItem("aegis-conversation-session");
     if (!id || !/^[a-f0-9]{32}$/.test(id)) return;
@@ -28,10 +32,6 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       }).catch(() => { /* Missing or expired sessions are never fabricated. */ });
     return () => controller.abort();
   }, []);
-  useEffect(() => {
-    setUseSelectedRun(Boolean(selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId)));
-  }, [selectedRunId]);
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const runContext = useSelectedRun && selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && !startSymbol.trim() ? selectedRunId : "";
@@ -79,7 +79,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setCurrentRunId(body.run_id ?? ""); setRestored("当前研究 · Run ID: " + body.run_id); }
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
       setMessage("");
-      setUseSelectedRun(false);
+      setRunScopePreference({ runId: selectedRunId ?? null, enabled: false });
       setConfirmStart(false);
       setStartSymbol("");
     } catch (e) {
@@ -98,7 +98,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       </div>)}
     </div>
     <form onSubmit={submit} style={{ display: "grid", gap: 8, marginTop: 12 }}>
-      {selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && <label><input type="checkbox" checked={useSelectedRun} disabled={busy} onChange={event => setUseSelectedRun(event.target.checked)} /> 针对当前研究 Run {selectedRunId.slice(0, 12)}… 追问（只读）</label>}
+      {selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && <label><input type="checkbox" checked={useSelectedRun} disabled={busy} onChange={event => setRunScopePreference({ runId: selectedRunId ?? null, enabled: event.target.checked })} /> 针对当前研究 Run {selectedRunId.slice(0, 12)}… 追问（只读）</label>}
       <label htmlFor="aegis-conversation-message">询问已有研究</label>
       <textarea id="aegis-conversation-message" value={message} onChange={event => setMessage(event.target.value)}
         maxLength={2048} rows={3} placeholder="例如：请列出最近的研究 Run；600519.SH 最近一次研究的空头依据是什么？"
