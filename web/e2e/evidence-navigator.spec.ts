@@ -38,7 +38,10 @@ async function signIn(page: Page) {
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "发起新研究", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "研究详情", exact: true })).toBeVisible();
+  await page.locator("#research-follow-up > summary").click();
 }
 
 async function submit(page: Page) {
@@ -58,6 +61,7 @@ test("EvidenceLedger links only explicit event IDs and lets a reader inspect doc
   await signIn(page);
   const first = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  await page.getByRole("button", { name: "完整依据" }).click();
   const nav = page.getByRole("region", { name: "交互式证据与论点导航" });
   await expect(nav).toBeVisible();
   await expect(nav.getByText("后端声明的多头示例").first()).toBeVisible();
@@ -81,6 +85,7 @@ test("EvidenceLedger links only explicit event IDs and lets a reader inspect doc
   await expect(nav.getByText("针对 bull-001 的反驳")).toBeVisible();
   await page.reload();
   await expect(page.locator(".live-run-fields")).toContainText(first);
+  await page.getByRole("button", { name: "完整依据" }).click();
   const restored = page.getByRole("region", { name: "交互式证据与论点导航" });
   await expect(restored.getByText("后端声明的多头示例").first()).toBeVisible();
   await expect(restored.getByRole("region", { name: "已匹配的事件详情" })).toHaveCount(0);
@@ -98,5 +103,6 @@ test("failed work never shows stale linked evidence", async ({ page }) => {
   await page.getByLabel("研究关注点（可选）").fill("fail provider fixture", { timeout: 8_000 });
   await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 12_000 });
-  await expect(page.getByRole("region", { name: "交互式证据与论点导航" })).toHaveCount(0);
+  await expect(page.locator("#report-evidence")).toHaveCount(0);
+  await expect(page.locator(".live-evidence-navigator")).toHaveCount(0);
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareResearchRuns } from "./run-comparison";
+import { compareResearchRuns, findPreviousComparableRun } from "./run-comparison";
 import type { LiveArtifact, LiveRun } from "./live-contract";
 
 const makeRun = (id: string, symbol="600519.SH", mode: LiveRun["mode"]="PORTFOLIO_REVIEW", state: LiveRun["state"]="COMPLETED"): LiveRun => ({
@@ -44,6 +44,17 @@ const find = (value: ReturnType<typeof compareResearchRuns>, label: string) =>
   value?.rows.find(r => r.label === label);
 
 describe("safe historical Run comparison", () => {
+  it("finds the nearest earlier completed Run for the same symbol and mode", () => {
+    const earlier = { ...makeRun("c"), created_at: "2026-10-09T07:00:00Z" };
+    const current = { ...makeRun("d"), created_at: "2026-10-11T07:00:00Z" };
+    const later = { ...makeRun("e"), created_at: "2026-10-12T07:00:00Z" };
+    const failed = { ...makeRun("f", "600519.SH", "PORTFOLIO_REVIEW", "FAILED"), created_at: "2026-10-10T07:00:00Z" };
+    const otherSymbol = { ...makeRun("g", "000001.SZ"), created_at: "2026-10-10T07:00:00Z" };
+    const otherMode = { ...makeRun("h", "600519.SH", "DECISION"), created_at: "2026-10-10T07:00:00Z" };
+    expect(findPreviousComparableRun([later, failed, otherSymbol, current, otherMode, earlier], current.run_id)?.run_id).toBe(earlier.run_id);
+    expect(findPreviousComparableRun([current, later], current.run_id)).toBeNull();
+    expect(findPreviousComparableRun([failed, earlier], failed.run_id)).toBeNull();
+  });
   it("compares two completed and same-symbol Runs with a typed zero, missing data and actual differences", () => {
     const result = compareResearchRuns(a, artifact({ advance: 0, close: 100, ids: ["old"] }), b,
       artifact({ regime: "RISK_OFF", advance: null, close: 104, ids: ["new", "old"] }));

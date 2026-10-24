@@ -16,7 +16,12 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
   const [restored, setRestored] = useState("");
   const [currentSession, setCurrentSession] = useState("");
   const [currentRunId, setCurrentRunId] = useState("");
-  const [useSelectedRun, setUseSelectedRun] = useState(false);
+  const [runScopePreference, setRunScopePreference] = useState<{ runId: string | null; enabled: boolean } | null>(null);
+  const selectedRunAvailable = Boolean(selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId));
+  const explicitRunScope = runScopePreference?.runId === (selectedRunId ?? null) && runScopePreference.enabled;
+  const useSelectedRun = runScopePreference?.runId === (selectedRunId ?? null)
+    ? runScopePreference.enabled
+    : selectedRunAvailable && !currentSession;
   useEffect(() => {
     const id = window.sessionStorage.getItem("aegis-conversation-session");
     if (!id || !/^[a-f0-9]{32}$/.test(id)) return;
@@ -30,7 +35,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
   }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const runContext = useSelectedRun && selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && !startSymbol.trim() ? selectedRunId : "";
+    const runContext = useSelectedRun && selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && !startSymbol.trim() && (!currentSession || selectedRunId !== currentRunId || explicitRunScope) ? selectedRunId : "";
     const question = runContext ? `请只读查询已有 Run ID ${runContext}。${message.trim()} 不要启动新的研究。` : message.trim();
     if (!question || busy || question.length > 2048) return;
     const starting = startSymbol.trim().length > 0;
@@ -75,7 +80,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setCurrentRunId(body.run_id ?? ""); setRestored("当前研究 · Run ID: " + body.run_id); }
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
       setMessage("");
-      setUseSelectedRun(false);
+      setRunScopePreference({ runId: selectedRunId ?? null, enabled: !starting && selectedRunAvailable && (Boolean(runContext) || !currentSession) });
       setConfirmStart(false);
       setStartSymbol("");
     } catch (e) {
@@ -83,8 +88,8 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
     } finally { setBusy(false); }
   }
   return <section aria-label="研究对话" className="surface" style={{ padding: 20, marginBlock: 16 }}>
-    <h2 style={{ fontWeight: 700 }}>研究对话</h2>
-    <p style={{ marginBlock: 8, opacity: .75 }}>可询问已有 Run 的研究结论或多空依据。默认只读。只有填写股票代码并确认后，才允许对话 Agent 发起新的研究任务；模型回答及新研究都可能产生费用。</p>
+    <h2 style={{ fontWeight: 700 }}>针对研究继续追问</h2>
+    <p style={{ marginBlock: 8, opacity: .75 }}>默认只读，可追问本次研究的结论、依据和不确定性。只有在下方主动展开并确认后，才会通过对话启动新研究；模型调用可能产生费用。</p>
     {restored && <p aria-live="polite">{restored}</p>}
     {onOpenRun && /^[a-f0-9]{32}$/.test(currentRunId) && <button type="button" onClick={() => onOpenRun(currentRunId)}>在研究工作台打开此 Run</button>}
     <div aria-live="polite">
@@ -94,16 +99,19 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       </div>)}
     </div>
     <form onSubmit={submit} style={{ display: "grid", gap: 8, marginTop: 12 }}>
-      {selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && <label><input type="checkbox" checked={useSelectedRun} disabled={busy} onChange={event => setUseSelectedRun(event.target.checked)} /> 针对当前研究 Run {selectedRunId.slice(0, 12)}… 追问（只读）</label>}
+      {selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && <label><input type="checkbox" checked={useSelectedRun} disabled={busy} onChange={event => setRunScopePreference({ runId: selectedRunId ?? null, enabled: event.target.checked })} /> 针对当前研究 Run {selectedRunId.slice(0, 12)}… 追问（只读）</label>}
       <label htmlFor="aegis-conversation-message">询问已有研究</label>
       <textarea id="aegis-conversation-message" value={message} onChange={event => setMessage(event.target.value)}
         maxLength={2048} rows={3} placeholder="例如：请列出最近的研究 Run；600519.SH 最近一次研究的空头依据是什么？"
         disabled={busy} style={{ width: "100%", padding: 10, borderRadius: 8 }} />
-      <label htmlFor="aegis-start-symbol">启动新研究（可选，A 股代码）</label>
-      <input id="aegis-start-symbol" value={startSymbol} onChange={event => { setStartSymbol(event.target.value); setConfirmStart(false); }}
-        placeholder="例如 600519.SH；留空仅查询已有研究" disabled={busy} maxLength={9} />
-      {startSymbol.trim() && <label><input type="checkbox" checked={confirmStart} disabled={busy}
-        onChange={event => setConfirmStart(event.target.checked)} /> 我确认允许启动 {startSymbol.trim().toUpperCase()} 的新研究（可能产生费用）</label>}
+      <details className="conversation-start-research">
+        <summary>从对话启动新研究（可选）</summary>
+        <label htmlFor="aegis-start-symbol">A 股代码</label>
+        <input id="aegis-start-symbol" value={startSymbol} onChange={event => { setStartSymbol(event.target.value); setConfirmStart(false); }}
+          placeholder="例如 600519.SH" disabled={busy} maxLength={9} />
+        {startSymbol.trim() && <label><input type="checkbox" checked={confirmStart} disabled={busy}
+          onChange={event => setConfirmStart(event.target.checked)} /> 我确认允许启动 {startSymbol.trim().toUpperCase()} 的新研究（可能产生费用）</label>}
+      </details>
       <button type="submit" disabled={busy || !message.trim()}>{busy ? "正在分析…" : "发送问题"}</button>
       {error && <p role="alert" style={{ color: "var(--danger, #b42318)" }}>{error}</p>}
     </form>
