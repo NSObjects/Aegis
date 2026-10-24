@@ -16,7 +16,7 @@ on:
         default: false
         type: boolean
       run_pullback_scan:
-        description: "R3-01 real Tushare pullback scan (no LLM, 2 symbols)"
+        description: "R3-01 real Tushare pullback scan + R3-05 snapshot replay verification (no LLM, 2 symbols)"
         required: true
         default: false
         type: boolean
@@ -76,12 +76,13 @@ concurrency:
 jobs:
 
   pullback_scan:
-    name: R3-01 Real Tushare Pullback Scan
+    name: R3-01/R3-05 Real Tushare Pullback Scan and Replay
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_pullback_scan }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
       TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+      AEGIS_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -120,6 +121,13 @@ jobs:
             ' "$RUNNER_TEMP/pullback-results.json" >/dev/null
           fi
           jq -c '{strategy_version,as_of:(.as_of // .universe.as_of),universe_source:(.universe.source // null),results:[.results[] | {symbol,verdict,reason}]}' "$RUNNER_TEMP/pullback-results.json"
+      - name: Verify scan replays identically from persisted snapshots (R3-05)
+        shell: bash
+        run: |
+          go test ./internal/application \
+            -run '^TestScanReplayRealTushareIntegration$' \
+            -v \
+            -count=1
 
   trading:
     name: Trading Agent
