@@ -30,7 +30,11 @@ const states: Record<LiveRun["state"], string> = {
 const statusColors: Record<LiveRun["state"], string> = {
   PENDING: "blue", RUNNING: "blue", COMPLETED: "green", FAILED: "red", CANCELLED: "gray",
 };
-const formatDate = (value: string | undefined) => value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "—";
+const formatDate = (value: string | undefined) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "时间不可用" : date.toLocaleString("zh-CN", { hour12: false });
+};
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { cache: "no-store", credentials: "same-origin", ...init });
