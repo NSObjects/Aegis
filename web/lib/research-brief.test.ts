@@ -10,10 +10,14 @@ describe("research brief is source-backed and safe", () => {
      {title:"事件依据",source:"事件分析",lines:["依据 F"]},
      {title:"决策依据",source:"决策分析",lines:["依据 G"]},
    ]);
-   expect(summary.blocks.flatMap(block=>block.lines)).toEqual(["依据 A","依据 D","依据 F"]);
-   expect(summary.blocks.map(block=>block.source)).toEqual(["研究经理","综合分析","事件分析"]);
+   expect(summary.blocks.flatMap(block=>block.lines)).toEqual(["依据 A","依据 F","依据 G"]);
+   expect(summary.blocks.map(block=>block.source)).toEqual(["研究经理","事件分析","决策分析"]);
    expect(summary.omittedLines).toBe(4);
    expect(summarizeBriefBlocks([{title:"单一来源",source:"来源",lines:["A","B","C","D"]}]).blocks[0].lines).toEqual(["A","B","C"]);
+   expect(summarizeBriefBlocks([
+     {title:"来源一",source:"来源一",lines:["A","B"]},
+     {title:"来源二",source:"来源二",lines:["C","D"]},
+   ]).blocks.flatMap(block=>block.lines)).toEqual(["A","C","B"]);
  });
  it("counts all source entries omitted from the brief preview while preserving the full chapter",()=>{
    const opportunities=Array.from({length:7},(_,i)=>({claim:`机会 ${i+1}`}));

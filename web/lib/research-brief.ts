@@ -9,18 +9,34 @@ export type BriefBlockSummary = { blocks: BriefBlock[]; omittedLines: number };
 export function summarizeBriefBlocks(blocks: BriefBlock[], maxLines = 3): BriefBlockSummary {
   const limit = Math.max(0, Math.floor(maxLines));
   const totalLines = blocks.reduce((count, block) => count + block.lines.length, 0);
-  const visible = blocks.map(block => ({ ...block, lines: [] as string[] }));
+  const candidates = blocks.filter(block => block.lines.length > 0);
+  const visible = candidates.map(block => ({ ...block, lines: [] as string[] }));
   let visibleLines = 0;
-  for (let lineIndex = 0; visibleLines < limit; lineIndex++) {
-    let foundLine = false;
-    for (let blockIndex = 0; blockIndex < blocks.length && visibleLines < limit; blockIndex++) {
-      const line = blocks[blockIndex].lines[lineIndex];
-      if (line === undefined) continue;
-      visible[blockIndex].lines.push(line);
+
+  if (limit > 0 && candidates.length >= limit) {
+    // When sources outnumber preview slots, sample across the full source list
+    // instead of accidentally showing only the first few sources.
+    const indexes = limit === 1
+      ? [0]
+      : Array.from({ length: limit }, (_, slot) =>
+          Math.round(slot * (candidates.length - 1) / (limit - 1)));
+    for (const index of indexes) {
+      visible[index].lines.push(candidates[index].lines[0]);
       visibleLines++;
-      foundLine = true;
     }
-    if (!foundLine) break;
+  } else {
+    // When there are fewer sources than slots, round-robin through their lines.
+    for (let lineIndex = 0; visibleLines < limit; lineIndex++) {
+      let foundLine = false;
+      for (let blockIndex = 0; blockIndex < candidates.length && visibleLines < limit; blockIndex++) {
+        const line = candidates[blockIndex].lines[lineIndex];
+        if (line === undefined) continue;
+        visible[blockIndex].lines.push(line);
+        visibleLines++;
+        foundLine = true;
+      }
+      if (!foundLine) break;
+    }
   }
   return {
     blocks: visible.filter(block => block.lines.length > 0),
