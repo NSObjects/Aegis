@@ -3,7 +3,7 @@
 import type { LiveArtifact, LiveRun } from "@/lib/live-contract";
 import { useEffect, useRef } from "react";
 import { readLiveReport, type ReportCard } from "@/lib/live-report";
-import { readResearchBrief, readableResearchCode } from "@/lib/research-brief";
+import { readResearchBrief, readableResearchCode, summarizeBriefBlocks } from "@/lib/research-brief";
 import { ArrowLeftRight, BarChart3, BookOpen, FileSearch, MessageCircle, ShieldAlert, ListChecks } from "lucide-react";
 import LiveEvidenceNavigator from "@/components/live-evidence-navigator";
 import LiveTechnicalVisual from "@/components/live-technical-visual";
@@ -41,6 +41,8 @@ function ReportCardView({ card }: { card: ReportCard }) {
 export default function LiveResearchReport({ artifact, run, onCompare }: { artifact: LiveArtifact; run: LiveRun; onCompare?: () => void }) {
   const report = readLiveReport(artifact);
   const brief = readResearchBrief(report);
+  const evidenceSummary = summarizeBriefBlocks(brief.evidence);
+  const riskSummary = summarizeBriefBlocks(brief.risks);
   const reportRoot = useRef<HTMLDivElement>(null);
   const evidenceDisclosure = useRef<HTMLDetailsElement>(null);
   const followUpEntries = report.cards.flatMap(card => card.entries
@@ -102,11 +104,12 @@ export default function LiveResearchReport({ artifact, run, onCompare }: { artif
       </dl>}
       <div className="live-brief-grid">
         <section className="live-brief-section" aria-label="研究关键依据"><h3><ListChecks size={17}/>关键依据</h3>
-          {brief.evidence.length ? brief.evidence.map(block=><div key={block.title} className="live-brief-block"><h4>{block.title}</h4><ul>{block.lines.map((line,i)=><li key={i}>{line}</li>)}</ul><small>来源：{block.source}</small></div>) :
-          <p className="live-brief-muted">摘要层没有明确的支持观点；不代表存在看多依据。</p>}
+          {evidenceSummary.blocks.length ? <>{evidenceSummary.blocks.map(block=><div key={block.title} className="live-brief-block"><h4>{block.title}</h4><ul>{block.lines.map((line,i)=><li key={i}>{line}</li>)}</ul><small>来源：{block.source}</small></div>)}{evidenceSummary.omittedLines > 0 && <p className="live-brief-muted">摘要展示 3 条代表性依据；另有 {evidenceSummary.omittedLines} 条原始依据保留在完整研究章节中。</p>}</> :
+           <p className="live-brief-muted">摘要层没有明确的支持观点；不代表存在看多依据。</p>}
         </section>
         <section className="live-brief-section" aria-label="研究风险与不确定性"><h3><ShieldAlert size={17}/>风险与不确定性</h3>
-          {brief.risks.map(block=><div key={block.title} className="live-brief-block"><h4>{block.title}</h4><ul>{block.lines.map((line,i)=><li key={i}>{line}</li>)}</ul><small>来源：{block.source}</small></div>)}
+          {riskSummary.blocks.map(block=><div key={block.title} className="live-brief-block"><h4>{block.title}</h4><ul>{block.lines.map((line,i)=><li key={i}>{line}</li>)}</ul><small>来源：{block.source}</small></div>)}
+          {riskSummary.omittedLines > 0 && <p className="live-brief-muted">摘要展示 3 条代表性风险；另有 {riskSummary.omittedLines} 条风险细节保留在完整研究章节中。</p>}
           {!brief.risks.length && <p className="live-brief-muted">摘要层未提取到风险记录，不意味着风险为零。</p>}
         </section>
       </div>
