@@ -50,9 +50,15 @@ export default function LiveRunComparison({
   const { leftId, rightId } = pair;
   const key = (leftId ?? "") + ":" + (rightId ?? "");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [resolvedRuns, setResolvedRuns] = useState<LiveRun[]>([]);
   const [retry, setRetry] = useState(0);
   const [state, setState] = useState<{ key: string; loading: boolean; error: string }>({ key: "", loading: false, error: "" });
-  const completed = useMemo(() => runs.filter(run => run.state === "COMPLETED"), [runs]);
+  const completed = useMemo(() => {
+    const byId = new Map<string, LiveRun>();
+    for (const run of runs) if (run.state === "COMPLETED") byId.set(run.run_id, run);
+    for (const run of resolvedRuns) if (run.state === "COMPLETED") byId.set(run.run_id, run);
+    return [...byId.values()];
+  }, [runs, resolvedRuns]);
   const baseline = completed.find(run => run.run_id === leftId);
   const compatible = completed.filter(run => run.run_id !== leftId &&
     (!baseline || (run.symbol === baseline.symbol && run.mode === baseline.mode)));
@@ -67,6 +73,12 @@ export default function LiveRunComparison({
       return Promise.all([loadRun(leftId), loadRun(rightId)]);
     }).then(([left, right]) => {
       if (cancelled) return;
+      setResolvedRuns(current => {
+        const byId = new Map(current.map(run => [run.run_id, run]));
+        byId.set(left.run.run_id, left.run);
+        byId.set(right.run.run_id, right.run);
+        return [...byId.values()];
+      });
       const comparison = compareResearchRuns(left.run, left.artifact, right.run, right.artifact);
       if (!comparison) throw Error("对比来源不合法：要求不同的已完成 Run、同一标的与研究模式，且工件身份必须匹配");
       setLoaded({ key: activeKey, left: left.run, right: right.run, comparison });
