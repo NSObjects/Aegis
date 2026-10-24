@@ -18,7 +18,6 @@ test("mobile failed Run remains failed after refresh and never exposes a report"
   await expect.poll(async () => page.locator(".live-run-fields code").innerText(), { timeout: 15_000 }).toMatch(/^[a-f0-9]{32}$/);
   const id = await page.locator(".live-run-fields code").innerText();
   await expect(page.locator("details.live-export-menu")).toHaveCount(0);
-  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "结构化研究报告" })).toHaveCount(0);
 
   await page.goto("/?run=" + id);
