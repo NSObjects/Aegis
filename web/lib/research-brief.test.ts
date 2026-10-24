@@ -15,6 +15,23 @@ describe("research brief is source-backed and safe", () => {
    expect(summary.omittedLines).toBe(4);
    expect(summarizeBriefBlocks([{title:"单一来源",source:"来源",lines:["A","B","C","D"]}]).blocks[0].lines).toEqual(["A","B","C"]);
  });
+ it("counts all source entries omitted from the brief preview while preserving the full chapter",()=>{
+   const opportunities=Array.from({length:7},(_,i)=>({claim:`机会 ${i+1}`}));
+   const risks=Array.from({length:6},(_,i)=>({claim:`风险 ${i+1}`}));
+   const report=readLiveReport({
+     research_artifact:{symbol:"600519.SH"},
+     portfolio_review:{research_plan:{conclusion:"BALANCED",opportunities,risks}},
+   });
+   const brief=readResearchBrief(report);
+   expect(brief.evidence[0].lines).toHaveLength(7);
+   expect(brief.risks[0].lines).toHaveLength(6);
+   const evidence=summarizeBriefBlocks(brief.evidence);
+   const risk=summarizeBriefBlocks(brief.risks);
+   expect(evidence.blocks.flatMap(block=>block.lines)).toHaveLength(3);
+   expect(evidence.omittedLines).toBe(4);
+   expect(risk.blocks.flatMap(block=>block.lines)).toHaveLength(3);
+   expect(risk.omittedLines).toBe(3);
+ });
  it("glosses only known research enums and keeps exact backend codes",()=>{
    expect(readableResearchCode("BALANCED")).toBe("多空观点相对均衡（BALANCED）");
    expect(readableResearchCode("REVIEW_REQUIRED")).toBe("需要人工复核（REVIEW_REQUIRED）");

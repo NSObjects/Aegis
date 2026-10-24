@@ -46,7 +46,7 @@ const match = (fields: ReportField[], name: string): string | null => fields.fin
 function gather(c: ReportCard | undefined, names: string[], title: string): BriefBlock | null {
   if (!c) return null;
   const lines = c.entries.filter(e => names.some(name => e.label.includes(name)))
-    .map(e => e.body).filter(Boolean).slice(0, 5);
+    .map(e => e.body).filter(Boolean);
   return lines.length ? { title, lines, source: c.title } : null;
 }
 export function readResearchBrief(report: LiveReport): ResearchBrief {
