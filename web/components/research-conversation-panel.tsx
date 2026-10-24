@@ -28,6 +28,10 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       }).catch(() => { /* Missing or expired sessions are never fabricated. */ });
     return () => controller.abort();
   }, []);
+  useEffect(() => {
+    setUseSelectedRun(Boolean(selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId)));
+  }, [selectedRunId]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const runContext = useSelectedRun && selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && !startSymbol.trim() ? selectedRunId : "";
@@ -83,8 +87,8 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
     } finally { setBusy(false); }
   }
   return <section aria-label="研究对话" className="surface" style={{ padding: 20, marginBlock: 16 }}>
-    <h2 style={{ fontWeight: 700 }}>研究对话</h2>
-    <p style={{ marginBlock: 8, opacity: .75 }}>可询问已有 Run 的研究结论或多空依据。默认只读。只有填写股票代码并确认后，才允许对话 Agent 发起新的研究任务；模型回答及新研究都可能产生费用。</p>
+    <h2 style={{ fontWeight: 700 }}>针对研究继续追问</h2>
+    <p style={{ marginBlock: 8, opacity: .75 }}>默认只读，可追问本次研究的结论、依据和不确定性。只有在下方主动展开并确认后，才会通过对话启动新研究；模型调用可能产生费用。</p>
     {restored && <p aria-live="polite">{restored}</p>}
     {onOpenRun && /^[a-f0-9]{32}$/.test(currentRunId) && <button type="button" onClick={() => onOpenRun(currentRunId)}>在研究工作台打开此 Run</button>}
     <div aria-live="polite">
@@ -99,11 +103,14 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       <textarea id="aegis-conversation-message" value={message} onChange={event => setMessage(event.target.value)}
         maxLength={2048} rows={3} placeholder="例如：请列出最近的研究 Run；600519.SH 最近一次研究的空头依据是什么？"
         disabled={busy} style={{ width: "100%", padding: 10, borderRadius: 8 }} />
-      <label htmlFor="aegis-start-symbol">启动新研究（可选，A 股代码）</label>
-      <input id="aegis-start-symbol" value={startSymbol} onChange={event => { setStartSymbol(event.target.value); setConfirmStart(false); }}
-        placeholder="例如 600519.SH；留空仅查询已有研究" disabled={busy} maxLength={9} />
-      {startSymbol.trim() && <label><input type="checkbox" checked={confirmStart} disabled={busy}
-        onChange={event => setConfirmStart(event.target.checked)} /> 我确认允许启动 {startSymbol.trim().toUpperCase()} 的新研究（可能产生费用）</label>}
+      <details className="conversation-start-research">
+        <summary>从对话启动新研究（可选）</summary>
+        <label htmlFor="aegis-start-symbol">A 股代码</label>
+        <input id="aegis-start-symbol" value={startSymbol} onChange={event => { setStartSymbol(event.target.value); setConfirmStart(false); }}
+          placeholder="例如 600519.SH" disabled={busy} maxLength={9} />
+        {startSymbol.trim() && <label><input type="checkbox" checked={confirmStart} disabled={busy}
+          onChange={event => setConfirmStart(event.target.checked)} /> 我确认允许启动 {startSymbol.trim().toUpperCase()} 的新研究（可能产生费用）</label>}
+      </details>
       <button type="submit" disabled={busy || !message.trim()}>{busy ? "正在分析…" : "发送问题"}</button>
       {error && <p role="alert" style={{ color: "var(--danger, #b42318)" }}>{error}</p>}
     </form>
