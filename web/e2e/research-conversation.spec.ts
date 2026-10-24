@@ -5,6 +5,7 @@ test("authenticated Web conversation displays fixture response without exposing 
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await expect(panel).toBeVisible();
   await panel.getByLabel("询问已有研究").fill("列出已保存的研究");
@@ -30,10 +31,12 @@ test("research start needs explicit ticker confirmation and forwards scoped cons
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await expect(panel).toBeVisible();
   await panel.getByLabel("询问已有研究").fill("请研究 600519.SH");
-  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
   await panel.getByRole("button", { name: "发送问题" }).click();
   await expect(panel.getByRole("alert")).toContainText("明确确认");
   const check = panel.getByRole("checkbox", { name: /我确认允许启动/ });
@@ -51,6 +54,7 @@ test("conversation proxy rejects unconfirmed research action after authenticatio
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const response = await page.evaluate(async () => {
     const r = await fetch("/api/workbench/conversation", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "研究一下", start_symbol: "600519.SH", confirm_start: false }) });
@@ -63,15 +67,18 @@ test("confirmed research session is recovered after a browser reload", async ({ 
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await panel.getByLabel("询问已有研究").fill("启动600519.SH研究");
-  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
   await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
   const post = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
   await panel.getByRole("button", { name: "发送问题" }).click();
   expect((await post).status()).toBe(200);
   await expect(panel).toContainText("当前研究 · Run ID: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   await page.reload();
+  await page.locator("#research-follow-up > summary").click();
   const restored = page.getByRole("region", { name: "研究对话" });
   await expect(restored).toContainText("已恢复研究 600519.SH · Run ID: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 });
@@ -80,14 +87,17 @@ test("follow-up sends restored session reference without authorizing a new resea
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await panel.getByLabel("询问已有研究").fill("研究600519.SH");
-  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
   await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
   const first = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
   await panel.getByRole("button", { name: "发送问题" }).click();
   expect((await first).status()).toBe(200);
   await page.reload();
+  await page.locator("#research-follow-up > summary").click();
   await expect(page.getByRole("region", { name: "研究对话" })).toContainText("已恢复研究 600519.SH");
   const followup = page.getByRole("region", { name: "研究对话" });
   await followup.getByLabel("询问已有研究").fill("刚才那次研究有什么空头依据？");
@@ -102,10 +112,12 @@ test("second confirmed research reuses the restored conversation session", async
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   for (let i=0;i<2;i++) {
     await panel.getByLabel("询问已有研究").fill(i===0 ? "第一次研究" : "第二次研究");
-    await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+    await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
     await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
     const pending = page.waitForResponse(r => r.url().endsWith("/api/workbench/conversation") && r.request().method() === "POST");
     await panel.getByRole("button", { name: "发送问题" }).click();
@@ -122,11 +134,13 @@ test("binding failure preserves created Run ID and warns against duplicate resea
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   // Establish a real fixture-backed session first: binding failure must
   // not leave a stale session attached to the newly created Run.
   const existing = page.getByRole("region", { name: "研究对话" });
   await existing.getByLabel("询问已有研究").fill("第一次研究");
-  await existing.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await existing.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await existing.getByLabel("A 股代码").fill("600519.SH");
   await existing.getByRole("checkbox", { name: /我确认允许启动/ }).check();
   await existing.getByRole("button", { name: "发送问题" }).click();
   await expect(existing).toContainText("当前研究 · Run ID");
@@ -138,7 +152,8 @@ test("binding failure preserves created Run ID and warns against duplicate resea
   });
   const panel = page.getByRole("region", { name: "研究对话" });
   await panel.getByLabel("询问已有研究").fill("请研究 600519.SH");
-  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
   await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
   await panel.getByRole("button", { name: "发送问题" }).click();
   await expect(panel).toContainText("c".repeat(32));
@@ -155,9 +170,11 @@ test("conversation Run opens the corresponding workspace deep link", async ({ pa
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await panel.getByLabel("询问已有研究").fill("研究 600519.SH");
-  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
   await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
   await panel.getByRole("button", { name: "发送问题" }).click();
   await expect(panel.getByRole("button", { name: "在研究工作台打开此 Run" })).toBeVisible();
@@ -169,9 +186,11 @@ test("selected report follow-up is explicitly read-only and references exactly t
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await panel.getByLabel("询问已有研究").fill("研究 600519.SH");
-  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
   await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
   await panel.getByRole("button", { name: "发送问题" }).click();
   await panel.getByRole("button", { name: "在研究工作台打开此 Run" }).click();
@@ -193,9 +212,11 @@ test("successful research without a session ID clears previous binding but retai
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await panel.getByLabel("询问已有研究").fill("第一次研究");
-  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
   await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
   await panel.getByRole("button", { name: "发送问题" }).click();
   await expect(panel).toContainText("当前研究 · Run ID");
@@ -205,7 +226,8 @@ test("successful research without a session ID clears previous binding but retai
     }) });
   });
   await panel.getByLabel("询问已有研究").fill("第二次研究");
-  await panel.getByLabel("启动新研究（可选，A 股代码）").fill("600519.SH");
+  await panel.locator("details.conversation-start-research").evaluate((el: HTMLDetailsElement) => { el.open = true; });
+  await panel.getByLabel("A 股代码").fill("600519.SH");
   await panel.getByRole("checkbox", { name: /我确认允许启动/ }).check();
   await panel.getByRole("button", { name: "发送问题" }).click();
   await expect(panel.getByRole("alert")).toContainText("未返回有效会话关联");
@@ -221,6 +243,7 @@ test("expired authentication rejects read-only follow-up without sending researc
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await page.route("**/api/workbench/conversation", async route => {
     await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "unauthorized" }) });
@@ -238,6 +261,7 @@ test("conversation service failure never invents a reply or grants research cons
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
+  await page.locator("#research-follow-up > summary").click();
   const panel = page.getByRole("region", { name: "研究对话" });
   await page.route("**/api/workbench/conversation", async route => {
     await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "service unavailable" }) });
