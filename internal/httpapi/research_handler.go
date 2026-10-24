@@ -46,8 +46,9 @@ type Handler struct {
 	now      func() time.Time
 	poll     time.Duration
 	localDev bool
-	credentials *settings.Store
+ credentials *settings.Store
  scans ScanController
+ watchlist WatchlistStore
  conversation ConversationResponder
  rateMu sync.Mutex
  windowStart time.Time
@@ -99,6 +100,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   return
  }
  if r.URL.Path == "/api/v1/scans" || strings.HasPrefix(r.URL.Path,"/api/v1/scans/") { h.scanRoute(w,r); return }
+ if r.URL.Path == "/api/v1/watchlist" || strings.HasPrefix(r.URL.Path,"/api/v1/watchlist/") { h.watchlistRoute(w,r); return }
  if r.URL.Path == "/api/v1/conversation/query" { h.conversationQuery(w, r); return }
  if strings.HasPrefix(r.URL.Path,"/api/v1/conversation/sessions/") { h.conversationSessionRead(w,r); return }
  if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }

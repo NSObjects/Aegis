@@ -87,6 +87,34 @@ export interface LiveStageEvent {
 export interface LiveSession { authenticated: boolean; configured: boolean; mode: LiveMode; local_dev?: boolean; }
 export type LiveArtifact = Record<string, unknown>;
 
+/** Operator-curated watchlist entry; the reason/conditions are the operator's
+ * own words, never a research verdict or a market snapshot. */
+export interface WatchItem {
+  symbol: string;
+  reason: string;
+  conditions: string;
+  created_at: string;
+  updated_at: string;
+  /** Most recent persisted run for this symbol, resolved by Go; null when none exists. */
+  latest_run: { run_id: string; state: LiveState; mode: LiveMode; created_at: string } | null;
+}
+export function isWatchItem(x: unknown): x is WatchItem {
+  if (typeof x !== "object" || x === null) return false;
+  const w = x as Record<string, unknown>;
+  if (typeof w.symbol !== "string" || !isAshareSymbol(w.symbol)) return false;
+  if (typeof w.reason !== "string" || w.reason.length === 0 || w.reason.length > 1024) return false;
+  if (typeof w.conditions !== "string" || w.conditions.length > 1024) return false;
+  if (typeof w.created_at !== "string" || !Number.isFinite(Date.parse(w.created_at))) return false;
+  if (typeof w.updated_at !== "string" || !Number.isFinite(Date.parse(w.updated_at))) return false;
+  if (w.latest_run !== null && typeof w.latest_run !== "object") return false;
+  if (w.latest_run === null) return true;
+  const ref = w.latest_run as Record<string, unknown>;
+  return typeof ref.run_id === "string" && isRunID(ref.run_id) &&
+    typeof ref.state === "string" && states.has(ref.state) &&
+    (ref.mode === "DECISION" || ref.mode === "PORTFOLIO_REVIEW") &&
+    typeof ref.created_at === "string" && Number.isFinite(Date.parse(ref.created_at));
+}
+
 const states = new Set<string>(["PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"]);
 export const isTerminal = (s: LiveState) => s === "COMPLETED" || s === "FAILED" || s === "CANCELLED";
 export const isRunID = (s: string) => /^[a-f0-9]{32}$/.test(s);

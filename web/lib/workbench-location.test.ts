@@ -51,3 +51,12 @@ describe("Live workbench URL contract", () => {
     expect(readWorkbenchLocation("?view=unrecognized")).toEqual({ view: "workspace", runId: null });
   });
 });
+
+describe("watchlist view location", () => {
+  it("round trips the explicit watchlist view and drops run ids there", () => {
+    expect(readWorkbenchLocation("?view=watchlist")).toEqual({ view: "watchlist", runId: null });
+    expect(readWorkbenchLocation(`?view=watchlist&run=${id}`)).toEqual({ view: "watchlist", runId: null });
+    expect(workbenchHref("/", "watchlist")).toBe("/?view=watchlist");
+    expect(workbenchHref("/", "watchlist", id)).toBe("/?view=watchlist");
+  });
+});
