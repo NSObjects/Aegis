@@ -27,6 +27,11 @@ const base = "/api/workbench";
 const states: Record<LiveRun["state"], string> = {
   PENDING: "等待执行", RUNNING: "研究中", COMPLETED: "已完成", FAILED: "失败", CANCELLED: "已取消",
 };
+const modeLabel = (mode: string) => ({
+  DECISION: "个股决策研究",
+  PORTFOLIO_REVIEW: "组合复核",
+  RESEARCH: "研究分析",
+}[mode] ?? mode.replaceAll("_", " "));
 const statusColors: Record<LiveRun["state"], string> = {
   PENDING: "blue", RUNNING: "blue", COMPLETED: "green", FAILED: "red", CANCELLED: "gray",
 };
@@ -375,7 +380,7 @@ export default function LiveResearchWorkbench() {
       <div className="live-secondary-grid">
         <details className="surface live-create" open={!selected || selected.state !== "COMPLETED"}>
           <summary>开始新的研究 <span>输入标的和本次关注点</span></summary>
-          <div className="live-create-body"><div className="eyebrow">New research run</div><h2>发起股票研究</h2><p>研究时点由后端创建任务时确定。正式执行可能触发数据源请求和模型费用。</p>{rerunFrom&&<div className="live-rerun-notice" role="status"><strong>再次研究 · 来源任务 {rerunFrom.runId.slice(0, 12)}…</strong><span>仅预填标的，不会复制旧的关注点、账户状态或研究时间。请确认本次研究参数后手动启动全新任务。</span><button type="button" onClick={()=>{setRerunFrom(null);pendingStart.current=null;}}>取消再次研究</button></div>}<form onSubmit={startRun}><label>股票代码<input value={symbol} onChange={e=>{setSymbol(e.target.value.toUpperCase());setRerunFrom(null);pendingStart.current=null;}} placeholder="600519.SH" required/></label><label>研究关注点（可选）<input maxLength={1024} value={marketQuery} onChange={e=>setMarketQuery(e.target.value)} placeholder="例如：近期市场环境与标的事件"/></label><div className="live-create-foot"><span className="badge blue">{session.mode}</span>{session.mode==="PORTFOLIO_REVIEW"&&<span className="badge gray">账户：NOT_PROVIDED · 未知</span>}<button className="btn primary" type="submit" disabled={busy}><Search size={15}/>{busy?"处理中…":"启动真实研究"}</button></div></form></div>
+          <div className="live-create-body"><div className="eyebrow">New research run</div><h2>发起股票研究</h2><p>研究时点由后端创建任务时确定。正式执行可能触发数据源请求和模型费用。</p>{rerunFrom&&<div className="live-rerun-notice" role="status"><strong>再次研究 · 来源任务 {rerunFrom.runId.slice(0, 12)}…</strong><span>仅预填标的，不会复制旧的关注点、账户状态或研究时间。请确认本次研究参数后手动启动全新任务。</span><button type="button" onClick={()=>{setRerunFrom(null);pendingStart.current=null;}}>取消再次研究</button></div>}<form onSubmit={startRun}><label>股票代码<input value={symbol} onChange={e=>{setSymbol(e.target.value.toUpperCase());setRerunFrom(null);pendingStart.current=null;}} placeholder="600519.SH" required/></label><label>研究关注点（可选）<input maxLength={1024} value={marketQuery} onChange={e=>setMarketQuery(e.target.value)} placeholder="例如：近期市场环境与标的事件"/></label><div className="live-create-foot"><span className="badge blue">{modeLabel(session.mode)}</span>{session.mode==="PORTFOLIO_REVIEW"&&<span className="badge gray">账户：NOT_PROVIDED · 未知</span>}<button className="btn primary" type="submit" disabled={busy}><Search size={15}/>{busy?"处理中…":"启动真实研究"}</button></div></form></div>
         </details>
         <details className="live-secondary-panel" open={!selected && Boolean(selectedId)}>
           <summary>研究信息 <span>状态、研究时点、请求约束与来源索引</span></summary>
