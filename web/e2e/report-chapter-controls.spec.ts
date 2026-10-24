@@ -12,6 +12,10 @@ test("completed report expands and collapses only the structured chapters", asyn
   await expect(page.getByLabel("股票代码")).toBeVisible({ timeout: 8_000 });
   await page.getByLabel("股票代码").fill("600519.SH", { timeout: 8_000 });
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  // Anchor to the freshly submitted run before waiting for completion: the
+  // workspace initially selects the latest persisted run, which may already
+  // be COMPLETED from an earlier spec against the shared fixture.
+  await expect(page).toHaveURL(/run=/, { timeout: 8_000 });
   await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 12_000 });
 
