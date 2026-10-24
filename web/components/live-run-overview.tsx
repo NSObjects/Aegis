@@ -39,7 +39,7 @@ export default function LiveRunOverview({
         <p>查看最近研究、需要复核的任务，并继续发起研究。这里只呈现服务端已保存的结果，不填充模拟数据。</p>
       </div>
       <div className="run-overview-actions">
-        <button className="btn" type="button" disabled={runs.length < 2} onClick={onCompare}><History size={15}/>对比研究</button>
+        <button className="btn" type="button" onClick={onCompare}><History size={15}/>对比研究</button>
         <button className="btn primary" type="button" onClick={onNew}><PlayCircle size={15}/>发起新研究</button>
       </div>
     </section>
