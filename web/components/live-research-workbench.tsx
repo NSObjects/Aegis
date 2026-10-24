@@ -67,7 +67,7 @@ export default function LiveResearchWorkbench() {
   const [artifactRecord, setArtifactRecord] = useState<{ runId: string; value: LiveArtifact } | null>(null);
   const events = eventRecord?.runId === selectedId ? eventRecord.values : [];
   const artifact = artifactRecord?.runId === selectedId ? artifactRecord.value : null;
-  const [view, setView] = useState<WorkbenchView>("workspace");
+  const [view, setView] = useState<WorkbenchView>("overview");
   const [comparisonPair, setComparisonPair] = useState<{leftId:string|null;rightId:string|null}>({leftId:null,rightId:null});
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
