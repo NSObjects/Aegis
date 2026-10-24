@@ -63,10 +63,16 @@ func Evaluate(symbol, asOf string, bars []technical.HistoricalBar, factors []Adj
  last:=bars[len(bars)-1]
  if last.Volume==0 {out.Reason="HALTED_OR_NO_VOLUME";return out,nil}
  anchor:=factors[len(factors)-1].Factor
- sma:=func(end,n int)float64{v:=0.0;for i:=end-n;i<end;i++{v+=bars[i].Close*factors[i].Factor/anchor};return v/float64(n)}
- n:=len(bars);ma20:=sma(n,20);ma60:=sma(n,60);old60:=sma(n-5,60)
+ n:=len(bars);ma20:=adjustedSMA(bars,factors,anchor,n,20);ma60:=adjustedSMA(bars,factors,anchor,n,60);old60:=adjustedSMA(bars,factors,anchor,n-5,60)
  out.Verdict=Rejected
  if ma20<=ma60 || ma60<=old60 {out.Reason="TREND_NOT_UP";return out,nil}
  if last.Close<ma20 || last.Close>ma20*1.03 {out.Reason="NOT_NEAR_MA20";return out,nil}
  out.Verdict=Selected;out.Reason="TREND_PULLBACK_V1";return out,nil
+}
+
+// adjustedSMA is the single moving-average formula shared by the selection
+// rule and the published comparison metrics; end is the exclusive last
+// session index and callers guarantee bar/factor alignment and sufficiency.
+func adjustedSMA(bars []technical.HistoricalBar,factors []AdjustmentFactor,anchor float64,end,n int)float64{
+ v:=0.0;for i:=end-n;i<end;i++{v+=bars[i].Close*factors[i].Factor/anchor};return v/float64(n)
 }
