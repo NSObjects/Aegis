@@ -13,7 +13,10 @@ const filters: Array<{ key: OverviewFilter; label: string }> = [
   { key: "completed", label: "已完成" }, { key: "failed", label: "失败" },
   { key: "cancelled", label: "已取消" },
 ];
-const ts = (value: string) => new Date(value).toLocaleString("zh-CN", { hour12: false });
+const ts = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "时间不可用" : date.toLocaleString("zh-CN", { hour12: false });
+};
 
 export default function LiveRunOverview({
   runs, syncedAt, syncError, onOpen, onNew, onCompare, onRefresh,
