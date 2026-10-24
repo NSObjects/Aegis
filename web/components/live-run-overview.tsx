@@ -17,6 +17,11 @@ const ts = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "时间不可用" : date.toLocaleString("zh-CN", { hour12: false });
 };
+const modeLabel = (mode: string) => ({
+  DECISION: "个股决策研究",
+  PORTFOLIO_REVIEW: "组合复核",
+  RESEARCH: "研究分析",
+}[mode] ?? mode.replaceAll("_", " "));
 
 export default function LiveRunOverview({
   runs, syncedAt, syncError, onOpen, onNew, onCompare, onRefresh,
@@ -112,7 +117,7 @@ export default function LiveRunOverview({
         </div> : <div className="run-overview-rows">
           {visible.map(run => <button key={run.run_id} type="button" className="run-overview-row" onClick={()=>onOpen(run.run_id)}>
             <div className="run-overview-identity"><strong>{run.symbol}</strong><code>{run.run_id.slice(0,12)}…</code></div>
-            <div className="run-overview-meta"><span>{ts(run.created_at)}</span><small>{run.mode}</small></div>
+            <div className="run-overview-meta"><span>{ts(run.created_at)}</span><small>{modeLabel(run.mode)}</small></div>
             <span className={"run-overview-state state-"+run.state.toLowerCase()}>{runStateLabel(run.state)}</span>
             <span className="run-overview-action">{run.state==="COMPLETED"?"查看报告":run.state==="FAILED"?"排查失败":run.state==="CANCELLED"?"查看记录":"查看进度"} <ArrowUpRight size={13}/></span>
           </button>)}
