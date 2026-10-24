@@ -18,6 +18,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
   const [currentRunId, setCurrentRunId] = useState("");
   const [runScopePreference, setRunScopePreference] = useState<{ runId: string | null; enabled: boolean } | null>(null);
   const selectedRunAvailable = Boolean(selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId));
+  const explicitRunScope = runScopePreference?.runId === (selectedRunId ?? null) && runScopePreference.enabled;
   const useSelectedRun = runScopePreference?.runId === (selectedRunId ?? null)
     ? runScopePreference.enabled
     : selectedRunAvailable && !currentSession;
@@ -34,7 +35,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
   }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const runContext = useSelectedRun && selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && !startSymbol.trim() && (!currentSession || selectedRunId !== currentRunId) ? selectedRunId : "";
+    const runContext = useSelectedRun && selectedRunId && /^[a-f0-9]{32}$/.test(selectedRunId) && !startSymbol.trim() && (!currentSession || selectedRunId !== currentRunId || explicitRunScope) ? selectedRunId : "";
     const question = runContext ? `请只读查询已有 Run ID ${runContext}。${message.trim()} 不要启动新的研究。` : message.trim();
     if (!question || busy || question.length > 2048) return;
     const starting = startSymbol.trim().length > 0;
@@ -79,7 +80,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setCurrentRunId(body.run_id ?? ""); setRestored("当前研究 · Run ID: " + body.run_id); }
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
       setMessage("");
-      setRunScopePreference({ runId: selectedRunId ?? null, enabled: !starting && selectedRunAvailable && !currentSession });
+      setRunScopePreference({ runId: selectedRunId ?? null, enabled: !starting && selectedRunAvailable && (Boolean(runContext) || !currentSession) });
       setConfirmStart(false);
       setStartSymbol("");
     } catch (e) {
