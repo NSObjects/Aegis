@@ -714,7 +714,7 @@ svg { flex-shrink: 0; }
 /* R1-12 Go Run overview. All quantities describe the bounded list, not P&L. */
 .run-overview {display:grid;gap:17px;min-width:0}
 .run-overview-hero {display:flex;justify-content:space-between;align-items:center;gap:20px;padding:27px 29px;border:1px solid #33526a;border-radius:14px;background:linear-gradient(115deg,#1b3648 0%,#16283e 68%,#20283e 100%)}
-.run-overview-hero h2 {margin:7px 0 7px;color:#e9f5fb;font-size:24px;letter-spacing:-.6px}
+.run-overview-hero h1 {margin:7px 0 7px;color:#e9f5fb;font-size:24px;letter-spacing:-.6px}
 .run-overview-hero p {margin:0;color:#a4bfd0;font-size:12px;line-height:1.8;max-width:580px}
 .run-overview-actions {display:flex;gap:9px;flex-wrap:wrap;flex-shrink:0}
 .run-overview-sync {display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 2px;color:#8ca6b6;font-size:11px}
@@ -787,7 +787,7 @@ svg { flex-shrink: 0; }
 .run-overview-zero p {margin:0;color:#839eb2;font-size:11px;line-height:1.7}
 @media(max-width:1120px) {.run-overview-metrics {grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:780px) {.run-overview-hero {flex-direction:column;align-items:flex-start;padding:19px}.run-overview-metrics {grid-template-columns:repeat(2,minmax(0,1fr))}.run-overview-two-col {grid-template-columns:1fr}.run-overview-list-head {flex-direction:column;align-items:stretch}.run-overview-search {min-width:0}}
-@media(max-width:510px) {.run-overview-row {grid-template-columns:1fr 1fr;gap:10px;padding:11px 14px}.run-overview-action {justify-content:flex-start}.run-overview-metrics {gap:7px}.run-overview-kpi {padding:14px 11px}.run-overview-kpi strong {font-size:25px}.run-overview-hero h2 {font-size:20px}.run-overview-week {gap:4px}.run-overview-day small {font-size:8px}}
+@media(max-width:510px) {.run-overview-row {grid-template-columns:1fr 1fr;gap:10px;padding:11px 14px}.run-overview-action {justify-content:flex-start}.run-overview-metrics {gap:7px}.run-overview-kpi {padding:14px 11px}.run-overview-kpi strong {font-size:25px}.run-overview-hero h1 {font-size:20px}.run-overview-week {gap:4px}.run-overview-day small {font-size:8px}}
 
 
 /* Persisted event/document identity index: never an unverified source link. */

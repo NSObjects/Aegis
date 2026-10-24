@@ -349,7 +349,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
 }
 .live-workspace .run-overview-hero .eyebrow { color: #78958e; }
-.live-workspace .run-overview-hero h2 { color: #263f45; font-size: 23px; letter-spacing: -.4px; margin: 0 0 7px; }
+.live-workspace .run-overview-hero h1 { color: #263f45; font-size: 23px; letter-spacing: -.4px; margin: 0 0 7px; }
 .live-workspace .run-overview-hero p { color: #7a9093; font-size: 12px; line-height: 1.75; max-width: 620px; margin: 0; }
 .live-workspace .run-overview-sync {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

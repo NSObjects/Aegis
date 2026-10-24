@@ -23,6 +23,7 @@ async function signIn(page: Page) {
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.status(), "login POST must succeed before showing the Live workspace").toBe(200);
   await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "工作台", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "发起新研究", exact: true }).click();
   await expect(page.getByRole("heading", { name: "研究详情", exact: true })).toBeVisible();
 }

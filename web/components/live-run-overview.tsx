@@ -35,7 +35,7 @@ export default function LiveRunOverview({
     <section className="run-overview-hero">
       <div>
         <div className="eyebrow">Aegis Research</div>
-        <h2>工作台</h2>
+        <h1>工作台</h1>
         <p>查看最近研究、需要复核的任务，并继续发起研究。这里只呈现服务端已保存的结果，不填充模拟数据。</p>
       </div>
       <div className="run-overview-actions">
