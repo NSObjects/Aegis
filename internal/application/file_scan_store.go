@@ -2,6 +2,8 @@ package application
 
 import (
  "crypto/rand"
+ "crypto/sha256"
+ "encoding/hex"
  "encoding/hex"
  "encoding/json"
  "errors"
@@ -32,6 +34,7 @@ type ScanRecord struct {
  StrategyVersion string `json:"strategy_version"`
  State ScanState `json:"state"`
  UniverseSource string `json:"universe_source"`
+ InputSnapshotSHA256 string `json:"input_snapshot_sha256"`
  Symbols []string `json:"symbols"`
  Results []pullback.Result `json:"results,omitempty"`
  FailureCode string `json:"failure_code,omitempty"`
@@ -54,10 +57,20 @@ func NewScanID()(string,error){
 func validScanID(s string)bool{
  if len(s)!=32{return false};_,err:=hex.DecodeString(s);return err==nil&&s==strings.ToLower(s)
 }
+// ScanInputSnapshotSHA256 fingerprints the canonical scan inputs. It records
+// the PIT cutoff, strategy version, universe provenance and ordered symbols;
+// it does not claim to fingerprint the provider's underlying market bars.
+func ScanInputSnapshotSHA256(r ScanRecord) string {
+ canonical:=r.AsOf+"\n"+r.StrategyVersion+"\n"+r.UniverseSource+"\n"+strings.Join(r.Symbols,"\n")
+ sum:=sha256.Sum256([]byte(canonical))
+ return hex.EncodeToString(sum[:])
+}
+
 func validateScanRecord(r ScanRecord)error{
  if !validScanID(r.ID)||r.AsOf==""||r.StrategyVersion!=pullback.StrategyVersion||r.CreatedAt.IsZero()||r.UpdatedAt.IsZero()||r.UpdatedAt.Before(r.CreatedAt){return errors.New("invalid scan metadata")}
  date,err:=time.Parse("20060102",r.AsOf);if err!=nil||date.Format("20060102")!=r.AsOf{return errors.New("invalid PIT scan cutoff")}
  if len(r.Symbols)==0||len(r.Symbols)>20{return errors.New("invalid bounded scan universe")}
+ if r.UniverseSource==""||r.InputSnapshotSHA256==""||r.InputSnapshotSHA256!=ScanInputSnapshotSHA256(r){return errors.New("scan input snapshot mismatch")}
  seen:=map[string]bool{}
  for i,s:=range r.Symbols {if len(s)!=9||(!strings.HasSuffix(s,".SH")&&!strings.HasSuffix(s,".SZ"))||seen[s]||(i>0&&r.Symbols[i-1]>=s){return errors.New("invalid scan symbols")};seen[s]=true}
  switch r.State {
