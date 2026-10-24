@@ -21,3 +21,15 @@ func TestFileScanStoreListNewestAndLimit(t *testing.T){
  all,err:=reopened.List(100);if err!=nil||len(all)!=3{t.Fatalf("reopened list count=%d err=%v",len(all),err)}
  if _,err=store.List(101);err==nil{t.Fatal("unbounded query accepted")}
 }
+
+func TestScanInputSnapshotBindsPITStrategySourceAndSymbols(t *testing.T){
+ r:=ScanRecord{AsOf:"20261022",StrategyVersion:pullback.StrategyVersion,UniverseSource:"TUSHARE_STOCK_BASIC_L_D_P",Symbols:[]string{"000001.SZ","600519.SH"}}
+ base:=ScanInputSnapshotSHA256(r)
+ if len(base)!=64{t.Fatalf("invalid sha256 %q",base)}
+ variants:=[]ScanRecord{r,r,r,r}
+ variants[0].AsOf="20261023"
+ variants[1].StrategyVersion="other"
+ variants[2].UniverseSource="USER_SUPPLIED"
+ variants[3].Symbols=[]string{"600519.SH"}
+ for i,v:=range variants{if ScanInputSnapshotSHA256(v)==base{t.Fatalf("variant %d did not change snapshot",i)}}
+}
