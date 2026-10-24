@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { readLiveReport } from "./live-report";
-import { readResearchBrief, readableResearchCode } from "./research-brief";
+import { readResearchBrief, readableResearchCode, summarizeBriefBlocks } from "./research-brief";
 
 describe("research brief is source-backed and safe", () => {
+ it("limits summary previews to three source-diverse lines and counts omitted details",()=>{
+   const summary=summarizeBriefBlocks([
+     {title:"经理观点",source:"研究经理",lines:["依据 A","依据 B","依据 C"]},
+     {title:"综合观点",source:"综合分析",lines:["依据 D","依据 E"]},
+     {title:"事件依据",source:"事件分析",lines:["依据 F"]},
+     {title:"决策依据",source:"决策分析",lines:["依据 G"]},
+   ]);
+   expect(summary.blocks.flatMap(block=>block.lines)).toEqual(["依据 A","依据 D","依据 F"]);
+   expect(summary.blocks.map(block=>block.source)).toEqual(["研究经理","综合分析","事件分析"]);
+   expect(summary.omittedLines).toBe(4);
+   expect(summarizeBriefBlocks([{title:"单一来源",source:"来源",lines:["A","B","C","D"]}]).blocks[0].lines).toEqual(["A","B","C"]);
+ });
  it("glosses only known research enums and keeps exact backend codes",()=>{
    expect(readableResearchCode("BALANCED")).toBe("多空观点相对均衡（BALANCED）");
    expect(readableResearchCode("REVIEW_REQUIRED")).toBe("需要人工复核（REVIEW_REQUIRED）");
