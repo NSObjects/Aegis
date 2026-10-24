@@ -12,6 +12,9 @@ test("completed run exports Markdown and JSON for the same durable Run ID", asyn
   await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await page.getByLabel("股票代码").fill("600519.SH", { timeout: 8_000 });
   await page.getByRole("button", { name: "启动真实研究" }).click();
+  // Anchor to the submitted run first: a previously completed fixture run may
+  // be selected initially and would otherwise satisfy the wait immediately.
+  await expect(page).toHaveURL(/run=/, { timeout: 8_000 });
   await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isLiveRun, isLiveEvent, mergeStageEvents, readReportSummary, isAshareSymbol } from "./live-contract";
+import { isLiveRun, isLiveEvent, mergeStageEvents, readReportSummary, isAshareSymbol, isWatchItem } from "./live-contract";
 const run = { run_id: "a".repeat(32), mode: "PORTFOLIO_REVIEW", symbol: "600519.SH", requested_as_of: "2026-10-10T12:00:00Z", created_at: "2026-10-10T12:00:00Z", state: "RUNNING" };
 const ev = (n: number) => ({ seq: n, stage: "Market", status: "START", at: "2026-10-10T12:00:00Z" });
 describe("live Go contract (not demo)", () => {
@@ -30,5 +30,26 @@ describe("observed tool event validation", () => {
   it("deduplicates retriever events by durable sequence", () => {
     const merged = mergeStageEvents([], [tool, tool, { ...tool, seq: 9, status: "DONE" }]);
     expect(merged.map(x => x.seq)).toEqual([8, 9]);
+  });
+});
+
+describe("watchlist entry contract", () => {
+  const item = { symbol: "600519.SH", reason: "回调观察", conditions: "", created_at: "2026-10-24T08:00:00Z", updated_at: "2026-10-24T08:00:00Z", latest_run: null };
+  it("accepts a Go watch item with no research link yet", () => {
+    expect(isWatchItem(item)).toBe(true);
+    expect(isWatchItem({ ...item, conditions: "跌破 MA20 复查" })).toBe(true);
+  });
+  it("validates the linked latest run like a run reference", () => {
+    expect(isWatchItem({ ...item, latest_run: { run_id: "b".repeat(32), state: "FAILED", mode: "DECISION", created_at: "2026-10-24T09:00:00Z" } })).toBe(true);
+    expect(isWatchItem({ ...item, latest_run: { run_id: "../bad", state: "FAILED", mode: "DECISION", created_at: "2026-10-24T09:00:00Z" } })).toBe(false);
+    expect(isWatchItem({ ...item, latest_run: { run_id: "b".repeat(32), state: "DONE", mode: "DECISION", created_at: "2026-10-24T09:00:00Z" } })).toBe(false);
+  });
+  it("rejects forged operator fields and non-symbols", () => {
+    expect(isWatchItem({ ...item, symbol: "600519" })).toBe(false);
+    expect(isWatchItem({ ...item, reason: "" })).toBe(false);
+    expect(isWatchItem({ ...item, reason: "x".repeat(1025) })).toBe(false);
+    expect(isWatchItem({ ...item, conditions: "x".repeat(1025) })).toBe(false);
+    expect(isWatchItem({ ...item, created_at: "not-a-date" })).toBe(false);
+    expect(isWatchItem({ ...item, latest_run: undefined })).toBe(false);
   });
 });

@@ -394,6 +394,19 @@ svg { flex-shrink: 0; }
 .live-history { padding:0 0 16px; } .live-history .panel-head { padding:20px; }
 .live-history-table { margin:6px 15px; } .live-history-row { width:100%; border:0; background:transparent; display:grid; grid-template-columns:1fr 1.3fr 1.3fr 105px 17px; gap:13px; align-items:center; text-align:left; padding:15px; border-bottom:1px solid #26354a; color:#dce8fa; }
 .live-history-row:hover { background:#1c2c41; } .live-history-row small { color:#92a8be; } .live-history-row code { color:#8295a9; font-size:10px; }
+.watch-row { display:flex; justify-content:space-between; gap:16px; align-items:center; padding:15px; border-bottom:1px solid #26354a; }
+.watch-row:hover { background:#1c2c41; }
+.watch-main { display:flex; flex-direction:column; gap:5px; min-width:0; } .watch-main strong { font-size:14px; color:#dce8fa; }
+.watch-reason { color:#c1d0df; font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+.watch-conditions { color:#8fa5bb; font-size:11px; overflow-wrap:anywhere; }
+.watch-main small { color:#92a8be; }
+.watch-side { display:flex; align-items:center; gap:9px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
+.watch-run-link { display:flex; flex-direction:column; gap:3px; align-items:flex-end; border:0; background:transparent; cursor:pointer; padding:6px 9px; border-radius:8px; color:#c1d0df; text-align:right; }
+.watch-run-link:hover { background:#22334b; } .watch-run-link.none { cursor:default; color:#8295a9; } .watch-run-link.none:hover { background:transparent; }
+.watch-run-link span:first-child, .watch-run-link > span > span { font-size:11px; }
+.watch-run-link small { color:#92a8be; }
+.watch-footnote { display:flex; gap:7px; align-items:center; color:#637f96; font-size:10px; padding:12px 16px 4px; }
+@media(max-width:760px){ .watch-row { flex-direction:column; align-items:stretch; } .watch-side { justify-content:flex-start; } }
 .live-empty { color:#8c9fb6; padding:20px; font-size:12px; line-height:1.8; }
 .live-report-stack { display:grid; gap:18px; }
 .live-summary { border-left:3px solid #65e1c4; } .live-summary h2 { margin:8px 0; font-size:19px; } .live-summary p, .live-evidence-text, .live-facts p { color:#c1d0df; line-height:1.9; font-size:13px; overflow-wrap:anywhere; }

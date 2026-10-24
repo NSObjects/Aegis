@@ -2,7 +2,7 @@
  * Browser-location contract for the single-operator Live research console.
  * URLs contain only view and opaque Run ID; never credentials or report data.
  */
-export type WorkbenchView = "workspace" | "overview" | "history" | "compare" | "settings";
+export type WorkbenchView = "workspace" | "overview" | "history" | "compare" | "watchlist" | "settings";
 
 export type WorkbenchLocation = {
   view: WorkbenchView;
@@ -15,7 +15,7 @@ const isRunId = (value: string | null): value is string =>
 export function readWorkbenchLocation(search: string): WorkbenchLocation {
   const params = new URLSearchParams(search);
   const requestedView = params.get("view");
-  const view: WorkbenchView = requestedView === "overview" || requestedView === "history" || requestedView === "settings" || requestedView === "compare"
+  const view: WorkbenchView = requestedView === "overview" || requestedView === "history" || requestedView === "settings" || requestedView === "compare" || requestedView === "watchlist"
     ? requestedView : "workspace";
   return { view, runId: view === "workspace" && isRunId(params.get("run")) ? params.get("run") : null };
 }

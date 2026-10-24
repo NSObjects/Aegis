@@ -137,6 +137,13 @@ func main() {
   if err!=nil{log.Fatal(err)}
   handler.WithScanController(scans)
  }
+	// The watchlist is pure local curation: no provider token required, and it
+	// persists across restarts beside the run store.
+	watchlistStore, err := application.NewFileWatchlistStore(filepath.Join(filepath.Dir(*path), "watchlist"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	handler.WithWatchlistStore(watchlistStore)
 	bindingStore, err := application.NewFileConversationBindingStore(filepath.Join(filepath.Dir(*path), "conversation-sessions"), runs)
 	if err != nil {
 		log.Fatal(err)

@@ -7,6 +7,7 @@ const host = "127.0.0.1";
 const port = 18686;
 const secret = "ci-go-api-fixture-only-secret-32-characters";
 const runs = new Map();
+const watchlist = new Map();
 const requestKeys = new Map();
 const prefix = "/api/v1/research/runs";
 const providerSecrets = new Map();
@@ -160,6 +161,37 @@ const server = createServer(async (req, res) => {
       return json(res, 200, providerStatus());
     }
     return json(res, 405, { error: "method not allowed" });
+  }
+  // In-memory watchlist fixture mirroring the Go contract: operator-curated
+  // entries only, latest run linked from the fixture run map, never persisted.
+  if (url.pathname === "/api/v1/watchlist" && req.method === "GET") {
+    const items = [...watchlist.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([symbol, item]) => {
+      const latest = [...runs.values()].filter(r => r.symbol === symbol)
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+      return { ...item, latest_run: latest ? { run_id: latest.run_id, state: latest.state, mode: latest.mode, created_at: latest.created_at } : null };
+    });
+    return json(res, 200, { items });
+  }
+  if (url.pathname === "/api/v1/watchlist" && req.method === "POST") {
+    let body;
+    try { body = await readBody(req); } catch { return json(res, 400, { error: "bad JSON" }); }
+    const symbol = String(body.symbol ?? "").trim().toUpperCase();
+    const reason = String(body.reason ?? "").trim();
+    const conditions = String(body.conditions ?? "").trim();
+    if (!/^[0-9]{6}\.(SH|SZ)$/.test(symbol) || !reason || reason.length > 1024 || conditions.length > 1024)
+      return json(res, 400, { error: "invalid watchlist item" });
+    if (watchlist.has(symbol)) return json(res, 409, { error: "watchlist symbol already present" });
+    if (watchlist.size >= 50) return json(res, 409, { error: "watchlist capacity reached" });
+    const now = asOf();
+    const item = { symbol, reason, conditions, created_at: now, updated_at: now };
+    watchlist.set(symbol, item);
+    return json(res, 201, { ...item, latest_run: null });
+  }
+  const watchMatch = url.pathname.match(/^\/api\/v1\/watchlist\/([0-9]{6}\.(SH|SZ))$/);
+  if (watchMatch && req.method === "DELETE") {
+    if (!watchlist.delete(watchMatch[1])) return json(res, 404, { error: "not found" });
+    res.writeHead(204, { "Cache-Control": "no-store" });
+    return res.end();
   }
   if (url.pathname === prefix && req.method === "GET") {
     const limit = url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : 100;
