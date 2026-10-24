@@ -79,7 +79,7 @@ export default function ResearchConversationPanel({ onOpenRun, selectedRunId }: 
       if (starting && body.session_id && /^[a-f0-9]{32}$/.test(body.session_id)) { window.sessionStorage.setItem("aegis-conversation-session", body.session_id); setCurrentSession(body.session_id); setCurrentRunId(body.run_id ?? ""); setRestored("当前研究 · Run ID: " + body.run_id); }
       setExchanges(current => [...current, { question, answer: starting ? `${body.answer} Run ID: ${body.run_id}` : body.answer }]);
       setMessage("");
-      setRunScopePreference({ runId: selectedRunId ?? null, enabled: false });
+      setRunScopePreference({ runId: selectedRunId ?? null, enabled: !starting && selectedRunAvailable && !currentSession });
       setConfirmStart(false);
       setStartSymbol("");
     } catch (e) {
