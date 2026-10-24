@@ -11,6 +11,7 @@ import (
  "strings"
 
  "Aegis/internal/application"
+ "Aegis/internal/capability/technical"
 )
 
 // ScanController is intentionally separate from the LLM ResearchRun controller.
@@ -18,6 +19,7 @@ type ScanController interface {
  Submit(context.Context,string,string,[]string)(application.ScanRecord,error)
  Get(string)(application.ScanRecord,error)
  List(int)([]application.ScanRecord,error)
+ GetSnapshot(scanID,symbol string)(technical.HistoricalObservation,error)
 }
 func (h *Handler) WithScanController(scans ScanController) *Handler {h.scans=scans;return h}
 
@@ -54,6 +56,14 @@ func (h *Handler) scanRoute(w http.ResponseWriter,r *http.Request){
   return
  }
  id:=strings.TrimPrefix(r.URL.Path,"/api/v1/scans/")
+ parts:=strings.Split(id,"/")
+ // GET /results/{symbol}/snapshot returns the exact observed bars and PIT
+ // factors behind one symbol's verdict for offline re-verification.
+ if len(parts)==4&&parts[1]=="results"&&parts[3]=="snapshot"{
+  if r.Method!=http.MethodGet{methodNotAllowed(w,"GET");return}
+  if !isRunID(parts[0]){http.NotFound(w,r);return}
+  h.scanSnapshot(w,r,parts[0],parts[2]);return
+ }
  if r.Method!=http.MethodGet{methodNotAllowed(w,"GET");return}
  if !isRunID(id){http.NotFound(w,r);return}
  result,err:=h.scans.Get(id)
@@ -62,4 +72,18 @@ func (h *Handler) scanRoute(w http.ResponseWriter,r *http.Request){
   http.Error(w,"scan store unavailable",http.StatusInternalServerError);return
  }
  sendJSON(w,http.StatusOK,result)
+}
+
+// scanSnapshot serves one persisted input observation. Unfinished scans have
+// no committed snapshot surface; symbols without a valid observation report
+// their INSUFFICIENT_DATA verdict instead of a fabricated empty series.
+func (h *Handler) scanSnapshot(w http.ResponseWriter,r *http.Request,scanID,symbol string){
+ if !isRunID(scanID){http.NotFound(w,r);return}
+ obs,err:=h.scans.GetSnapshot(scanID,symbol)
+ if err!=nil{
+  if errors.Is(err,os.ErrNotExist)||errors.Is(err,application.ErrScanSnapshotNotFound){http.NotFound(w,r);return}
+  if errors.Is(err,application.ErrScanNotCompleted){http.Error(w,"scan snapshots require a completed scan",http.StatusConflict);return}
+  http.Error(w,"scan snapshot unavailable",http.StatusInternalServerError);return
+ }
+ sendJSON(w,http.StatusOK,obs)
 }
