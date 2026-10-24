@@ -21,6 +21,9 @@ type ScheduleKind string
 const (
 	ScheduleKindScan     ScheduleKind = "SCAN"
 	ScheduleKindResearch ScheduleKind = "RESEARCH"
+	// ScheduleKindMonitor runs one deterministic watch pass over the
+	// configured monitor rules; it never invokes an LLM.
+	ScheduleKindMonitor ScheduleKind = "MONITOR"
 )
 
 // ScheduleRunState is the persisted lifecycle of one (task, trading-day)
@@ -103,6 +106,10 @@ func ValidateScheduleTask(task ScheduleTask) error {
 		}
 		if len(task.Symbols) != 0 || task.UniverseSource != "" {
 			return errors.New("research schedule carries scan-only fields")
+		}
+	case ScheduleKindMonitor:
+		if task.Symbol != "" || len(task.Symbols) != 0 || task.UniverseSource != "" {
+			return errors.New("monitor schedule takes no engine-specific fields")
 		}
 	default:
 		return errors.New("invalid schedule kind")

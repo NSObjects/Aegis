@@ -16,6 +16,7 @@ import (
 type webScheduleRunner struct {
 	scans    *application.ScanManager
 	runs     *application.RunManager
+	monitor  *application.Monitor
 	mode     application.ResearchMode
 	lookback time.Duration
 }
@@ -49,6 +50,13 @@ func (r *webScheduleRunner) RunResearch(ctx context.Context, task application.Sc
 		return "", err
 	}
 	return rec.ID, nil
+}
+
+func (r *webScheduleRunner) RunMonitor(ctx context.Context, task application.ScheduleTask, tradeDate string) (string, error) {
+	if r.monitor == nil {
+		return "", errors.New("monitor engine unavailable")
+	}
+	return "", r.monitor.Tick(ctx, tradeDate)
 }
 
 // webScheduleTracker maps engine objects back to terminal execution state.

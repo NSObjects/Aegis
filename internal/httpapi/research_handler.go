@@ -50,6 +50,7 @@ type Handler struct {
  scans ScanController
  watchlist WatchlistStore
  schedules ScheduleController
+ monitors MonitorController
  conversation ConversationResponder
  rateMu sync.Mutex
  windowStart time.Time
@@ -103,6 +104,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
  if r.URL.Path == "/api/v1/scans" || strings.HasPrefix(r.URL.Path,"/api/v1/scans/") { h.scanRoute(w,r); return }
  if r.URL.Path == "/api/v1/watchlist" || strings.HasPrefix(r.URL.Path,"/api/v1/watchlist/") { h.watchlistRoute(w,r); return }
  if r.URL.Path == "/api/v1/schedules" || strings.HasPrefix(r.URL.Path,"/api/v1/schedules/") { h.scheduleRoute(w,r); return }
+ if r.URL.Path == "/api/v1/monitors" || strings.HasPrefix(r.URL.Path,"/api/v1/monitors/") { h.monitorRoute(w,r); return }
  if r.URL.Path == "/api/v1/conversation/query" { h.conversationQuery(w, r); return }
  if strings.HasPrefix(r.URL.Path,"/api/v1/conversation/sessions/") { h.conversationSessionRead(w,r); return }
  if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
