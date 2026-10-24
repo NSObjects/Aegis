@@ -38,7 +38,7 @@ func run(ctx context.Context,asOf,raw string)error{
  token:=strings.TrimSpace(os.Getenv("TUSHARE_TOKEN"))
  if token==""{return errors.New("TUSHARE_TOKEN required")}
  researcher,err:=technical.NewHTTPResearcher(token);if err!=nil{return err}
- results,err:=pullback.ScanResearcher(ctx,researcher,asOf,symbols);if err!=nil{return err}
+ results,err:=pullback.ScanResearcher(ctx,researcher,asOf,symbols,nil);if err!=nil{return err}
  return json.NewEncoder(os.Stdout).Encode(struct{
   Strategy string `json:"strategy_version"`
   AsOf string `json:"as_of"`
@@ -58,7 +58,7 @@ func runUniverse(ctx context.Context,asOf string,offset,limit int)error {
  end:=offset+limit;if end>len(universe.Symbols){end=len(universe.Symbols)}
  symbols:=universe.Symbols[offset:end]
  researcher,err:=technical.NewHTTPResearcher(token);if err!=nil{return err}
- results,err:=pullback.ScanResearcher(ctx,researcher,asOf,symbols);if err!=nil{return err}
+ results,err:=pullback.ScanResearcher(ctx,researcher,asOf,symbols,nil);if err!=nil{return err}
  return json.NewEncoder(os.Stdout).Encode(struct{
   Strategy string `json:"strategy_version"`
   Universe technical.StockUniverse `json:"universe"`

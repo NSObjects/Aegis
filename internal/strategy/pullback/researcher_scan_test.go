@@ -23,14 +23,24 @@ func (s *scanResearcherStub) Research(_ context.Context,req technical.Request)(m
 func TestScanResearcherUsesSourceObservations(t *testing.T){
  bars:=risingBars();date:=bars[len(bars)-1].TradeDate
  stub:=&scanResearcherStub{}
- results,err:=ScanResearcher(context.Background(),stub,date,[]string{"600519.SH","000001.SZ"})
+ results,err:=ScanResearcher(context.Background(),stub,date,[]string{"600519.SH","000001.SZ"},nil)
  if err!=nil||len(results)!=2||results[0].Symbol!="000001.SZ"||results[0].Verdict!=InsufficientData||results[1].Symbol!="600519.SH"{
   t.Fatalf("unexpected provider scan %+v %v",results,err)
  }
  if len(stub.calls)!=2||stub.calls[0]!="000001.SZ"{t.Fatalf("scan order not deterministic %+v",stub.calls)}
- if _,err:=ScanResearcher(context.Background(),stub,date,[]string{"600519.SH","600519.SH"});err==nil{t.Fatal("duplicate accepted")}
+ if _,err:=ScanResearcher(context.Background(),stub,date,[]string{"600519.SH","600519.SH"},nil);err==nil{t.Fatal("duplicate accepted")}
  failing:=&scanResearcherStub{fail:true}
- if results,err:=ScanResearcher(context.Background(),failing,date,[]string{"600519.SH"});err==nil||results!=nil{t.Fatalf("provider errors swallowed %+v %v",results,err)}
+ if results,err:=ScanResearcher(context.Background(),failing,date,[]string{"600519.SH"},nil);err==nil||results!=nil{t.Fatalf("provider errors swallowed %+v %v",results,err)}
  ctx,cancel:=context.WithCancel(context.Background());cancel()
- if _,err:=ScanResearcher(ctx,stub,date,[]string{"600519.SH"});err==nil{t.Fatal("cancelled scan accepted")}
+ if _,err:=ScanResearcher(ctx,stub,date,[]string{"600519.SH"},nil);err==nil{t.Fatal("cancelled scan accepted")}
+}
+func TestScanResearcherReportsOnlyValidatedObservations(t *testing.T){
+ bars:=risingBars();date:=bars[len(bars)-1].TradeDate
+ stub:=&scanResearcherStub{}
+ var seen []technical.HistoricalObservation
+ if _,err:=ScanResearcher(context.Background(),stub,date,[]string{"600519.SH","000001.SZ"},func(o technical.HistoricalObservation){seen=append(seen,o)});err!=nil{t.Fatal(err)}
+ // The NO_DATA symbol yields no observation; only evaluated inputs surface.
+ if len(seen)!=1||seen[0].Symbol!="600519.SH"||len(seen[0].Bars)!=len(bars)||len(seen[0].PITFactors)!=len(bars){
+  t.Fatalf("unexpected observed inputs %+v",seen)
+ }
 }

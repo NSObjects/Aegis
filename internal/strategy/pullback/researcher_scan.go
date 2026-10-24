@@ -12,7 +12,9 @@ import (
 // ScanResearcher obtains source observations using the existing Technical
 // Capability and applies the offline strategy. Missing/closed/stale bars never
 // become selected candidates. It performs no LLM or trading operations.
-func ScanResearcher(ctx context.Context, researcher technical.Researcher, asOf string, symbols []string) ([]Result,error) {
+// observed, when non-nil, receives each validated observation that actually
+// fed an evaluation, letting callers persist the exact reviewable inputs.
+func ScanResearcher(ctx context.Context, researcher technical.Researcher, asOf string, symbols []string, observed func(technical.HistoricalObservation)) ([]Result,error) {
  d,err:=time.Parse("20060102",asOf)
  if err!=nil || d.Format("20060102")!=asOf{return nil,errors.New("invalid scan date")}
  if researcher==nil{return nil,errors.New("technical researcher required")}
@@ -33,6 +35,7 @@ func ScanResearcher(ctx context.Context, researcher technical.Researcher, asOf s
    results=append(results,Result{Symbol:symbol,AsOf:asOf,Version:StrategyVersion,Verdict:InsufficientData,Reason:"NO_VALID_HISTORICAL_OBSERVATION"})
    continue
   }
+  if observed!=nil {observed(o)}
   result,err:=EvaluateObservation(o)
   if err!=nil{return nil,err}
   results=append(results,result)
