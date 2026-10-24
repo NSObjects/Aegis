@@ -206,7 +206,7 @@ test("cancelled research never exposes an artifact", async ({ page }) => {
   await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(409);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 });
 
 test("provider failure is terminal and cannot be presented as success", async ({ page }) => {
@@ -221,7 +221,7 @@ test("provider failure is terminal and cannot be presented as success", async ({
 
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(409);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 });
 
 test("settings lets a signed-in operator save provider credentials without echoing keys", async ({ page }) => {
@@ -298,7 +298,7 @@ test("unknown Live Run permalink never substitutes the latest report", async ({ 
   await revealRunDiagnostics(page);
   await expect(page.getByText(`找不到任务 ${unknown}`, { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 });
 
 
@@ -313,7 +313,7 @@ test("narrow viewport retains Run deep-link isolation across history and browser
   await revealRunDiagnostics(page);
   await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
   // Mobile sidebar navigation is hidden at 375px; use the same addressable history route.
   await page.goto("/?view=history");
   await expect(page).toHaveURL(/view=history$/);
@@ -343,7 +343,8 @@ test("Live structured report reads Go-shaped fixture fields without fabricated f
   await expect(page.locator("#report-ledger")).toContainText("领域引用（无具体事件 ID）");
   await expect(page.locator("#report-portfolio")).toContainText("NOT_PROVIDED · 未知（不能解释为零持仓）");
   await expect(page.locator("#report-portfolio")).toContainText("FIXTURE_NO_REAL_ACCOUNT");
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeEnabled();
+  await page.locator("details.live-export-menu > summary").click();
+  await expect(page.getByRole("button", { name: "原始工件（JSON）" })).toBeEnabled();
   await page.getByText("高级：查看后端原始 JSON 工件").click();
   await expect(page.getByText("完整 Typed Artifact")).toBeVisible();
 });
@@ -385,7 +386,7 @@ test("failed and cancelled studies can be researched again without replaying old
   await signIn(page);
   const failed = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
   await page.getByRole("button", { name: "再次研究该标的" }).click();
   await expect(page.getByLabel("研究关注点（可选）")).toHaveValue("");
   await page.getByRole("button", { name: "启动真实研究" }).click();
@@ -397,7 +398,7 @@ test("failed and cancelled studies can be researched again without replaying old
   await page.goto("/?run=" + failed);
   await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED");
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 
   const held = await submit(page, "hold fixture");
   await page.getByRole("button", { name: "请求取消" }).click();
@@ -464,7 +465,7 @@ test("failed and cancelled Go Runs show only observed stage failures, never infe
   await expect(trace.locator(".live-trace-error")).toContainText("Event");
   await expect(trace.locator(".live-trace-stage").filter({ hasText: "Event" })).toContainText("失败");
   await expect(trace.locator(".live-trace-stage a.live-trace-report-link")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 
   const held = await submit(page, "hold fixture");
   await page.getByRole("button", { name: "请求取消" }).click();
