@@ -74,7 +74,8 @@ export default function LiveRunComparison({
     }).then(([left, right]) => {
       if (cancelled) return;
       setResolvedRuns(current => {
-        const byId = new Map(current.map(run => [run.run_id, run]));
+        const byId = new Map<string, LiveRun>();
+        for (const run of current) byId.set(run.run_id, run);
         byId.set(left.run.run_id, left.run);
         byId.set(right.run.run_id, right.run);
         return [...byId.values()];
