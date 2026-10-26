@@ -351,6 +351,7 @@ func agenticMessageToClassic(
 		result := &schema.Message{
 			Role: schema.Assistant,
 		}
+		var text strings.Builder
 		for _, block := range message.ContentBlocks {
 			if block == nil {
 				continue
@@ -362,8 +363,9 @@ func agenticMessageToClassic(
 						"assistant text block is nil",
 					)
 				}
-				result.Content +=
-					block.AssistantGenText.Text
+				text.WriteString(
+					block.AssistantGenText.Text,
+				)
 
 			case schema.ContentBlockTypeFunctionToolCall:
 				if block.FunctionToolCall == nil {
@@ -411,6 +413,7 @@ func agenticMessageToClassic(
 				}
 		}
 
+		result.Content = text.String()
 		return result, nil
 
 	default:

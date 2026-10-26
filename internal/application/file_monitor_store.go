@@ -190,7 +190,7 @@ func (s *FileMonitorStore) readRule(id string) (MonitorRule, error) {
 		return MonitorRule{}, err
 	}
 	if rule.ID != id {
-		return MonitorRule{}, fmt.Errorf("monitor rule id mismatch %s", id)
+		return MonitorRule{}, fmt.Errorf("monitor rule id mismatch %q", id)
 	}
 	return rule, nil
 }

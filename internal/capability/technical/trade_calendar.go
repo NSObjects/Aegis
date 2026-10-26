@@ -64,10 +64,10 @@ func (c *TushareTradingCalendar) IsTradingDay(ctx context.Context, date string) 
 	case float64:
 		open = v == 1
 	default:
-		return false, fmt.Errorf("unexpected is_open type %T for %s", raw, date)
+		return false, fmt.Errorf("unexpected is_open type %T for %q", raw, date)
 	}
 	if rows[0]["cal_date"] != date {
-		return false, fmt.Errorf("trade calendar date mismatch %s", rows[0]["cal_date"])
+		return false, fmt.Errorf("trade calendar date mismatch %q", rows[0]["cal_date"])
 	}
 	c.cache[date] = open
 	return open, nil

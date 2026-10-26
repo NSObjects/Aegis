@@ -39,7 +39,17 @@ func (t *ConversationResearchTools) CompareResearchRuns(ctx context.Context, lef
  if left.Mode!=ModeDecision && left.Mode!=ModePortfolio {return ConversationRunComparison{},errors.New("unsupported comparison mode")}
  var a,b struct {Symbol string `json:"symbol"`; Action string `json:"action"`; MarketView string `json:"market_view"`}
  if left.Mode==ModeDecision && (json.Unmarshal(left.Artifact,&a)!=nil || json.Unmarshal(right.Artifact,&b)!=nil || a.Symbol!=left.Symbol || b.Symbol!=right.Symbol || a.Action=="" || b.Action=="") {return ConversationRunComparison{},errors.New("validated decision artifacts unavailable")}
- result:=ConversationRunComparison{LeftRunID:left.ID,RightRunID:right.ID,Symbol:left.Symbol,Mode:left.Mode,LeftAsOf:left.RequestedAsOf.Format("2006-01-02T15:04:05Z07:00"),RightAsOf:right.RequestedAsOf.Format("2006-01-02T15:04:05Z07:00"),Comparable:true, Caveats:[]string{"仅比较已保存研究结论；无法从差异推断变化原因或数据真实性。"}}
+ result:=ConversationRunComparison{
+  LeftRunID:left.ID,
+  RightRunID:right.ID,
+  Symbol:left.Symbol,
+  Mode:left.Mode,
+  LeftAsOf:left.RequestedAsOf.Format("2006-01-02T15:04:05Z07:00"),
+  RightAsOf:right.RequestedAsOf.Format("2006-01-02T15:04:05Z07:00"),
+  Comparable:true,
+  Caveats:[]string{"仅比较已保存研究结论；无法从差异推断变化原因或数据真实性。"},
+  Differences:[]ConversationComparedField{},
+ }
  result.SameResearchDate=left.RequestedAsOf.Equal(right.RequestedAsOf)
  if !result.SameResearchDate {result.Caveats=append(result.Caveats,"研究截止时点不同，市场观点不可当作同一时点的严格对照。")}
  if left.Mode==ModeDecision {

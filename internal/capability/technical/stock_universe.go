@@ -35,7 +35,7 @@ func (c *TushareClient) ListStockUniverse(ctx context.Context, asOf string)(Stoc
    if len(symbol)!=9||!(strings.HasSuffix(symbol,".SH")||strings.HasSuffix(symbol,".SZ")){continue}
    valid:=true;for i:=0;i<6;i++{if symbol[i]<'0'||symbol[i]>'9'{valid=false}}
    if !valid{continue}
-   if !(strings.HasPrefix(symbol,"600")||strings.HasPrefix(symbol,"601")||strings.HasPrefix(symbol,"603")||strings.HasPrefix(symbol,"605")||strings.HasPrefix(symbol,"000")||strings.HasPrefix(symbol,"001")||strings.HasPrefix(symbol,"002")||strings.HasPrefix(symbol,"003")){continue}
+   if !IsMainBoardSymbol(symbol){continue}
    if len(listed)!=8||listed>asOf{continue}
    if delisted!=""&&delisted<=asOf{continue}
    symbols[symbol]=true
@@ -45,4 +45,17 @@ func (c *TushareClient) ListStockUniverse(ctx context.Context, asOf string)(Stoc
  sort.Strings(out.Symbols)
  if len(out.Symbols)==0{return out,errors.New("empty eligible stock universe")}
  return out,nil
+}
+
+// IsMainBoardSymbol reports whether a symbol belongs to the Shanghai or
+// Shenzhen main board (600/601/603/605 and 000/001/002/003 prefixes). It is
+// the single source of that universe rule; callers still validate symbol
+// shape themselves.
+func IsMainBoardSymbol(symbol string) bool {
+ if len(symbol)<3 {return false}
+ switch symbol[:3] {
+ case "600","601","603","605","000","001","002","003":
+  return true
+ }
+ return false
 }

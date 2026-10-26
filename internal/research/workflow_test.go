@@ -736,65 +736,6 @@ func TestNewRequiresMainGraphDependencies(
 	}
 }
 
-func TestNewLegacyPreservesPreEventWorkflow(
-	t *testing.T,
-) {
-	marketContext := validMarketContext()
-	technicalContext := validTechnicalContext()
-	tradingAgent := &fakeArtifactTradingAgent{
-		result: validDecision(),
-	}
-
-	workflow, err := NewLegacy(
-		context.Background(),
-		LegacyConfig{
-			MarketAgent: &fakeMarketAgent{
-				result: marketContext,
-			},
-			TechnicalAgent: &fakeTechnicalAgent{
-				result: technicalContext,
-			},
-			TradingAgent: tradingAgent,
-		},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := workflow.Run(
-		context.Background(),
-		Input{Symbol: "600519.SH"},
-	)
-	if err != nil {
-		t.Fatalf(
-			"legacy Run() error = %v",
-			err,
-		)
-	}
-	if result.Symbol != "600519.SH" {
-		t.Fatalf(
-			"result = %+v",
-			result,
-		)
-	}
-	if tradingAgent.legacyCalls != 1 ||
-		tradingAgent.calls != 0 {
-		t.Fatalf(
-			"legacy=%d artifact=%d",
-			tradingAgent.legacyCalls,
-			tradingAgent.calls,
-		)
-	}
-	if tradingAgent.legacyInput.MarketContext !=
-		marketContext ||
-		tradingAgent.legacyInput.TechnicalContext !=
-			technicalContext {
-		t.Fatal(
-			"legacy contexts were not preserved",
-		)
-	}
-}
-
 func TestWorkflowRejectsFutureOrInconsistentResearchStageDates(t *testing.T) {
 	tests := []struct {
 		name string

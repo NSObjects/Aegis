@@ -395,7 +395,8 @@ func NewArtifact(
 			date:=in.RequestedAsOf.In(time.FixedZone("A-share",8*60*60)).Format("20060102")
 			result,err:=cfg.FundamentalAgent.Analyze(ctx,fundamental.Input{Symbol:in.Symbol,RequestedAsOf:date})
 			if err!=nil{return nil,fmt.Errorf("fundamental research: %w",err)}
-			if result==nil||result.Income==nil||result.Symbol!=in.Symbol||result.RequestedAsOf!=date||result.Income.Symbol!=in.Symbol||result.Income.AnnouncementDate>date{return nil,errors.New("invalid fundamental context")}
+			if err:=fundamental.ValidateCore(result,in.Symbol);err!=nil{return nil,err}
+			if result.RequestedAsOf!=date||result.Income.AnnouncementDate>date{return nil,errors.New("invalid fundamental context")}
 			return &fundamentalResult{FundamentalContext:result},nil
 		})
 		workflow.AddLambdaNode(fundamentalNodeKey,fundamentalNode).AddInput(compose.START)

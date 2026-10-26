@@ -6,10 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log"
-	"reflect"
-	"strings"
+ "io"
+ "log"
+ "strings"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
@@ -192,58 +191,63 @@ func (a *AgenticEventFactExtractor) Extract(
 			err,
 		)
 	}
-	if groundingErr :=
-		validateFactExtractionGroundings(
-			output,
-			documents,
-		); groundingErr == nil {
+	groundingErr := validateFactExtractionGroundings(output, documents)
+	if groundingErr == nil {
 		return output, nil
-	} else {
-		var repaired FactExtractionResult
-		repairInstruction :=
-			factExtractionInstruction +
-				"\n\nThe previous extraction failed deterministic grounding validation: " +
-				groundingErr.Error() +
-				". Return the full corrected JSON. Use previous_extraction only as a candidate, not as evidence. Recheck every quote against documents[].content; omit unsupported facts, do not invent or paraphrase quotations. Every retained quote must occur exactly once verbatim in its identified canonical document. The grounding_quote_candidates are exact snippets copied from the indicated documents around repeated quotes, not additional evidence; select a candidate only if its whole context supports the fact, or omit the unsupported fact. Never invent offsets."
-		if err := generateStrictAgenticJSON(
-			ctx,
-			a.Model,
-			repairInstruction,
-			struct { factExtractionPrompt; PreviousExtraction FactExtractionResult `json:"previous_extraction"`; GroundingQuoteCandidates []groundingRepairHint `json:"grounding_quote_candidates,omitempty"` }{factExtractionPrompt:prompt,PreviousExtraction:output,GroundingQuoteCandidates:groundingRepairHints(output,documents)},
-			&repaired,
-		); err != nil {
+	}
+	var repaired FactExtractionResult
+	repairInstruction :=
+		factExtractionInstruction +
+			"\n\nThe previous extraction failed deterministic grounding validation: " +
+			groundingErr.Error() +
+			". Return the full corrected JSON. Use previous_extraction only as a candidate, not as evidence. Recheck every quote against documents[].content; omit unsupported facts, do not invent or paraphrase quotations. Every retained quote must occur exactly once verbatim in its identified canonical document. The grounding_quote_candidates are exact snippets copied from the indicated documents around repeated quotes, not additional evidence; select a candidate only if its whole context supports the fact, or omit the unsupported fact. Never invent offsets."
+	repairPayload := struct {
+		factExtractionPrompt
+		PreviousExtraction        FactExtractionResult  `json:"previous_extraction"`
+		GroundingQuoteCandidates  []groundingRepairHint `json:"grounding_quote_candidates,omitempty"`
+	}{
+		factExtractionPrompt:     prompt,
+		PreviousExtraction:       output,
+		GroundingQuoteCandidates: groundingRepairHints(output, documents),
+	}
+	if err := generateStrictAgenticJSON(
+		ctx,
+		a.Model,
+		repairInstruction,
+		repairPayload,
+		&repaired,
+	); err != nil {
+		return FactExtractionResult{}, fmt.Errorf(
+			"event fact extraction grounding repair model: %w",
+			err,
+		)
+	}
+	if err := validateFactExtractionGroundings(
+		repaired,
+		documents,
+	); err != nil {
+		// After one LLM repair, only repeated verbatim quotations may
+		// be removed. Never choose a matching source offset arbitrarily.
+		// Preserve validated quotes and facts; all other failures remain
+		// hard errors. If no grounded facts remain, fail rather than
+		// returning a misleading NO_EVENT result.
+		filtered, removedQuotes, removedFacts, pruneErr :=
+			omitAmbiguousEventQuotes(repaired, documents)
+		if pruneErr != nil {
 			return FactExtractionResult{}, fmt.Errorf(
-				"event fact extraction grounding repair model: %w",
+				"event fact extraction grounding repair: %w",
 				err,
 			)
 		}
-		if err := validateFactExtractionGroundings(
-			repaired,
-			documents,
-		); err != nil {
-			// After one LLM repair, only repeated verbatim quotations may
-			// be removed. Never choose a matching source offset arbitrarily.
-			// Preserve validated quotes and facts; all other failures remain
-			// hard errors. If no grounded facts remain, fail rather than
-			// returning a misleading NO_EVENT result.
-			filtered, removedQuotes, removedFacts, pruneErr :=
-				omitAmbiguousEventQuotes(repaired, documents)
-			if pruneErr != nil {
-				return FactExtractionResult{}, fmt.Errorf(
-					"event fact extraction grounding repair: %w",
-					err,
-				)
-			}
-			if err := validateFactExtractionGroundings(filtered, documents); err != nil {
-				return FactExtractionResult{}, fmt.Errorf(
-					"event fact extraction filtered groundings: %w", err,
-				)
-			}
-			log.Printf("event fact grounding: omitted %d ambiguous quote(s), %d fact(s) without verified evidence", removedQuotes, removedFacts)
-			return filtered, nil
+		if err := validateFactExtractionGroundings(filtered, documents); err != nil {
+			return FactExtractionResult{}, fmt.Errorf(
+				"event fact extraction filtered groundings: %w", err,
+			)
 		}
-		return repaired, nil
+		log.Printf("event fact grounding: omitted %d ambiguous quote(s), %d fact(s) without verified evidence", removedQuotes, removedFacts)
+		return filtered, nil
 	}
+	return repaired, nil
 }
 
 
@@ -501,13 +505,14 @@ func (a *AgenticEventImpactMechanismAnalyzer) AnalyzeImpactMechanisms(
 		if err := generateStrictAgenticJSON(ctx, a.Model, instruction, payload, &output); err != nil {
 			return ImpactMechanismDetectionResult{}, fmt.Errorf("event impact mechanism model: %w", err)
 		}
-		if err := validateDetectedImpactEnums(output.Mechanisms); err == nil {
+		err := validateDetectedImpactEnums(output.Mechanisms)
+		if err == nil {
 			return output, nil
-		} else if attempt == 1 {
-			return ImpactMechanismDetectionResult{}, fmt.Errorf("event impact mechanism invalid enum after correction: %w", err)
-		} else {
-			instruction = impactMechanismInstruction + "\\n\\nYour previous output failed deterministic enum validation: " + err.Error() + ". Regenerate the complete JSON using only the exact channel and direction values specified above. Do not silently translate a market-price effect into a business mechanism; omit any mechanism without a supported permitted channel."
 		}
+		if attempt == 1 {
+			return ImpactMechanismDetectionResult{}, fmt.Errorf("event impact mechanism invalid enum after correction: %w", err)
+		}
+		instruction = impactMechanismInstruction + "\n\nYour previous output failed deterministic enum validation: " + err.Error() + ". Regenerate the complete JSON using only the exact channel and direction values specified above. Do not silently translate a market-price effect into a business mechanism; omit any mechanism without a supported permitted channel."
 	}
 	return ImpactMechanismDetectionResult{}, errors.New("event impact mechanism correction attempts exhausted")
 }
@@ -593,15 +598,14 @@ const timeRFC3339 = "2006-01-02T15:04:05Z07:00"
 
 const maxStrictJSONAttempts = 2
 
-func generateStrictAgenticJSON(
+func generateStrictAgenticJSON[T any](
 	ctx context.Context,
 	m model.BaseModel[*schema.AgenticMessage],
 	instruction string,
 	payload any,
-	output any,
+	output *T,
 ) error {
-	target := reflect.ValueOf(output)
-	if !target.IsValid() || target.Kind() != reflect.Pointer || target.IsNil() {
+	if output == nil {
 		return errors.New("strict JSON output must be a non-nil pointer")
 	}
 	data, err := json.Marshal(payload)
@@ -627,15 +631,15 @@ func generateStrictAgenticJSON(
 		if raw == "" {
 			return errors.New("model returned empty output")
 		}
-		candidate := reflect.New(target.Elem().Type())
-		if err := decodeStrictJSON(raw, candidate.Interface()); err != nil {
+		candidate := new(T)
+		if err := decodeStrictJSON(raw, candidate); err != nil {
 			if attempt == maxStrictJSONAttempts {
 				return fmt.Errorf("decode strict JSON after %d attempts: %w: output=%q",
 					attempt, err, raw)
 			}
 			continue
 		}
-		target.Elem().Set(candidate.Elem())
+		*output = *candidate
 		return nil
 	}
 	return errors.New("strict JSON attempts exhausted")

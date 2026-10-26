@@ -31,6 +31,14 @@ type Input struct {
  RequestedAsOf string
 }
 
+// ValidateCore enforces the symbol- and income-binding invariants shared by
+// every fundamental consumer. Cutoff alignment is caller-specific and is not
+// checked here.
+func ValidateCore(ctx *Context, symbol string) error {
+ if ctx==nil||ctx.Income==nil||ctx.Symbol!=symbol||ctx.Income.Symbol!=symbol {return errors.New("invalid fundamental context")}
+ return nil
+}
+
 type Agent struct {
  source Source
  runner *adk.TypedRunner[*schema.AgenticMessage]

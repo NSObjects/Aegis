@@ -64,12 +64,6 @@ type researchRoundState struct {
 	Attempts             []event.AcquisitionAttempt
 }
 
-func init() {
-	schema.RegisterName[*researchRoundState](
-		"_aegis_research_round_state",
-	)
-}
-
 type ResearchRoundArtifact struct {
 	Round            int
 	RootTask         event.ResearchTask
@@ -99,6 +93,12 @@ type ResearchRoundExecutor struct {
 }
 
 var _ adk.Agent = (*ResearchRoundExecutor)(nil)
+
+func init() {
+	schema.RegisterName[*researchRoundState](
+		"_aegis_research_round_state",
+	)
+}
 
 func NewResearchRoundExecutor(
 	cfg ResearchRoundExecutorConfig,
