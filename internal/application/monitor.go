@@ -46,8 +46,14 @@ func NewTushareMonitorSource(researcher technical.Researcher, client *technical.
 type Monitor struct {
 	store  *FileMonitorStore
 	source MonitorDataSource
+	// router, when wired, turns FIRED events into auditable research
+	// triggers; a nil router keeps the monitor observation-only.
+	router *TriggerRouter
 	now    func() time.Time
 }
+
+// WithTriggerRouter attaches the trigger router; returns the same monitor.
+func (m *Monitor) WithTriggerRouter(router *TriggerRouter) *Monitor { m.router = router; return m }
 
 func NewMonitor(store *FileMonitorStore, source MonitorDataSource) (*Monitor, error) {
 	if store == nil || source == nil {
@@ -94,6 +100,13 @@ func (m *Monitor) Tick(ctx context.Context, tradeDate string) error {
 		event := MonitorEvent{RuleID: rule.ID, Symbol: rule.Symbol, Kind: rule.Kind, TradeDate: tradeDate, Outcome: outcome, Detail: detail, CreatedAt: m.now().UTC()}
 		if err := m.store.SaveEvent(event); err != nil && !errors.Is(err, ErrMonitorEventExists) {
 			return fmt.Errorf("save monitor event: %w", err)
+		}
+		// Only a persisted, non-suppressed FIRED event may route research;
+		// suppression and outages never start paid work.
+		if outcome == MonitorFired && m.router != nil {
+			if _, err := m.router.Handle(ctx, event); err != nil {
+				log.Printf("AEGIS_MONITOR_TRIGGER_ERROR rule=%s err=%v", rule.ID, err)
+			}
 		}
 	}
 	return nil
