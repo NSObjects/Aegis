@@ -13,6 +13,20 @@ export type CompareRow = { section: string; label: string; left: string | null; 
 export type CompareEvidence = { left: string[] | null; right: string[] | null; added: string[] | null; removed: string[] | null };
 export type ResearchComparison = { symbol: string; mode: LiveRun["mode"]; rows: CompareRow[]; evidence: CompareEvidence; changed: number; missing: number };
 
+/** Find the nearest earlier completed Run that can be compared with the selected Run. */
+export function findPreviousComparableRun(runs: LiveRun[], currentRunId: string): LiveRun | null {
+  const current = runs.find(run => run.run_id === currentRunId && run.state === "COMPLETED");
+  if (!current) return null;
+  const currentTime = Date.parse(current.created_at);
+  if (!Number.isFinite(currentTime)) return null;
+  return runs
+    .filter(run => run.run_id !== current.run_id && run.state === "COMPLETED" &&
+      run.symbol === current.symbol && run.mode === current.mode)
+    .map(run => ({ run, createdAt: Date.parse(run.created_at) }))
+    .filter(item => Number.isFinite(item.createdAt) && item.createdAt < currentTime)
+    .sort((a, b) => b.createdAt - a.createdAt)[0]?.run ?? null;
+}
+
 function validIdentity(run: LiveRun, artifact: unknown): boolean {
   const root = obj(artifact);
   if (!root || run.state !== "COMPLETED") return false;
