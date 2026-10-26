@@ -12,7 +12,16 @@ const statuses = {
   same: "相同记录", different: "记录不同", only_left: "仅基准有数据",
   only_right: "仅对比有数据", unavailable: "双方均未提供",
 };
-const time = (s: string) => new Date(s).toLocaleString("zh-CN", { hour12: false });
+const time = (s: string | undefined) => {
+  if (!s) return "时间不可用";
+  const date = new Date(s);
+  return Number.isNaN(date.getTime()) ? "时间不可用" : date.toLocaleString("zh-CN", { hour12: false });
+};
+const modeLabel = (mode: string) => ({
+  DECISION: "个股决策研究",
+  PORTFOLIO_REVIEW: "组合复核",
+  RESEARCH: "研究分析",
+}[mode] ?? mode.replaceAll("_", " "));
 
 async function fetchJSON(url: string): Promise<unknown> {
   const res = await fetch(url, { cache: "no-store", credentials: "same-origin" });
@@ -41,9 +50,15 @@ export default function LiveRunComparison({
   const { leftId, rightId } = pair;
   const key = (leftId ?? "") + ":" + (rightId ?? "");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [resolvedRuns, setResolvedRuns] = useState<LiveRun[]>([]);
   const [retry, setRetry] = useState(0);
   const [state, setState] = useState<{ key: string; loading: boolean; error: string }>({ key: "", loading: false, error: "" });
-  const completed = useMemo(() => runs.filter(run => run.state === "COMPLETED"), [runs]);
+  const completed = useMemo(() => {
+    const byId = new Map<string, LiveRun>();
+    for (const run of runs) if (run.state === "COMPLETED") byId.set(run.run_id, run);
+    for (const run of resolvedRuns) if (run.state === "COMPLETED") byId.set(run.run_id, run);
+    return [...byId.values()];
+  }, [runs, resolvedRuns]);
   const baseline = completed.find(run => run.run_id === leftId);
   const compatible = completed.filter(run => run.run_id !== leftId &&
     (!baseline || (run.symbol === baseline.symbol && run.mode === baseline.mode)));
@@ -58,6 +73,13 @@ export default function LiveRunComparison({
       return Promise.all([loadRun(leftId), loadRun(rightId)]);
     }).then(([left, right]) => {
       if (cancelled) return;
+      setResolvedRuns(current => {
+        const byId = new Map<string, LiveRun>();
+        for (const run of current) byId.set(run.run_id, run);
+        byId.set(left.run.run_id, left.run);
+        byId.set(right.run.run_id, right.run);
+        return [...byId.values()];
+      });
       const comparison = compareResearchRuns(left.run, left.artifact, right.run, right.artifact);
       if (!comparison) throw Error("对比来源不合法：要求不同的已完成 Run、同一标的与研究模式，且工件身份必须匹配");
       setLoaded({ key: activeKey, left: left.run, right: right.run, comparison });
@@ -81,7 +103,7 @@ export default function LiveRunComparison({
     return <>
       {selected && !values.some(r => r.run_id === selected) && <option value={selected}>{selected.slice(0, 12)}… · 历史 ID（直接查询）</option>}
       {values.map(r => <option key={r.run_id} value={r.run_id}>
-        {r.symbol} · {time(r.requested_as_of)} · {r.run_id.slice(0, 8)}…
+        {r.symbol} · {modeLabel(r.mode)} · {time(r.requested_as_of)} · {r.run_id.slice(0, 8)}…
       </option>)}
     </>;
   };
@@ -121,7 +143,7 @@ export default function LiveRunComparison({
         <div><small>对比研究 · Source B</small><strong>{shown.right.symbol}</strong><span>PIT {time(shown.right.requested_as_of)}</span>
           <a href={workbenchHref("/", "workspace", shown.right.run_id)}>查看原任务与报告 <ArrowUpRight size={13}/></a><code>{shown.right.run_id}</code></div>
       </div>
-      <p className="live-compare-notice">标的与模式：{shown.comparison.symbol} · {shown.comparison.mode}。
+      <p className="live-compare-notice">标的与模式：{shown.comparison.symbol} · {modeLabel(shown.comparison.mode)}。
         两次研究记录的差异不代表市场变化原因，也不保证模型/源数据版本一致。仅对实际同时存在的字段判断“记录不同”；缺失不等于零。
       </p>
       <div className="live-compare-stats">

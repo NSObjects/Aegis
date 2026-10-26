@@ -5,7 +5,9 @@ test("observed TOOL events belong to the same Run and survive refresh", async ({
  await page.goto("/");
  await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
  await page.getByRole("button",{name:"解锁研究工作台"}).click();
- await expect(page.getByRole("heading",{name:"实时研究工作台"})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"工作台",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"发起新研究",exact:true}).click();
+ await expect(page.getByRole("heading",{name:"研究详情",exact:true})).toBeVisible();
  await page.getByLabel("股票代码").fill("600519.SH");
  await page.getByLabel("研究关注点（可选）").fill("observed tool trace fixture");
  await page.getByRole("button",{name:"启动真实研究"}).click();
