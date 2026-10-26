@@ -37,16 +37,15 @@ func obsFactors(bars []technical.HistoricalBar) []technical.PITAdjustmentFactor 
 	return out
 }
 
-// completedComparisonScan writes one COMPLETED scan whose universe covers the
-// three comparison cases: two selected candidates with different pullback
-// depths, one rejected trend with a committed snapshot, and one symbol whose
-// observation never validated (no snapshot).
+// completedComparisonScan writes one COMPLETED scan covering selected
+// candidates, a rejected trend, missing PIT factors, and a missing observation.
 func completedComparisonScan(t *testing.T, store *FileScanStore, deep, shallow string) ScanRecord {
 	t.Helper()
-	symbols := []string{"000001.SZ", deep, shallow, "601398.SH"}
+	symbols := []string{"000001.SZ", "000002.SZ", deep, shallow, "601398.SH"}
 	bars := map[string][]technical.HistoricalBar{
 		deep: comparisonBars(100, 127.5), shallow: comparisonBars(100, 129),
-		"000001.SZ": flatBars(), // flat trend rejects with TREND_NOT_UP but stays observable
+		"000001.SZ": flatBars(), // missing PIT factors: explicit insufficient-data case
+		"000002.SZ": flatBars(), // flat trend rejects but stays observable
 	}
 	asOf := bars[deep][len(bars[deep])-1].TradeDate
 	now := time.Now().UTC()
@@ -57,19 +56,27 @@ func completedComparisonScan(t *testing.T, store *FileScanStore, deep, shallow s
 			record.Results = append(record.Results, pullback.Result{Symbol: symbol, AsOf: asOf, Version: pullback.StrategyVersion, Verdict: pullback.InsufficientData, Reason: "NO_VALID_HISTORICAL_OBSERVATION"})
 			continue
 		}
-		verdict, err := pullback.Evaluate(symbol, asOf, b, sameTestFactors(b))
+		factors := sameTestFactors(b)
+		if symbol == "000001.SZ" {
+			factors = nil
+		}
+		verdict, err := pullback.Evaluate(symbol, asOf, b, factors)
 		if err != nil {
 			t.Fatal(err)
 		}
 		record.Results = append(record.Results, verdict)
 	}
-	// Snapshots must follow universe order; only the three observable symbols persist.
+	// Snapshots follow universe order; the no-observation symbol has no snapshot.
 	for _, symbol := range symbols {
 		b := bars[symbol]
 		if b == nil {
 			continue
 		}
-		o := technical.HistoricalObservation{Symbol: symbol, RequestedAsOf: asOf, EffectiveAsOf: asOf, PriceBasis: "RAW", Bars: b, PITFactors: obsFactors(b)}
+		pitFactors := obsFactors(b)
+		if symbol == "000001.SZ" {
+			pitFactors = nil
+		}
+		o := technical.HistoricalObservation{Symbol: symbol, RequestedAsOf: asOf, EffectiveAsOf: asOf, PriceBasis: "RAW", Bars: b, PITFactors: pitFactors}
 		digest, err := store.SaveSnapshot(record.ID, o)
 		if err != nil {
 			t.Fatal(err)
@@ -129,7 +136,10 @@ func TestScanComparisonRanksDeterministicallyAndStatesAbsence(t *testing.T) {
 	for _, row := range comparison.Incomparable {
 		notes[row.Symbol] = row.Note
 	}
-	if notes["000001.SZ"] != "NOT_SELECTED" {
+	if notes["000001.SZ"] != "MISSING_PIT_ADJUSTMENT" {
+		t.Fatalf("missing PIT factors must remain explicit without failing the whole comparison: %+v", comparison.Incomparable)
+	}
+	if notes["000002.SZ"] != "NOT_SELECTED" {
 		t.Fatalf("rejected trend must state NOT_SELECTED: %+v", comparison.Incomparable)
 	}
 	if notes["601398.SH"] != "NO_COMMITTED_SNAPSHOT" {
