@@ -4,7 +4,9 @@ import { expect, test } from "@playwright/test";
 // Missing credentials force a real FAILED Run; no paid providers are invoked.
 test("browser preserves failed Run and forbids export across actual Go process restart", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible({ timeout: 30000 });
+  await page.getByRole("button", { name: "发起新研究", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "研究详情", exact: true })).toBeVisible();
   await page.getByLabel("股票代码").fill("600519.SH");
   await page.getByRole("button", { name: "启动真实研究" }).click();
   const details = page.locator(".live-run-fields");
@@ -20,8 +22,8 @@ test("browser preserves failed Run and forbids export across actual Go process r
   await expect(details).toContainText("失败", { timeout: 20000 });
   await expect(details).toContainText(runId!);
   await expect(details).toContainText("600519.SH");
-  await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 
   const report = await page.request.get("/api/workbench/runs/" + runId + "/artifact");
   expect(report.status()).not.toBe(200);

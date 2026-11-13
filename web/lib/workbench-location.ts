@@ -15,15 +15,20 @@ const isRunId = (value: string | null): value is string =>
 export function readWorkbenchLocation(search: string): WorkbenchLocation {
   const params = new URLSearchParams(search);
   const requestedView = params.get("view");
-  const view: WorkbenchView = requestedView === "overview" || requestedView === "history" || requestedView === "settings" || requestedView === "compare" || requestedView === "watchlist"
-    ? requestedView : "workspace";
+  const knownView = requestedView === "workspace" || requestedView === "overview" || requestedView === "history" || requestedView === "settings" || requestedView === "compare" || requestedView === "watchlist";
+  // The root route is the overview. An opaque Run ID keeps old deep links opening the report.
+  const view: WorkbenchView = knownView
+    ? requestedView as WorkbenchView
+    : requestedView === null && isRunId(params.get("run")) ? "workspace" : "overview";
   return { view, runId: view === "workspace" && isRunId(params.get("run")) ? params.get("run") : null };
 }
 
 export function workbenchHref(pathname: string, view: WorkbenchView, runId: string | null = null): string {
   const params = new URLSearchParams();
-  if (view !== "workspace") params.set("view", view);
-  else if (isRunId(runId)) params.set("run", runId);
+  if (view === "workspace") {
+    if (isRunId(runId)) params.set("run", runId);
+    else params.set("view", "workspace");
+  } else params.set("view", view);
   const query = params.toString();
   return `${pathname || "/"}${query ? `?${query}` : ""}`;
 }

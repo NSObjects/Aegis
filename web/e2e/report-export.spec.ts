@@ -8,7 +8,9 @@ test("completed run exports Markdown and JSON for the same durable Run ID", asyn
   await page.goto("/");
   await page.getByLabel("工作台访问口令").fill("ci-browser-access-password");
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "发起新研究", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "研究详情", exact: true })).toBeVisible();
   await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await page.getByLabel("股票代码").fill("600519.SH", { timeout: 8_000 });
   await page.getByRole("button", { name: "启动真实研究" }).click();
@@ -24,9 +26,10 @@ test("completed run exports Markdown and JSON for the same durable Run ID", asyn
   const runId = new URL(href!, "http://localhost").searchParams.get("run");
   expect(runId).toBeTruthy();
 
+  await page.locator("details.live-export-menu > summary").click();
   const [md] = await test.step("download Markdown for persisted Run", async () => Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "导出 Markdown" }).click(),
+    page.getByRole("button", { name: "研究报告（Markdown）" }).click(),
   ]));
   expect(md.suggestedFilename()).toBe(`aegis-${runId}-report.md`);
   const mdText = await readFile(await md.path(), "utf8");
@@ -38,7 +41,7 @@ test("completed run exports Markdown and JSON for the same durable Run ID", asyn
 
   const [json] = await test.step("download JSON for same Run", async () => Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "导出真实 JSON" }).click(),
+    page.getByRole("button", { name: "原始工件（JSON）" }).click(),
   ]));
   expect(json.suggestedFilename()).toBe(`aegis-${runId}-artifact.json`);
   const artifact: unknown = JSON.parse(await readFile(await json.path(), "utf8"));
@@ -48,5 +51,6 @@ test("completed run exports Markdown and JSON for the same durable Run ID", asyn
   await page.goto(href!);
   await page.locator("details.live-secondary-panel").first().evaluate((el: HTMLDetailsElement) => { el.open = true; }, { timeout: 8_000 });
   await expect(page.locator(".live-run-fields")).toContainText(runId!, { timeout: 10_000 });
-  await expect(page.getByRole("button", { name: "导出 Markdown" })).toBeEnabled();
+  await page.locator("details.live-export-menu > summary").click();
+  await expect(page.getByRole("button", { name: "研究报告（Markdown）" })).toBeEnabled();
 });

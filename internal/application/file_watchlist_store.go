@@ -121,7 +121,7 @@ func (s *FileWatchlistStore) listLocked() ([]WatchItem, error) {
   var item WatchItem
   if err := json.Unmarshal(raw, &item); err != nil { return nil, err }
   if err := validateWatchItem(item); err != nil { return nil, err }
-  if item.Symbol != symbol { return nil, fmt.Errorf("watch item symbol mismatch %s", symbol) }
+  if item.Symbol != symbol { return nil, fmt.Errorf("watch item symbol mismatch %q", symbol) }
   items = append(items, item)
  }
  sort.Slice(items, func(i, j int) bool { return items[i].Symbol < items[j].Symbol })

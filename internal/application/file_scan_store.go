@@ -168,8 +168,8 @@ func (s *FileScanStore) ReconcileInterrupted() (int,error) {
  sort.Strings(ids)
  changed:=0
  for _,id:=range ids{
-  record,err:=s.Get(id);if err!=nil{return changed,fmt.Errorf("read scan %s: %w",id,err)}
-  if record.ID!=id{return changed,fmt.Errorf("scan filename/id mismatch %s",id)}
+  record,err:=s.Get(id);if err!=nil{return changed,fmt.Errorf("read scan %q: %w",id,err)}
+  if record.ID!=id{return changed,fmt.Errorf("scan filename/id mismatch %q",id)}
   if record.State!=ScanPending&&record.State!=ScanRunning{continue}
   record.State=ScanFailed
   record.FailureCode="PROCESS_INTERRUPTED"

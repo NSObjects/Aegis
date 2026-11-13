@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
- "sync"
+	"sync"
 	"time"
 
 	"Aegis/internal/application"
@@ -39,23 +39,24 @@ type RunController interface {
 // Handler keeps the API token on the server. Browser clients should proxy
 // through a server-side Next.js adapter, never expose it in client JS.
 type Handler struct {
-	runs     RunController
-	token    string
-	mode     application.ResearchMode
-	lookback time.Duration
-	now      func() time.Time
-	poll     time.Duration
-	localDev bool
- credentials *settings.Store
- scans ScanController
- watchlist WatchlistStore
- schedules ScheduleController
- monitors MonitorController
- conversation ConversationResponder
- rateMu sync.Mutex
- windowStart time.Time
- windowCount int
- sseSlots chan struct{}
+	runs         RunController
+	token        string
+	mode         application.ResearchMode
+	lookback     time.Duration
+	now          func() time.Time
+	poll         time.Duration
+	localDev     bool
+	credentials  *settings.Store
+	scans        ScanController
+	watchlist    WatchlistStore
+	schedules    ScheduleController
+	monitors     MonitorController
+	triggers     TriggerController
+	conversation ConversationResponder
+	rateMu       sync.Mutex
+	windowStart  time.Time
+	windowCount  int
+	sseSlots     chan struct{}
 }
 
 func NewHandler(runs RunController, token string, mode application.ResearchMode, lookback time.Duration) (*Handler, error) {
@@ -98,16 +99,41 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.localDev && !h.allowRequest(time.Now()) {
-  http.Error(w, "request rate limit exceeded", http.StatusTooManyRequests)
-  return
- }
- if r.URL.Path == "/api/v1/scans" || strings.HasPrefix(r.URL.Path,"/api/v1/scans/") { h.scanRoute(w,r); return }
- if r.URL.Path == "/api/v1/watchlist" || strings.HasPrefix(r.URL.Path,"/api/v1/watchlist/") { h.watchlistRoute(w,r); return }
- if r.URL.Path == "/api/v1/schedules" || strings.HasPrefix(r.URL.Path,"/api/v1/schedules/") { h.scheduleRoute(w,r); return }
- if r.URL.Path == "/api/v1/monitors" || strings.HasPrefix(r.URL.Path,"/api/v1/monitors/") { h.monitorRoute(w,r); return }
- if r.URL.Path == "/api/v1/conversation/query" { h.conversationQuery(w, r); return }
- if strings.HasPrefix(r.URL.Path,"/api/v1/conversation/sessions/") { h.conversationSessionRead(w,r); return }
- if r.URL.Path == "/api/v1/settings/credentials" { h.credentialSettings(w, r); return }
+		http.Error(w, "request rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+	if r.URL.Path == "/api/v1/scans" || strings.HasPrefix(r.URL.Path, "/api/v1/scans/") {
+		h.scanRoute(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/watchlist" || strings.HasPrefix(r.URL.Path, "/api/v1/watchlist/") {
+		h.watchlistRoute(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/schedules" || strings.HasPrefix(r.URL.Path, "/api/v1/schedules/") {
+		h.scheduleRoute(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/monitors" || strings.HasPrefix(r.URL.Path, "/api/v1/monitors/") {
+		h.monitorRoute(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/triggers" || strings.HasPrefix(r.URL.Path, "/api/v1/triggers/") {
+		h.triggerRoute(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/conversation/query" {
+		h.conversationQuery(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v1/conversation/sessions/") {
+		h.conversationSessionRead(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/settings/credentials" {
+		h.credentialSettings(w, r)
+		return
+	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/research/runs")
 	if path == r.URL.Path {
 		http.NotFound(w, r)
@@ -165,15 +191,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // A bounded per-process, single-user admission window; behind a reverse proxy
 // distributed deployments require a shared limiter instead.
 func (h *Handler) allowRequest(now time.Time) bool {
- h.rateMu.Lock()
- defer h.rateMu.Unlock()
- if h.windowStart.IsZero() || now.Sub(h.windowStart) >= time.Minute {
-  h.windowStart = now
-  h.windowCount = 0
- }
- if h.windowCount >= apiRequestsPerMinute { return false }
- h.windowCount++
- return true
+	h.rateMu.Lock()
+	defer h.rateMu.Unlock()
+	if h.windowStart.IsZero() || now.Sub(h.windowStart) >= time.Minute {
+		h.windowStart = now
+		h.windowCount = 0
+	}
+	if h.windowCount >= apiRequestsPerMinute {
+		return false
+	}
+	h.windowCount++
+	return true
 }
 
 func methodNotAllowed(w http.ResponseWriter, allow string) {
@@ -218,13 +246,13 @@ func lookupError(w http.ResponseWriter, err error) {
 func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	keys := r.Header.Values("Idempotency-Key")
-	if len(keys)>1 || (len(keys)==1 && keys[0]=="") {
-		http.Error(w,"invalid Idempotency-Key",http.StatusBadRequest)
+	if len(keys) > 1 || (len(keys) == 1 && keys[0] == "") {
+		http.Error(w, "invalid Idempotency-Key", http.StatusBadRequest)
 		return
 	}
 	key := r.Header.Get("Idempotency-Key")
-	if err:=application.ValidateIdempotencyKey(key);err!=nil {
-		http.Error(w,"invalid Idempotency-Key",http.StatusBadRequest)
+	if err := application.ValidateIdempotencyKey(key); err != nil {
+		http.Error(w, "invalid Idempotency-Key", http.StatusBadRequest)
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxCreateBytes+1))
@@ -285,7 +313,7 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid research input", http.StatusBadRequest)
 		return
 	}
-	rec, err := h.runs.Submit(r.Context(), application.ResearchRequest{IdempotencyKey:key, Mode: payload.Mode, Input: input, Portfolio: payload.Portfolio, RerunOf: payload.RerunOf})
+	rec, err := h.runs.Submit(r.Context(), application.ResearchRequest{IdempotencyKey: key, Mode: payload.Mode, Input: input, Portfolio: payload.Portfolio, RerunOf: payload.RerunOf})
 	if err != nil {
 		switch {
 		case errors.Is(err, application.ErrRunIdempotencyConflict):
@@ -342,18 +370,28 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	}
 	filtered := make([]application.RunRecord, 0)
 	for _, rec := range v {
-		if symbol != "" && !strings.Contains(rec.Symbol, symbol) { continue }
-		if state != "" && string(rec.State) != state { continue }
+		if symbol != "" && !strings.Contains(rec.Symbol, symbol) {
+			continue
+		}
+		if state != "" && string(rec.State) != state {
+			continue
+		}
 		filtered = append(filtered, rec)
 	}
 	total := len(filtered)
-	if offset >= total { filtered = filtered[:0] } else {
+	if offset >= total {
+		filtered = filtered[:0]
+	} else {
 		end := offset + limit
-		if end > total { end = total }
+		if end > total {
+			end = total
+		}
 		filtered = filtered[offset:end]
 	}
 	out := make([]application.RunRecord, 0, len(filtered))
-	for _, rec := range filtered { out = append(out, publicRun(rec)) }
+	for _, rec := range filtered {
+		out = append(out, publicRun(rec))
+	}
 	sendJSON(w, http.StatusOK, map[string]any{"runs": out, "total": total, "limit": limit, "offset": offset, "has_more": offset+len(out) < total})
 }
 func (h *Handler) load(w http.ResponseWriter, r *http.Request, id string) (application.RunRecord, bool) {
@@ -404,13 +442,13 @@ func terminal(s application.RunState) bool {
 	return s == application.RunCompleted || s == application.RunFailed || s == application.RunCancelled
 }
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request, id string) {
- select {
- case h.sseSlots <- struct{}{}:
-  defer func(){ <-h.sseSlots }()
- default:
-  http.Error(w, "SSE connection capacity reached", http.StatusTooManyRequests)
-  return
- }
+	select {
+	case h.sseSlots <- struct{}{}:
+		defer func() { <-h.sseSlots }()
+	default:
+		http.Error(w, "SSE connection capacity reached", http.StatusTooManyRequests)
+		return
+	}
 	last := uint64(0)
 	if raw := r.Header.Get("Last-Event-ID"); raw != "" {
 		if len(raw) > 20 {
