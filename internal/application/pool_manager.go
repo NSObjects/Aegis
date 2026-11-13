@@ -36,6 +36,7 @@ var (
 	ErrPoolBusy = errors.New("universe pool already running")
 	ErrPoolState = errors.New("pool state does not allow operation")
 	ErrPoolNotComplete = errors.New("pool is not completely scanned")
+	ErrPoolNonTradingDay = errors.New("market pool cutoff is not a trading day")
 )
 
 type PoolRecord struct {
@@ -191,15 +192,16 @@ type PoolManager struct {
 	store *FilePoolStore
 	scans *ScanManager
 	universe PoolUniverseProvider
+	calendar technical.TradingCalendar
 	ctx context.Context
 	mu sync.Mutex
 	runningID string
 	pauseRequested bool
 }
-func NewPoolManager(ctx context.Context, store *FilePoolStore, scans *ScanManager, universe PoolUniverseProvider) (*PoolManager, error) {
-	if ctx == nil || store == nil || scans == nil || universe == nil { return nil, errors.New("pool dependencies required") }
+func NewPoolManager(ctx context.Context, store *FilePoolStore, scans *ScanManager, universe PoolUniverseProvider, calendar technical.TradingCalendar) (*PoolManager, error) {
+	if ctx == nil || store == nil || scans == nil || universe == nil || calendar == nil { return nil, errors.New("pool dependencies required") }
 	if err := store.ReconcileInterrupted(); err != nil { return nil, err }
-	return &PoolManager{store: store, scans: scans, universe: universe, ctx: ctx}, nil
+	return &PoolManager{store: store, scans: scans, universe: universe, calendar: calendar, ctx: ctx}, nil
 }
 func (m *PoolManager) startJob(rec PoolRecord) {
 	m.runningID = rec.ID
@@ -215,6 +217,11 @@ func (m *PoolManager) Start(ctx context.Context, asOf string) (PoolRecord, error
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.runningID != "" { return PoolRecord{}, ErrPoolBusy }
+	// An exact closing-session cutoff is mandatory. Scanning a weekend or
+	// holiday would otherwise generate thousands of misleading NO_DATA rows.
+	trading, err := m.calendar.IsTradingDay(ctx, asOf)
+	if err != nil { return PoolRecord{}, fmt.Errorf("trading calendar unavailable: %w", err) }
+	if !trading { return PoolRecord{}, ErrPoolNonTradingDay }
 	// ListStockUniverse performs only 3 listing-status requests, before any
 	// per-security scans. Freeze the complete PIT membership once.
 	snapshot, err := m.universe.ListStockUniverse(ctx, asOf)

@@ -14,6 +14,8 @@ import (
 	"Aegis/internal/strategy/pullback"
 )
 
+type poolFakeCalendar struct { open bool }
+func (f poolFakeCalendar) IsTradingDay(context.Context,string)(bool,error){return f.open,nil}
 type poolFakeUniverse struct { symbols []string; err error }
 func (f poolFakeUniverse) ListStockUniverse(_ context.Context, asOf string) (technical.StockUniverse,error) {
 	if f.err!=nil { return technical.StockUniverse{},f.err }
@@ -51,7 +53,7 @@ func newPoolTestManager(t *testing.T, ctx context.Context, dir string, symbols [
 	scans,err:=NewFileScanStore(filepath.Join(dir,"scans"));if err!=nil{t.Fatal(err)}
 	manager,err:=NewScanManager(scans,researcher);if err!=nil{t.Fatal(err)}
 	store,err:=NewFilePoolStore(filepath.Join(dir,"pools"));if err!=nil{t.Fatal(err)}
-	pool,err:=NewPoolManager(ctx,store,manager,poolFakeUniverse{symbols:symbols});if err!=nil{t.Fatal(err)}
+	pool,err:=NewPoolManager(ctx,store,manager,poolFakeUniverse{symbols:symbols},poolFakeCalendar{open:true});if err!=nil{t.Fatal(err)}
 	return pool,store
 }
 func TestPoolAllBatchesDurableAndCoverage(t *testing.T) {
@@ -134,9 +136,22 @@ func TestPoolStoreInterruptedAndTamperedMembership(t *testing.T) {
 	ctx,cancel:=context.WithCancel(context.Background());defer cancel()
 	scans,err:=NewFileScanStore(filepath.Join(dir,"scans"));if err!=nil{t.Fatal(err)}
 	scanManager,err:=NewScanManager(scans,&poolFakeResearcher{});if err!=nil{t.Fatal(err)}
-	_,err=NewPoolManager(ctx,store,scanManager,poolFakeUniverse{symbols:rec.Symbols})
+	_,err=NewPoolManager(ctx,store,scanManager,poolFakeUniverse{symbols:rec.Symbols},poolFakeCalendar{open:true})
 	if err!=nil{t.Fatal(err)}
 	got,err:=store.Get(rec.ID);if err!=nil{t.Fatal(err)}
 	if got.State!=PoolPaused||got.FailureCode!="PROCESS_INTERRUPTED"{t.Fatalf("did not reconcile: %+v",got)}
 	if _,err:=store.Get("../bad");err==nil {t.Fatal("invalid path accepted")}
+}
+
+func TestPoolRejectsNonTradingDayBeforeFetchingUniverse(t *testing.T) {
+	ctx:=context.Background()
+	dir:=t.TempDir()
+	scanStore,err:=NewFileScanStore(filepath.Join(dir,"scans"));if err!=nil{t.Fatal(err)}
+	scans,err:=NewScanManager(scanStore,&poolFakeResearcher{});if err!=nil{t.Fatal(err)}
+	store,err:=NewFilePoolStore(filepath.Join(dir,"pools"));if err!=nil{t.Fatal(err)}
+	pool,err:=NewPoolManager(ctx,store,scans,poolFakeUniverse{err:errors.New("should never fetch")},poolFakeCalendar{open:false})
+	if err!=nil{t.Fatal(err)}
+	if _,err:=pool.Start(ctx,"20261114");!errors.Is(err,ErrPoolNonTradingDay){t.Fatalf("nontrading day accepted: %v",err)}
+	history,err:=pool.List(10)
+	if err!=nil||len(history)!=0{t.Fatalf("invalid jobs created: %+v %v",history,err)}
 }

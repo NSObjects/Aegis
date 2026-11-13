@@ -150,7 +150,9 @@ func main() {
 		if err != nil { log.Fatal(err) }
 		poolUniverse, err := technical.NewTushareClient(scanToken)
 		if err != nil { log.Fatal(err) }
-		pools, err := application.NewPoolManager(ctx, poolStore, scans, poolUniverse)
+		poolCalendar, err := technical.NewTushareTradingCalendar(poolUniverse)
+		if err != nil { log.Fatal(err) }
+		pools, err := application.NewPoolManager(ctx, poolStore, scans, poolUniverse, poolCalendar)
 		if err != nil { log.Fatal(err) }
 		handler.WithPoolController(pools)
 		// The scheduler triggers the existing engines on trading days only. Its

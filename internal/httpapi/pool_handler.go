@@ -70,6 +70,7 @@ func (h *Handler) poolRoute(w http.ResponseWriter,r *http.Request) {
 		record,err:=h.pools.Start(r.Context(),input.AsOf)
 		if err!=nil {
 			if errors.Is(err,application.ErrPoolBusy) { http.Error(w,"pool already running",http.StatusConflict);return }
+			if errors.Is(err,application.ErrPoolNonTradingDay) { http.Error(w,"cutoff is not a trading day",http.StatusUnprocessableEntity);return }
 			http.Error(w,"pool start failed",http.StatusBadRequest);return
 		}
 		sendJSON(w,http.StatusAccepted,record)

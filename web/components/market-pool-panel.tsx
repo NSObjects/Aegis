@@ -57,6 +57,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (res.status === 401) throw Error("会话已过期，请重新登录");
     if (res.status === 503) throw Error("全市场任务服务不可用：请在 Go 服务端配置 TUSHARE_TOKEN");
     if (res.status === 409) throw Error("任务正在执行或当前状态不允许此操作");
+    if (res.status === 422) throw Error("截止日不是交易日，请选择已结束的交易日");
     throw Error(`请求失败（HTTP ${res.status}）`);
   }
   return res.json() as Promise<T>;
