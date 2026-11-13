@@ -113,13 +113,14 @@ func readStages(c *http.Client,r *http.Request,out io.Writer,requireTools bool)(
  toolsStarted:=map[string]bool{}
  toolsFinished:=map[string]bool{}
  var last,id uint64
- var kind,data string
+ var kind string
+ var data strings.Builder
  terminal:=false
  flush:=func()error{
-  if kind==""&&data==""{return nil}
-  if kind!="research_stage"||data==""{return errors.New("unexpected SSE event")}
+  if kind==""&&data.Len()==0{return nil}
+  if kind!="research_stage"||data.Len()==0{return errors.New("unexpected SSE event")}
   var ev map[string]any
-  if json.Unmarshal([]byte(data),&ev)!=nil{return errors.New("invalid stage JSON")}
+  if json.Unmarshal([]byte(data.String()),&ev)!=nil{return errors.New("invalid stage JSON")}
   seq,ok:=ev["seq"].(float64)
   if !ok||uint64(seq)!=id||id!=last+1||seq<1||seq!=float64(uint64(seq)){return errors.New("stage SSE sequence mismatch")}
   name,status:=getText(ev,"stage"),getText(ev,"status")
@@ -150,14 +151,14 @@ func readStages(c *http.Client,r *http.Request,out io.Writer,requireTools bool)(
  }
  for scanner.Scan(){
   line:=scanner.Text()
-  if line==""{if err:=flush();err!=nil{return nil,err};kind="";data="";id=0;continue}
+  if line==""{if err:=flush();err!=nil{return nil,err};kind="";data.Reset();id=0;continue}
   if strings.HasPrefix(line,":"){continue}
   if strings.HasPrefix(line,"id: "){id,err=strconv.ParseUint(strings.TrimPrefix(line,"id: "),10,64);if err!=nil{return nil,errors.New("bad SSE id")}}
   if strings.HasPrefix(line,"event: "){kind=strings.TrimPrefix(line,"event: ")}
-  if strings.HasPrefix(line,"data: "){data+=strings.TrimPrefix(line,"data: ")}
+  if strings.HasPrefix(line,"data: "){data.WriteString(strings.TrimPrefix(line,"data: "))}
  }
  if err:=scanner.Err();err!=nil{return nil,err}
- if kind!=""||data!=""{if err:=flush();err!=nil{return nil,err}}
+ if kind!=""||data.Len()>0{if err:=flush();err!=nil{return nil,err}}
  if !terminal||last<2{return nil,errors.New("SSE stream stopped before a terminal Run event")}
  if requireTools {
   hasTechnical,hasEvent:=false,false

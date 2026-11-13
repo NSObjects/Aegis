@@ -264,7 +264,7 @@ func (s *FileScheduleStore) readTask(id string) (ScheduleTask, error) {
 		return ScheduleTask{}, err
 	}
 	if task.ID != id {
-		return ScheduleTask{}, fmt.Errorf("schedule task id mismatch %s", id)
+		return ScheduleTask{}, fmt.Errorf("schedule task id mismatch %q", id)
 	}
 	return task, nil
 }

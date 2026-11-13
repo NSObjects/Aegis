@@ -2,8 +2,9 @@ package synthesis
 
 import (
 	"Aegis/internal/agent/event"
+		"Aegis/internal/agent/fundamental"
 		"Aegis/internal/agent/market"
-	"Aegis/internal/agent/technical"
+		"Aegis/internal/agent/technical"
 	"errors"
 	"fmt"
 	"math"
@@ -47,7 +48,8 @@ func ValidateInput(
 	}
 
 	if input.Fundamental != nil {
-		if input.Fundamental.Symbol != symbol || input.Fundamental.Income == nil || input.Fundamental.Income.Symbol != symbol || strings.TrimSpace(input.Fundamental.Interpretation)=="" {return fmt.Errorf("invalid fundamental context for %s",symbol)}
+		if err := fundamental.ValidateCore(input.Fundamental, symbol); err != nil {return fmt.Errorf("%w for %s",err,symbol)}
+		if strings.TrimSpace(input.Fundamental.Interpretation)=="" {return fmt.Errorf("invalid fundamental context for %s",symbol)}
 		if input.Fundamental.RequestedAsOf != input.Technical.RequestedAsOf {return fmt.Errorf("fundamental cutoff differs from technical requested date")}
 		if input.Fundamental.Income.AnnouncementDate > input.Fundamental.RequestedAsOf {return fmt.Errorf("fundamental report announced after cutoff")}
 	}

@@ -100,28 +100,27 @@ func (h *Handler) conversationQuery(w http.ResponseWriter,r *http.Request) {
   }
   sendJSON(w,http.StatusOK,response)
   return
- } else {
-  if request.SessionID!="" {
-   if application.ValidateConversationSessionID(request.SessionID)!=nil {http.Error(w,"invalid conversation session",http.StatusBadRequest);return}
-   resolver,ok:=h.conversation.(ConversationSessionResolver)
-   if !ok {http.Error(w,"conversation session unavailable",http.StatusServiceUnavailable);return}
-   binding,resolveErr:=resolver.ResolveConversationSession(r.Context(),request.SessionID,"single-operator")
-   if resolveErr!=nil {http.Error(w,"conversation session not found",http.StatusNotFound);return}
-   if strings.Contains(request.Message,"上次") || strings.Contains(request.Message,"上一回") || refersToHistoricalResearchDay(request.Message) {
-    historyResolver,ok:=h.conversation.(ConversationSessionHistoryResolver)
-    if !ok {http.Error(w,"历史研究不可用，请指定 Run ID",http.StatusConflict);return}
-    history,historyErr:=historyResolver.ResolveConversationSessionHistory(r.Context(),request.SessionID,"single-operator")
-    if historyErr!=nil || len(history)==0 || history[0].RunID!=binding.RunID {
-     http.Error(w,"历史研究引用不可用",http.StatusConflict);return
-    }
-    selected,selectErr:=selectConversationHistoricalRun(request.Message,history,time.Now())
-    if selectErr!=nil {http.Error(w,"无法唯一定位历史研究，请指定 Run ID",http.StatusConflict);return}
-    binding=selected
-   }
-   request.Message="当前已授权的历史研究引用：run_id="+binding.RunID+"，symbol="+binding.Symbol+"，as_of="+binding.AsOf.Format(time.RFC3339)+"。仅可使用研究只读工具验证事实；不得启动新研究。用户问题："+request.Message
-  }
-  answer,err=h.conversation.Respond(r.Context(),request.Message)
  }
+ if request.SessionID!="" {
+  if application.ValidateConversationSessionID(request.SessionID)!=nil {http.Error(w,"invalid conversation session",http.StatusBadRequest);return}
+  resolver,ok:=h.conversation.(ConversationSessionResolver)
+  if !ok {http.Error(w,"conversation session unavailable",http.StatusServiceUnavailable);return}
+  binding,resolveErr:=resolver.ResolveConversationSession(r.Context(),request.SessionID,"single-operator")
+  if resolveErr!=nil {http.Error(w,"conversation session not found",http.StatusNotFound);return}
+  if strings.Contains(request.Message,"上次") || strings.Contains(request.Message,"上一回") || refersToHistoricalResearchDay(request.Message) {
+   historyResolver,ok:=h.conversation.(ConversationSessionHistoryResolver)
+   if !ok {http.Error(w,"历史研究不可用，请指定 Run ID",http.StatusConflict);return}
+   history,historyErr:=historyResolver.ResolveConversationSessionHistory(r.Context(),request.SessionID,"single-operator")
+   if historyErr!=nil || len(history)==0 || history[0].RunID!=binding.RunID {
+    http.Error(w,"历史研究引用不可用",http.StatusConflict);return
+   }
+   selected,selectErr:=selectConversationHistoricalRun(request.Message,history,time.Now())
+   if selectErr!=nil {http.Error(w,"无法唯一定位历史研究，请指定 Run ID",http.StatusConflict);return}
+   binding=selected
+  }
+  request.Message="当前已授权的历史研究引用：run_id="+binding.RunID+"，symbol="+binding.Symbol+"，as_of="+binding.AsOf.Format(time.RFC3339)+"。仅可使用研究只读工具验证事实；不得启动新研究。用户问题："+request.Message
+ }
+ answer,err=h.conversation.Respond(r.Context(),request.Message)
  if err!=nil {
   if errors.Is(err,context.Canceled)||errors.Is(err,context.DeadlineExceeded) {http.Error(w,"conversation interrupted",http.StatusGatewayTimeout);return}
   http.Error(w,"conversation unavailable",http.StatusServiceUnavailable);return

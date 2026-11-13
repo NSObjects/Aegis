@@ -49,30 +49,18 @@ func (m *ResearchManager) BuildPlan(ctx context.Context, artifact *synthesis.Art
 	known := debateArgumentIDs(state)
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
-		if err := ctx.Err(); err != nil { return nil, err }
-		response, err := m.Model.Generate(ctx, messages, opts...)
-		if err != nil { return nil, fmt.Errorf("generate research plan: %w", err) }
-		raw := strings.TrimSpace(managerAssistantText(response))
-		if raw == "" { lastErr = errors.New("research manager returned empty output") } else {
-			plan, decodeErr := decodeResearchPlan(raw)
-			if decodeErr != nil { lastErr = decodeErr } else if validationErr := Validate(&plan, artifact, state); validationErr == nil {
-                if languageErr := checkPlanLanguage(ctx, &plan); languageErr == nil {
-                    return &plan, nil
-                } else { lastErr = languageErr }
-            } else {
-				lastErr = fmt.Errorf("invalid research plan: %w", validationErr)
-				// Model correction was exhausted. Unknown IDs are unsupported
-				// provenance links, not evidence. Remove just those links, retain
-				// artifact-bound claims, and disclose the loss of provenance.
-				// Other schema and reference failures must remain fatal.
-				if attempt == 1 && ValidateForTrading(&plan, artifact) == nil {
-					corrected, removed := omitUnknownManagerLinks(plan, known)
-					if removed > 0 && Validate(&corrected, artifact, state) == nil && checkPlanLanguage(ctx, &corrected) == nil {
-                        return &corrected, nil
-                    }
-				}
-			}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
+		response, err := m.Model.Generate(ctx, messages, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("generate research plan: %w", err)
+		}
+		plan, planErr := acceptedPlan(ctx, strings.TrimSpace(managerAssistantText(response)), artifact, state, known, attempt)
+		if planErr == nil {
+			return plan, nil
+		}
+		lastErr = planErr
 		if attempt == 0 {
 			allowed, _ := json.Marshal(known)
 			messages = append(messages, response, schema.UserAgenticMessage(
@@ -81,6 +69,34 @@ func (m *ResearchManager) BuildPlan(ctx context.Context, artifact *synthesis.Art
 		}
 	}
 	return nil, lastErr
+}
+
+// acceptedPlan decodes and validates one manager candidate. When the final
+// attempt fails only on unknown provenance links, it retries once with those
+// links omitted: unknown IDs are unsupported provenance links, not evidence,
+// so remove just those links, retain artifact-bound claims, and disclose the
+// loss of provenance. Other schema and reference failures stay fatal.
+func acceptedPlan(ctx context.Context, raw string, artifact *synthesis.Artifact, state *debate.State, known []string, attempt int) (*ResearchPlan, error) {
+	if raw == "" {
+		return nil, errors.New("research manager returned empty output")
+	}
+	plan, err := decodeResearchPlan(raw)
+	if err != nil {
+		return nil, err
+	}
+	if validationErr := Validate(&plan, artifact, state); validationErr != nil {
+		if attempt == 1 && ValidateForTrading(&plan, artifact) == nil {
+			corrected, removed := omitUnknownManagerLinks(plan, known)
+			if removed > 0 && Validate(&corrected, artifact, state) == nil && checkPlanLanguage(ctx, &corrected) == nil {
+				return &corrected, nil
+			}
+		}
+		return nil, fmt.Errorf("invalid research plan: %w", validationErr)
+	}
+	if languageErr := checkPlanLanguage(ctx, &plan); languageErr != nil {
+		return nil, languageErr
+	}
+	return &plan, nil
 }
 
 func checkPlanLanguage(ctx context.Context, plan *ResearchPlan) error {

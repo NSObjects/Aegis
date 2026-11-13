@@ -28,6 +28,16 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 )
 
+func envOrDefault(
+	name string,
+	fallback string,
+) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
+}
+
 func TestWorkflow_Run_FullMultiAgentHostedIntegration(t *testing.T) {
 	if os.Getenv("AEGIS_FULL_MULTI_AGENT_E2E") != "1" {
 		t.Skip("set AEGIS_FULL_MULTI_AGENT_E2E=1 to run full multi-agent hosted E2E")

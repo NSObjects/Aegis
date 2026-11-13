@@ -31,7 +31,7 @@ func Validate(d *Decision) error {
 	switch d.Action {
 	case ActionWatch, ActionAvoid, ActionCandidate:
 	default:
-		return fmt.Errorf("invalid action: %s", d.Action)
+		return fmt.Errorf("invalid action: %q", d.Action)
 	}
 
 	if d.Confidence < 0 || d.Confidence > 1 {

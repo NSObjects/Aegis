@@ -73,49 +73,55 @@ func (s *AgenticSynthesizer) Synthesize(
 		if raw == "" {
 			return nil, errors.New("research synthesis model returned empty output")
 		}
-		synthesized, err := decodeSynthesis(raw)
-		if err == nil {
-			artifact := &Artifact{
-				Symbol: strings.TrimSpace(input.Symbol),
-				Market: input.Market,
-				Technical: input.Technical,
-				Event: input.Event,
-				Fundamental: input.Fundamental,
-				Synthesis: synthesized,
-			}
-			if validationErr := Validate(artifact); validationErr == nil {
-                if langErr:=checkSynthesisLanguage(ctx,synthesized);langErr==nil {
-                    return artifact,nil
-                }else{
-                    err=langErr
-                }
-            } else {
-				// An LLM can continue inventing "cross-domain" conflicts backed
-				// by a single domain even after a corrective prompt. Only after
-				// the retry is exhausted may we omit those unsupported *relations*.
-				// Every retained claim, reference and the whole artifact must
-				// still pass unchanged deterministic validation.
-				if attempt == 1 {
-					filtered, count := omitSingleDomainConflictCandidates(artifact)
-					if count > 0 && Validate(filtered) == nil && checkSynthesisLanguage(ctx,filtered.Synthesis)==nil {
-                        return filtered,nil
-                    }
-				}
-				err = fmt.Errorf("invalid research synthesis artifact: %w", validationErr)
-			}
+		artifact, artifactErr := synthesizedArtifact(ctx, input, raw, attempt)
+		if artifactErr == nil {
+			return artifact, nil
 		}
-		lastErr = err
+		lastErr = artifactErr
 		if attempt == 0 {
 			messages = append(messages,
 				response,
 				schema.UserAgenticMessage(fmt.Sprintf(
 					"Your previous JSON failed validation: %v. Return the complete corrected JSON object only. Preserve upstream facts and obey the original schema; in particular, every conflict must reference at least two genuinely supported distinct domains. If a claimed conflict is supported within only one domain, REMOVE that conflict and, if necessary, describe its uncertainty under risks. Do not attach an unrelated domain citation to satisfy validation. %s",
-                    err,researchlang.Correction,
+					lastErr, researchlang.Correction,
 				)),
 			)
 		}
 	}
 	return nil, lastErr
+}
+
+// synthesizedArtifact decodes and validates one synthesis candidate. An LLM
+// can continue inventing "cross-domain" conflicts backed by a single domain
+// even after a corrective prompt; only after the retry is exhausted may those
+// unsupported *relations* be omitted. Every retained claim, reference and the
+// whole artifact must still pass unchanged deterministic validation.
+func synthesizedArtifact(ctx context.Context, input Input, raw string, attempt int) (*Artifact, error) {
+	synthesized, err := decodeSynthesis(raw)
+	if err != nil {
+		return nil, err
+	}
+	artifact := &Artifact{
+		Symbol: strings.TrimSpace(input.Symbol),
+		Market: input.Market,
+		Technical: input.Technical,
+		Event: input.Event,
+		Fundamental: input.Fundamental,
+		Synthesis: synthesized,
+	}
+	if validationErr := Validate(artifact); validationErr != nil {
+		if attempt == 1 {
+			filtered, count := omitSingleDomainConflictCandidates(artifact)
+			if count > 0 && Validate(filtered) == nil && checkSynthesisLanguage(ctx, filtered.Synthesis) == nil {
+				return filtered, nil
+			}
+		}
+		return nil, fmt.Errorf("invalid research synthesis artifact: %w", validationErr)
+	}
+	if langErr := checkSynthesisLanguage(ctx, synthesized); langErr != nil {
+		return nil, langErr
+	}
+	return artifact, nil
 }
 
 
