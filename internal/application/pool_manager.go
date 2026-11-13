@@ -240,6 +240,13 @@ func (m *PoolManager) Resume(id string) (PoolRecord,error) {
 	rec, err := m.store.Get(id)
 	if err != nil { return PoolRecord{}, err }
 	if rec.State != PoolPaused && rec.State != PoolFailed { return PoolRecord{}, ErrPoolState }
+	// A completed-but-not-committed batch can be recovered. A failed
+	// batch must be retried on the same immutable slice, not skipped.
+	if rec.ActiveScanID != "" {
+		child,err := m.scans.Get(rec.ActiveScanID)
+		if err != nil { return PoolRecord{},err }
+		if child.State == ScanFailed { rec.ActiveScanID = "" }
+	}
 	rec.State = PoolRunning
 	rec.FailureCode = ""
 	rec.UpdatedAt = time.Now().UTC()
@@ -307,8 +314,8 @@ func (m *PoolManager) run(id string) {
 				if err := m.store.Save(rec); err != nil { return }
 				continue
 			}
-			// A failed batch never advances coverage. Resuming reissues that
-			// same slice; the failed child scan remains available for audit.
+			// A failed batch never advances coverage. Keep the failed child
+			// for audit and stop; operator resume retries the same symbols.
 			rec.ActiveScanID = ""
 			rec.UpdatedAt = time.Now().UTC()
 			if err := m.store.Save(rec); err != nil { return }
@@ -321,7 +328,14 @@ func (m *PoolManager) run(id string) {
 		if pause { m.stop(rec,PoolPaused,"OPERATOR_PAUSED"); return }
 		end := rec.NextOffset + poolBatchSize
 		if end > len(rec.Symbols) { end = len(rec.Symbols) }
-		batch,err := m.scans.Submit(m.ctx,rec.AsOf,rec.UniverseSource,rec.Symbols[rec.NextOffset:end])
+		var batch ScanRecord
+		var err error
+		for attempt:=0;attempt<3;attempt++ {
+			batch,err = m.scans.Submit(m.ctx,rec.AsOf,rec.UniverseSource,rec.Symbols[rec.NextOffset:end])
+			if err == nil { break }
+			if !strings.Contains(err.Error(),"already running") { break }
+			select { case <-m.ctx.Done(): return; case <-time.After(350*time.Millisecond): }
+		}
 		if err != nil {
 			m.stop(rec,PoolPaused,"SCAN_BUSY_OR_UNAVAILABLE")
 			return
