@@ -1,6 +1,7 @@
 package application
 
 import (
+ "fmt"
  "path/filepath"
  "testing"
  "time"
@@ -32,4 +33,22 @@ func TestScanInputSnapshotBindsPITStrategySourceAndSymbols(t *testing.T){
  variants[2].UniverseSource="USER_SUPPLIED"
  variants[3].Symbols=[]string{"600519.SH"}
  for i,v:=range variants{if ScanInputSnapshotSHA256(v)==base{t.Fatalf("variant %d did not change snapshot",i)}}
+}
+
+func TestScanHistorySourceFilterDoesNotLoseManualRuns(t *testing.T) {
+	store,err:=NewFileScanStore(filepath.Join(t.TempDir(),"scans"))
+	if err!=nil {t.Fatal(err)}
+	now:=time.Now().UTC()
+	for i:=0;i<130;i++ {
+		source:="TUSHARE_STOCK_BASIC_L_D_P"
+		if i==0 {source="USER_SUPPLIED"}
+		rec:=ScanRecord{ID:fmt.Sprintf("%032x",i+1),AsOf:"20261022",StrategyVersion:pullback.StrategyVersion,
+			State:ScanPending,UniverseSource:source,Symbols:[]string{"600519.SH"},
+			CreatedAt:now.Add(time.Duration(i)*time.Second),UpdatedAt:now.Add(time.Duration(i)*time.Second)}
+		if err:=store.Save(rec);err!=nil{t.Fatal(err)}
+	}
+	manual,err:=store.ListSource(20,"USER_SUPPLIED")
+	if err!=nil||len(manual)!=1||manual[0].UniverseSource!="USER_SUPPLIED"{t.Fatalf("missing manual source: %+v %v",manual,err)}
+	all,err:=store.List(20)
+	if err!=nil||len(all)!=20||all[0].UniverseSource=="USER_SUPPLIED"{t.Fatalf("unexpected unfiltered history: %+v %v",all,err)}
 }

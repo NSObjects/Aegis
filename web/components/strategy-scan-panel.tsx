@@ -85,7 +85,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 async function fetchScans(): Promise<ScanRecord[]> {
-  const result = await request<{ scans: unknown[] }>(`${base}/scans?limit=100`);
+  const result = await request<{ scans: unknown[] }>(`${base}/scans?limit=20&universe_source=USER_SUPPLIED`);
   if (!Array.isArray(result.scans)) throw Error("扫描历史返回格式无效");
   // The pool's 20-symbol child scans live in the same store; do not mix them
   // into the operator's manual-scan history.
