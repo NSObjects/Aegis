@@ -51,14 +51,19 @@ async function proxy(req: NextRequest, ctx: Context, method: "GET" | "POST") {
     upstreamHeaders.set("Content-Type", "application/json");
   } else if (parts.length === 0) {
     const entries = [...req.nextUrl.searchParams.entries()];
-    if (entries.some(([k]) => k !== "limit") || entries.length > 1)
+    if (entries.some(([k]) => !["limit","universe_source"].includes(k)) ||
+        new Set(entries.map(([key])=>key)).size !== entries.length)
       return NextResponse.json({ error: "unsupported scan filter" }, { status: 400, headers });
+    const source = req.nextUrl.searchParams.get("universe_source");
+    if (source !== null && source !== "USER_SUPPLIED")
+      return NextResponse.json({ error: "invalid scan source" }, { status: 400, headers });
     const limit = req.nextUrl.searchParams.get("limit");
     if (limit !== null) {
       if (!/^[1-9][0-9]?$|^100$/.test(limit))
         return NextResponse.json({ error: "invalid scan history limit" }, { status: 400, headers });
       url += `?limit=${limit}`;
     }
+    if (source !== null) url += (limit === null ? "?" : "&") + "universe_source=USER_SUPPLIED";
   } else if (req.nextUrl.search)
     return NextResponse.json({ error: "unsupported scan filter" }, { status: 400, headers });
 

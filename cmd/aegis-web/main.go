@@ -146,6 +146,15 @@ func main() {
 			log.Fatal(err)
 		}
 		handler.WithScanController(scans)
+		poolStore, err := application.NewFilePoolStore(filepath.Join(filepath.Dir(*path), "pools"))
+		if err != nil { log.Fatal(err) }
+		poolUniverse, err := technical.NewTushareClient(scanToken)
+		if err != nil { log.Fatal(err) }
+		poolCalendar, err := technical.NewTushareTradingCalendar(poolUniverse)
+		if err != nil { log.Fatal(err) }
+		pools, err := application.NewPoolManager(ctx, poolStore, scans, poolUniverse, poolCalendar)
+		if err != nil { log.Fatal(err) }
+		handler.WithPoolController(pools)
 		// The scheduler triggers the existing engines on trading days only. Its
 		// persisted (task, day) records make every trigger at-most-once per day,
 		// and interrupted RUNNING work is never silently re-triggered.

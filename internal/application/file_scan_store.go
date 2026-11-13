@@ -182,7 +182,12 @@ func (s *FileScanStore) ReconcileInterrupted() (int,error) {
 }
 
 // List returns bounded scan history newest first. Invalid records fail closed.
-func (s *FileScanStore) List(limit int)([]ScanRecord,error){
+func (s *FileScanStore) List(limit int)([]ScanRecord,error){return s.list(limit,"")}
+func (s *FileScanStore) ListSource(limit int,source string)([]ScanRecord,error){
+ if source!="USER_SUPPLIED"{return nil,errors.New("unsupported scan history source")}
+ return s.list(limit,source)
+}
+func (s *FileScanStore) list(limit int,source string)([]ScanRecord,error){
  if s==nil{return nil,errors.New("nil scan store")}
  if limit<1||limit>100{return nil,errors.New("scan history limit must be 1..100")}
  entries,err:=os.ReadDir(s.dir);if err!=nil{return nil,err}
@@ -193,6 +198,7 @@ func (s *FileScanStore) List(limit int)([]ScanRecord,error){
   if !validScanID(id){return nil,errors.New("invalid scan history filename")}
   rec,err:=s.Get(id);if err!=nil{return nil,err}
   if rec.ID!=id{return nil,errors.New("scan history id mismatch")}
+  if source!=""&&rec.UniverseSource!=source{continue}
   records=append(records,rec)
  }
  sort.Slice(records,func(i,j int)bool{

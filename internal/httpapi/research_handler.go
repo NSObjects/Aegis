@@ -48,6 +48,7 @@ type Handler struct {
 	localDev     bool
 	credentials  *settings.Store
 	scans        ScanController
+	pools        PoolController
 	watchlist    WatchlistStore
 	schedules    ScheduleController
 	monitors     MonitorController
@@ -100,6 +101,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if !h.localDev && !h.allowRequest(time.Now()) {
 		http.Error(w, "request rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+	if r.URL.Path == "/api/v1/pools" || strings.HasPrefix(r.URL.Path, "/api/v1/pools/") {
+		h.poolRoute(w, r)
 		return
 	}
 	if r.URL.Path == "/api/v1/scans" || strings.HasPrefix(r.URL.Path, "/api/v1/scans/") {

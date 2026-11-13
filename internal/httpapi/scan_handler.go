@@ -42,7 +42,31 @@ func (h *Handler) scanRoute(w http.ResponseWriter, r *http.Request) {
 				}
 				limit = n
 			}
-			records, err := h.scans.List(limit)
+			source := r.URL.Query().Get("universe_source")
+			if source != "" && source != "USER_SUPPLIED" {
+				http.Error(w, "invalid universe_source", http.StatusBadRequest)
+				return
+			}
+			if len(r.URL.Query()) > 2 || len(r.URL.Query()["limit"]) > 1 || len(r.URL.Query()["universe_source"]) > 1 {
+				http.Error(w, "invalid scan history filter", http.StatusBadRequest)
+				return
+			}
+			var records []application.ScanRecord
+			var err error
+			if source != "" {
+				if filtered, ok := h.scans.(interface{ ListSource(int,string)([]application.ScanRecord,error) }); ok {
+					records,err = filtered.ListSource(limit,source)
+				} else {
+					records,err = h.scans.List(limit)
+					if err == nil {
+						only := make([]application.ScanRecord,0,len(records))
+						for _,record := range records { if record.UniverseSource == source { only=append(only,record) } }
+						records=only
+					}
+				}
+			} else {
+				records,err = h.scans.List(limit)
+			}
 			if err != nil {
 				http.Error(w, "scan store unavailable", http.StatusInternalServerError)
 				return

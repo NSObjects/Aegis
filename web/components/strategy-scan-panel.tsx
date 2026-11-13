@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowRight, Database, Eye, Plus, RefreshCcw, Search, TriangleAlert } from "lucide-react";
 import { isAshareSymbol, isRunID } from "@/lib/live-contract";
+import MarketPoolPanel from "@/components/market-pool-panel";
 
 const base = "/api/workbench";
 type ScanState = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
@@ -84,10 +85,14 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 async function fetchScans(): Promise<ScanRecord[]> {
-  const result = await request<{ scans: unknown[] }>(`${base}/scans?limit=20`);
+  const result = await request<{ scans: unknown[] }>(`${base}/scans?limit=20&universe_source=USER_SUPPLIED`);
   if (!Array.isArray(result.scans)) throw Error("扫描历史返回格式无效");
-  const scans = result.scans.filter(isScan);
-  if (scans.length !== result.scans.length) throw Error("扫描历史记录未通过校验");
+  // The pool's 20-symbol child scans live in the same store; do not mix them
+  // into the operator's manual-scan history.
+  const entries = result.scans.filter((value): value is Record<string,unknown> =>
+    isObj(value) && value.universe_source === "USER_SUPPLIED");
+  const scans = entries.filter(isScan);
+  if (scans.length !== entries.length) throw Error("手动扫描历史记录未通过校验");
   return scans;
 }
 function validAsOf(value: string): boolean {
@@ -210,8 +215,9 @@ export default function StrategyScanPanel({
   }
 
   return <div className="scan-workspace">
+    <MarketPoolPanel onStartResearch={onStartResearch} onOpenWatchlist={onOpenWatchlist} researching={researching}/>
     <section className="surface scan-create" aria-label="指定股票范围策略扫描">
-      <div className="panel-head"><div><h2>策略扫描 · 趋势回踩 V1</h2><p>对手动指定的股票范围进行确定性筛选，不是全市场自动选股。</p></div><span className="badge blue">不调用 LLM</span></div>
+      <div className="panel-head"><div><h2>指定股票小范围扫描</h2><p>保留现有的 1–20 只手动验证入口；上方可发起主板范围扫描。</p></div><span className="badge blue">不调用 LLM</span></div>
       <form onSubmit={start} className="scan-form">
         <label>股票代码（1–20 只）
           <textarea value={symbolsText} onChange={e => setSymbolsText(e.target.value)} rows={3}

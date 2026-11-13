@@ -105,3 +105,8 @@ func (m *ScanManager) List(limit int)([]ScanRecord,error){
  if m==nil{return nil,errors.New("nil scan manager")}
  return m.store.List(limit)
 }
+
+func (m *ScanManager) ListSource(limit int, source string)([]ScanRecord,error){
+ if m==nil{return nil,errors.New("nil scan manager")}
+ return m.store.ListSource(limit,source)
+}
