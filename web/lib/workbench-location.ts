@@ -2,7 +2,7 @@
  * Browser-location contract for the single-operator Live research console.
  * URLs contain only view and opaque Run ID; never credentials or report data.
  */
-export type WorkbenchView = "workspace" | "overview" | "history" | "compare" | "watchlist" | "settings";
+export type WorkbenchView = "workspace" | "overview" | "history" | "compare" | "watchlist" | "scan" | "settings";
 
 export type WorkbenchLocation = {
   view: WorkbenchView;
@@ -15,7 +15,7 @@ const isRunId = (value: string | null): value is string =>
 export function readWorkbenchLocation(search: string): WorkbenchLocation {
   const params = new URLSearchParams(search);
   const requestedView = params.get("view");
-  const knownView = requestedView === "workspace" || requestedView === "overview" || requestedView === "history" || requestedView === "settings" || requestedView === "compare" || requestedView === "watchlist";
+  const knownView = requestedView === "workspace" || requestedView === "overview" || requestedView === "history" || requestedView === "settings" || requestedView === "compare" || requestedView === "watchlist" || requestedView === "scan";
   // The root route is the overview. An opaque Run ID keeps old deep links opening the report.
   const view: WorkbenchView = knownView
     ? requestedView as WorkbenchView
