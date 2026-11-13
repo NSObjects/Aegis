@@ -93,8 +93,9 @@ export default function MarketPoolPanel({
     const data = await request<{ pools: unknown[] }>("/pools?limit=20");
     if (!Array.isArray(data.pools)||!data.pools.every(isSummary))
       throw Error("全市场任务历史数据校验失败");
-    setHistory(data.pools);
-    setSelectedId(current=>current ?? data.pools[0]?.pool_id ?? null);
+    const pools = data.pools as PoolSummary[];
+    setHistory(pools);
+    setSelectedId(current=>current ?? pools[0]?.pool_id ?? null);
   },[]);
   useEffect(() => {
     let cancelled=false;
