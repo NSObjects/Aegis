@@ -77,7 +77,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     if (res.status === 401) throw Error("登录已失效，请重新登录");
     if (res.status === 503) throw Error("扫描服务不可用：请确认 Go API 已配置 TUSHARE_TOKEN 并重启服务");
-    if (res.status === 409) throw Error("已有扫描正在执行，请完成后重试");
+    if (res.status === 409) throw Error(url.includes("/watchlist") ? "该标的已在观察池（HTTP 409）" : "已有扫描正在执行（HTTP 409）");
     if (res.status === 404) throw Error("扫描记录不存在或已被删除");
     throw Error(`扫描接口返回 HTTP ${res.status}`);
   }
@@ -115,9 +115,11 @@ export default function StrategyScanPanel({
     setHistoryBusy(true);
     try {
       const result = await request<{ scans: unknown[] }>(`${base}/scans?limit=20`);
-      if (!Array.isArray(result.scans) || !result.scans.every(isScan)) throw Error("扫描历史返回格式无效");
-      setHistory(result.scans);
-      setSelectedId(current => current ?? result.scans[0]?.scan_id ?? null);
+      if (!Array.isArray(result.scans)) throw Error("扫描历史返回格式无效");
+      const scans = result.scans.filter(isScan);
+      if (scans.length !== result.scans.length) throw Error("扫描历史记录未通过校验");
+      setHistory(scans);
+      setSelectedId(current => current ?? scans[0]?.scan_id ?? null);
       setError("");
     } catch (e) {
       setError((e as Error).message);
