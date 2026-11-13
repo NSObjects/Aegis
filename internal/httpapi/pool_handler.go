@@ -41,11 +41,21 @@ func (h *Handler) poolRoute(w http.ResponseWriter,r *http.Request) {
 			// History omits full universe membership; GET by ID returns the
 			// immutable frozen membership if the operator needs an audit.
 			type summary struct {
-				application.PoolRecord
+				ID string `json:"pool_id"`
+				AsOf string `json:"as_of"`
+				State application.PoolState `json:"state"`
+				StrategyVersion string `json:"strategy_version"`
+				UniverseSource string `json:"universe_source"`
+				UniverseSHA256 string `json:"universe_sha256"`
 				Count int `json:"universe_count"`
+				NextOffset int `json:"next_offset"`
+				FailureCode string `json:"failure_code,omitempty"`
+				CreatedAt interface{} `json:"created_at"`
 			}
 			out:=make([]summary,0,len(pools))
-			for _,p:=range pools { out=append(out,summary{PoolRecord:p,Count:len(p.Symbols)}) }
+			for _,p:=range pools { out=append(out,summary{ID:p.ID,AsOf:p.AsOf,State:p.State,
+				StrategyVersion:p.StrategyVersion,UniverseSource:p.UniverseSource,UniverseSHA256:p.UniverseSHA256,
+				Count:len(p.Symbols),NextOffset:p.NextOffset,FailureCode:p.FailureCode,CreatedAt:p.CreatedAt}) }
 			sendJSON(w,http.StatusOK,map[string]any{"pools":out})
 			return
 		}
