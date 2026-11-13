@@ -83,6 +83,13 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+async function fetchScans(): Promise<ScanRecord[]> {
+  const result = await request<{ scans: unknown[] }>(`${base}/scans?limit=20`);
+  if (!Array.isArray(result.scans)) throw Error("扫描历史返回格式无效");
+  const scans = result.scans.filter(isScan);
+  if (scans.length !== result.scans.length) throw Error("扫描历史记录未通过校验");
+  return scans;
+}
 function validAsOf(value: string): boolean {
   if (!/^\d{8}$/.test(value) || value > chinaToday()) return false;
   const year = Number(value.slice(0, 4)), month = Number(value.slice(4, 6)), day = Number(value.slice(6, 8));
@@ -114,10 +121,7 @@ export default function StrategyScanPanel({
   const refresh = useCallback(async () => {
     setHistoryBusy(true);
     try {
-      const result = await request<{ scans: unknown[] }>(`${base}/scans?limit=20`);
-      if (!Array.isArray(result.scans)) throw Error("扫描历史返回格式无效");
-      const scans = result.scans.filter(isScan);
-      if (scans.length !== result.scans.length) throw Error("扫描历史记录未通过校验");
+      const scans = await fetchScans();
       setHistory(scans);
       setSelectedId(current => current ?? scans[0]?.scan_id ?? null);
       setError("");
@@ -126,7 +130,16 @@ export default function StrategyScanPanel({
     } finally { setHistoryBusy(false); }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchScans().then(scans => {
+      if (cancelled) return;
+      setHistory(scans);
+      setSelectedId(current => current ?? scans[0]?.scan_id ?? null);
+      setError("");
+    }).catch(e => { if (!cancelled) setError((e as Error).message); });
+    return () => { cancelled = true; };
+  }, []);
 
   const selectedFromHistory = useMemo(() => history?.find(s => s.scan_id === selectedId) ?? null, [history, selectedId]);
   const selected = detail?.id === selectedId ? detail.scan : selectedFromHistory;
