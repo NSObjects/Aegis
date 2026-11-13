@@ -46,6 +46,28 @@ type ScanComparisonIncomparable struct {
 	Source  *ScanComparisonSource `json:"source,omitempty"`
 }
 
+func comparisonIncomparableNote(result pullback.Result) string {
+	if result.Verdict != pullback.InsufficientData {
+		return "NOT_SELECTED"
+	}
+	switch result.Reason {
+	case "MISSING_BARS":
+		return "METRICS_INSUFFICIENT_BARS"
+	case "STALE_OR_MISSING_CLOSE":
+		return "STALE_OR_MISSING_CLOSE"
+	case "UNSUPPORTED_PRICE_BASIS":
+		return "UNSUPPORTED_PRICE_BASIS"
+	case "MISSING_PIT_ADJUSTMENT":
+		return "MISSING_PIT_ADJUSTMENT"
+	case "INVALID_PIT_ADJUSTMENT":
+		return "INVALID_PIT_ADJUSTMENT"
+	case "HALTED_OR_NO_VOLUME":
+		return "HALTED_OR_NO_VOLUME"
+	default:
+		return "INSUFFICIENT_DATA"
+	}
+}
+
 // Comparison builds the ranked view for a completed scan. Unfinished scans,
 // missing snapshots and digest failures fail closed; a digest mismatch means
 // the persisted inputs no longer match the record and the whole comparison is
@@ -84,23 +106,27 @@ func (m *ScanManager) Comparison(scanID string) (ScanComparison, error) {
 			return ScanComparison{}, err
 		}
 		source := ScanComparisonSource{SHA256: ref.SHA256, BarsCount: ref.BarsCount, EffectiveAsOf: ref.EffectiveAsOf}
-		// The scan cutoff, not each symbol's own effective date, defines the one
-		// comparison clock; stale fallback observations drop out of the ranking.
+
+		// Non-selected observations do not need ranking metrics. Preserve their
+		// actual exclusion reason instead of trying to compute ratios from
+		// missing/misaligned PIT factors and failing the entire comparison.
+		if result.Verdict != pullback.Selected {
+			incomparable = append(incomparable, ScanComparisonIncomparable{
+				Symbol: symbol, Verdict: result.Verdict, Reason: result.Reason,
+				Note: comparisonIncomparableNote(result), Source: &source,
+			})
+			continue
+		}
+
+		// A selected verdict implies validated RAW bars, PIT factors, and an
+		// exact as-of close. If those invariants no longer hold, fail closed.
 		factors := make([]pullback.AdjustmentFactor, len(obs.PITFactors))
 		for i, f := range obs.PITFactors {
 			factors[i] = pullback.AdjustmentFactor{TradeDate: f.TradeDate, Factor: f.Factor}
 		}
 		metrics, mErr := pullback.ComputeMetrics(record.AsOf, obs.Bars, factors)
-		if errors.Is(mErr, pullback.ErrMetricsInsufficientBars) {
-			incomparable = append(incomparable, ScanComparisonIncomparable{Symbol: symbol, Verdict: result.Verdict, Reason: result.Reason, Note: "METRICS_INSUFFICIENT_BARS", Source: &source})
-			continue
-		}
 		if mErr != nil {
 			return ScanComparison{}, mErr
-		}
-		if result.Verdict != pullback.Selected {
-			incomparable = append(incomparable, ScanComparisonIncomparable{Symbol: symbol, Verdict: result.Verdict, Reason: result.Reason, Note: "NOT_SELECTED", Source: &source})
-			continue
 		}
 		candidates = append(candidates, pullback.Candidate{Symbol: symbol, Metrics: metrics})
 		rankedSources[symbol] = source
