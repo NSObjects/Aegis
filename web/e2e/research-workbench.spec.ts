@@ -22,7 +22,10 @@ async function signIn(page: Page) {
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.status(), "login POST must succeed before showing the Live workspace").toBe(200);
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "工作台", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "发起新研究", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "研究详情", exact: true })).toBeVisible();
 }
 
 async function submit(page: Page, query = "") {
@@ -189,8 +192,8 @@ test("real browser submits a run, receives stage SSE, reads artifact, and restor
   expect(replayed).toContain("event: research_stage");
   await page.reload();
   await revealRunDiagnostics(page);
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await expect(page.getByRole("heading", { name: "研究详情" })).toBeVisible();
+  await page.getByRole("button", { name: "研究档案" }).click();
   await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0,12) }).first()).toBeVisible();
   await page.locator(".live-history-row").filter({ hasText: id.slice(0,12) }).click();
   await expect(page.locator(".live-run-fields")).toContainText(id);
@@ -204,7 +207,7 @@ test("cancelled research never exposes an artifact", async ({ page }) => {
   await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(409);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 });
 
 test("provider failure is terminal and cannot be presented as success", async ({ page }) => {
@@ -219,12 +222,12 @@ test("provider failure is terminal and cannot be presented as success", async ({
 
   const artifact = await page.request.get(`/api/workbench/runs/${id}/artifact`);
   expect(artifact.status()).toBe(409);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 });
 
 test("settings lets a signed-in operator save provider credentials without echoing keys", async ({ page }) => {
   await signIn(page);
-  await page.getByRole("button", { name: "凭证设置" }).click();
+  await page.getByRole("button", { name: "数据源设置" }).click();
   await expect(page.getByRole("heading", { name: "模型与数据源凭证" })).toBeVisible();
   const groups = page.locator(".provider-settings-group");
   await expect(groups).toHaveCount(3);
@@ -250,7 +253,7 @@ test("settings lets a signed-in operator save provider credentials without echoi
 
   await page.reload();
   await revealRunDiagnostics(page);
-  await page.getByRole("button", { name: "凭证设置" }).click();
+  await page.getByRole("button", { name: "数据源设置" }).click();
   await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
   await expect(page.getByLabel("TuShare Token")).toHaveValue("");
   await expect(page.locator(".provider-settings-row").filter({ hasText: "DeepSeek" })).toContainText("已配置");
@@ -264,15 +267,15 @@ test("Live Run permalink, refresh and browser back/forward restore the correct w
   await expect(page).toHaveURL(new RegExp(`\\?run=${id}$`));
   await expect(page.locator(".live-run-fields")).toContainText(id);
 
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await page.getByRole("button", { name: "研究档案" }).click();
   await expect(page).toHaveURL(/\?view=history$/);
-  await expect(page.getByRole("heading", { name: "研究历史" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "研究档案" })).toBeVisible();
 
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`\\?run=${id}$`));
   await expect(page.locator(".live-run-fields")).toContainText(id);
   await page.goForward();
-  await expect(page.getByRole("heading", { name: "研究历史" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "研究档案" })).toBeVisible();
 
   await page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) }).click();
   await page.reload();
@@ -282,7 +285,7 @@ test("Live Run permalink, refresh and browser back/forward restore the correct w
 
   await page.goto("/?view=settings");
   await revealRunDiagnostics(page);
-  await expect(page.getByRole("heading", { name: "数据源与模型凭证" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "数据源设置", exact: true })).toBeVisible();
   await page.goto(`/?run=${id}`);
   await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText(id);
@@ -296,7 +299,7 @@ test("unknown Live Run permalink never substitutes the latest report", async ({ 
   await revealRunDiagnostics(page);
   await expect(page.getByText(`找不到任务 ${unknown}`, { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 });
 
 
@@ -311,7 +314,7 @@ test("narrow viewport retains Run deep-link isolation across history and browser
   await revealRunDiagnostics(page);
   await expect(page.getByText("找不到任务 " + unknown, { exact: false })).toBeVisible();
   await expect(page.locator(".live-run-fields")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
   // Mobile sidebar navigation is hidden at 375px; use the same addressable history route.
   await page.goto("/?view=history");
   await expect(page).toHaveURL(/view=history$/);
@@ -341,7 +344,8 @@ test("Live structured report reads Go-shaped fixture fields without fabricated f
   await expect(page.locator("#report-ledger")).toContainText("领域引用（无具体事件 ID）");
   await expect(page.locator("#report-portfolio")).toContainText("NOT_PROVIDED · 未知（不能解释为零持仓）");
   await expect(page.locator("#report-portfolio")).toContainText("FIXTURE_NO_REAL_ACCOUNT");
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeEnabled();
+  await page.locator("details.live-export-menu > summary").click();
+  await expect(page.getByRole("button", { name: "原始工件（JSON）" })).toBeEnabled();
   await page.getByText("高级：查看后端原始 JSON 工件").click();
   await expect(page.getByText("完整 Typed Artifact")).toBeVisible();
 });
@@ -383,7 +387,7 @@ test("failed and cancelled studies can be researched again without replaying old
   await signIn(page);
   const failed = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
   await page.getByRole("button", { name: "再次研究该标的" }).click();
   await expect(page.getByLabel("研究关注点（可选）")).toHaveValue("");
   await page.getByRole("button", { name: "启动真实研究" }).click();
@@ -395,7 +399,7 @@ test("failed and cancelled studies can be researched again without replaying old
   await page.goto("/?run=" + failed);
   await revealRunDiagnostics(page);
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED");
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 
   const held = await submit(page, "hold fixture");
   await page.getByRole("button", { name: "请求取消" }).click();
@@ -462,7 +466,7 @@ test("failed and cancelled Go Runs show only observed stage failures, never infe
   await expect(trace.locator(".live-trace-error")).toContainText("Event");
   await expect(trace.locator(".live-trace-stage").filter({ hasText: "Event" })).toContainText("失败");
   await expect(trace.locator(".live-trace-stage a.live-trace-report-link")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出真实 JSON" })).toBeDisabled();
+  await expect(page.locator("details.live-export-menu")).toHaveCount(0);
 
   const held = await submit(page, "hold fixture");
   await page.getByRole("button", { name: "请求取消" }).click();
@@ -565,6 +569,29 @@ test("NO_DATA never draws a synthetic OHLC candle", async ({ page }) => {
 });
 
 
+test("report shortcut compares the current Run with the nearest previous completed Run without starting another task", async ({ page }) => {
+  await signIn(page);
+  const previous = await submit(page, "technical snapshot fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const current = await submit(page, "historical comparison fixture");
+  await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
+  const posts: string[] = [];
+  const historyQueries: string[] = [];
+  page.on("request", req => {
+    if (req.url().includes("/api/workbench/runs") && req.method() === "POST") posts.push(req.url());
+    if (req.url().includes("/api/workbench/runs?") && req.method() === "GET") historyQueries.push(req.url());
+  });
+  await page.getByRole("button", { name: "判断变化", exact: true }).click();
+  await expect(page).toHaveURL("/?view=compare&left=" + previous + "&right=" + current);
+  await expect(page.getByLabel("基准研究")).toHaveValue(previous);
+  await expect(page.getByLabel("对比研究")).toHaveValue(current);
+  const comparison = page.getByRole("region", { name: "历史研究对比" });
+  await expect(comparison.getByRole("table", { name: "市场环境对比" })).toContainText("MIXED");
+  await expect(comparison.getByRole("table", { name: "市场环境对比" })).toContainText("RISK_OFF");
+  expect(historyQueries.some(url => url.includes("symbol=600519.SH") && url.includes("state=COMPLETED"))).toBe(true);
+  expect(posts).toEqual([]);
+});
+
 test("two completed research runs compare source-owned conclusion, market, technical, event and risk facts", async ({ page }) => {
   await signIn(page);
   const baseline = await submit(page, "technical snapshot fixture");
@@ -575,7 +602,9 @@ test("two completed research runs compare source-owned conclusion, market, techn
   page.on("request", req => {
     if (req.url().includes("/api/workbench/runs") && req.method() === "POST") methods.push("POST");
   });
-  await page.getByRole("button", { name: "研究对比", exact: true }).click();
+  await page.getByRole("button", { name: "工作台", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "对比研究", exact: true }).click();
   await expect(page.getByRole("heading", { name: "两次研究记录对比" })).toBeVisible();
   await page.getByLabel("基准研究").selectOption(baseline);
   await page.getByLabel("对比研究").selectOption(followup);
@@ -642,11 +671,14 @@ test("overview is authenticated, URL-addressable and opens the same completed Ru
   await signIn(page);
   const id = await submit(page, "technical snapshot fixture");
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
-  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  await page.getByRole("button", { name: "工作台", exact: true }).click();
   await expect(page).toHaveURL("/?view=overview");
   const overview = page.getByRole("region", { name: "研究任务概览" });
-  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "工作台" })).toBeVisible();
   await expect(overview.getByText("样本最多 100 条", { exact: false })).toBeVisible();
+  const activity = overview.locator(".run-overview-activity-disclosure");
+  await expect(activity).not.toHaveAttribute("open");
+  await activity.locator("summary").click();
   await expect(overview.getByRole("img", { name: "最近七个 UTC 日", exact: false })).toBeVisible();
   const list = overview.getByRole("region", { name: "近期研究任务列表" });
   await list.getByRole("textbox", { name: "筛选股票或任务 ID" }).fill(id);
@@ -658,10 +690,10 @@ test("overview is authenticated, URL-addressable and opens the same completed Ru
   await expect(page.getByRole("heading", { name: /的研究判断$/ })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL("/?view=overview");
-  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "工作台" })).toBeVisible();
   await page.reload();
   await revealRunDiagnostics(page);
-  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "工作台" })).toBeVisible();
   await overview.getByRole("button", { name: "对比研究" }).click();
   await expect(page).toHaveURL("/?view=compare");
 });
@@ -672,7 +704,7 @@ test("overview active and failed filters open live progress or exact failure, wi
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
   const held = await submit(page, "hold fixture");
   await expect(page.locator(".live-run-fields")).toContainText(held);
-  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  await page.getByRole("button", { name: "工作台", exact: true }).click();
   const overview = page.getByRole("region", { name: "研究任务概览" });
   const list = overview.getByRole("region", { name: "近期研究任务列表" });
   const filter = overview.getByRole("group", { name: "研究任务状态筛选" });
@@ -686,7 +718,7 @@ test("overview active and failed filters open live progress or exact failure, wi
   await expect(page.getByRole("region", { name: "Agent 执行轨迹" })).toBeVisible();
   await page.getByRole("button", { name: "请求取消" }).click();
   await expect(page.locator(".live-run-fields")).toContainText("已取消", { timeout: 20_000 });
-  await page.getByRole("button", { name: "研究概览", exact: true }).click();
+  await page.getByRole("button", { name: "工作台", exact: true }).click();
   await filter.getByRole("button", { name: "失败" }).click();
   await list.getByRole("textbox", { name: "筛选股票或任务 ID" }).fill(failed);
   await expect(list.locator(".run-overview-row")).toHaveCount(1);
@@ -708,11 +740,11 @@ test("overview with a list of no records shows an empty state, not fabricated KP
   await page.getByLabel("工作台访问口令").fill(password);
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
   const overview = page.getByRole("region", { name: "研究任务概览" });
-  await expect(overview.getByRole("heading", { name: "研究任务总览" })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "工作台" })).toBeVisible();
   await expect(overview.getByText("暂无已保存的研究任务")).toBeVisible();
   await expect(overview.locator(".run-overview-row")).toHaveCount(0);
   await overview.getByRole("button", { name: "发起第一项研究" }).click();
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "研究详情" })).toBeVisible();
   await expect(page.getByLabel("股票代码")).toBeVisible();
 });
 
@@ -726,6 +758,15 @@ test("completed research defaults to a readable brief with expandable source cha
   await expect(overview.getByRole("region",{name:"研究关键依据"})).toBeVisible();
   await expect(overview.getByRole("region",{name:"研究风险与不确定性"})).toBeVisible();
   await expect(page.getByRole("heading",{name:"完整研究章节"})).toBeVisible();
+  const evidence = page.locator("#report-evidence");
+  await expect(evidence).not.toHaveAttribute("open");
+  await page.getByRole("button", { name: "完整依据" }).click();
+  await expect(evidence).toHaveAttribute("open");
+  const followUp = page.locator("#research-follow-up");
+  await expect(followUp).not.toHaveAttribute("open");
+  await followUp.locator(":scope > summary").click();
+  await expect(followUp).toHaveAttribute("open");
+  await expect(followUp.getByRole("checkbox", { name: /针对当前研究 Run/ })).toBeChecked();
   const manager = page.locator("#chapter-manager");
   await expect(manager).not.toHaveAttribute("open");
   await manager.locator("summary").click();
@@ -742,7 +783,7 @@ test("research history filters loaded runs without hiding source data or inventi
   await signIn(page);
   const id = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await page.getByRole("button", { name: "研究档案" }).click();
   const rows = page.locator(".live-history-row");
   await expect(rows.filter({ hasText: id.slice(0, 12) })).toBeVisible();
   await page.getByLabel("按股票代码筛选").fill("000000");
@@ -761,7 +802,7 @@ test("history uses server paging and keeps a selected Run separate from the list
   await signIn(page);
   const id = await submit(page);
   await expect(page.locator(".live-run-fields")).toContainText("已完成", { timeout: 25_000 });
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await page.getByRole("button", { name: "研究档案" }).click();
   await expect(page.getByRole("button", { name: "上一页" })).toBeDisabled();
   // The fixture persists runs created by earlier tests, so additional pages may exist.
   await expect(page.locator(".live-history-row").filter({ hasText: id.slice(0, 12) })).toBeVisible();
@@ -776,7 +817,7 @@ test("research history displays the persisted failure code for the correct run",
   await signIn(page);
   const failedId = await submit(page, "fail provider fixture");
   await expect(page.locator(".live-run-fields")).toContainText("RESEARCH_FAILED", { timeout: 25_000 });
-  await page.getByRole("button", { name: "研究历史" }).click();
+  await page.getByRole("button", { name: "研究档案" }).click();
   const failedRow = page.locator(".live-history-row").filter({ hasText: failedId.slice(0, 12) });
   await expect(failedRow).toContainText("失败");
   await expect(failedRow.locator(".live-history-failure")).toContainText("RESEARCH_FAILED");

@@ -7,7 +7,7 @@ async function signIn(page: Page) {
   await expect(page.getByRole("heading", { name: "AEGIS · 研究工作台" })).toBeVisible();
   await page.getByLabel("工作台访问口令").fill(password);
   await page.getByRole("button", { name: "解锁研究工作台" }).click();
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
 }
 
 async function openWatchlist(page: Page) {

@@ -3,6 +3,46 @@ import type { LiveReport, ReportCard, ReportField } from "./live-report";
 /** Presentation-only projection. All text remains directly traceable to a
  * field or entry in the same Go Run. No LLM rewriting or inferred advice. */
 export type BriefBlock = { title: string; lines: string[]; source: string };
+export type BriefBlockSummary = { blocks: BriefBlock[]; omittedLines: number };
+
+/** Select a small, source-diverse preview while preserving the complete source blocks for the appendix. */
+export function summarizeBriefBlocks(blocks: BriefBlock[], maxLines = 3): BriefBlockSummary {
+  const limit = Math.max(0, Math.floor(maxLines));
+  const totalLines = blocks.reduce((count, block) => count + block.lines.length, 0);
+  const candidates = blocks.filter(block => block.lines.length > 0);
+  const visible = candidates.map(block => ({ ...block, lines: [] as string[] }));
+  let visibleLines = 0;
+
+  if (limit > 0 && candidates.length >= limit) {
+    // When sources outnumber preview slots, sample across the full source list
+    // instead of accidentally showing only the first few sources.
+    const indexes = limit === 1
+      ? [0]
+      : Array.from({ length: limit }, (_, slot) =>
+          Math.round(slot * (candidates.length - 1) / (limit - 1)));
+    for (const index of indexes) {
+      visible[index].lines.push(candidates[index].lines[0]);
+      visibleLines++;
+    }
+  } else {
+    // When there are fewer sources than slots, round-robin through their lines.
+    for (let lineIndex = 0; visibleLines < limit; lineIndex++) {
+      let foundLine = false;
+      for (let blockIndex = 0; blockIndex < candidates.length && visibleLines < limit; blockIndex++) {
+        const line = candidates[blockIndex].lines[lineIndex];
+        if (line === undefined) continue;
+        visible[blockIndex].lines.push(line);
+        visibleLines++;
+        foundLine = true;
+      }
+      if (!foundLine) break;
+    }
+  }
+  return {
+    blocks: visible.filter(block => block.lines.length > 0),
+    omittedLines: Math.max(0, totalLines - visibleLines),
+  };
+}
 export type ResearchBrief = {
   summary: string | null;
   conclusion: string | null;
@@ -22,7 +62,7 @@ const match = (fields: ReportField[], name: string): string | null => fields.fin
 function gather(c: ReportCard | undefined, names: string[], title: string): BriefBlock | null {
   if (!c) return null;
   const lines = c.entries.filter(e => names.some(name => e.label.includes(name)))
-    .map(e => e.body).filter(Boolean).slice(0, 5);
+    .map(e => e.body).filter(Boolean);
   return lines.length ? { title, lines, source: c.title } : null;
 }
 export function readResearchBrief(report: LiveReport): ResearchBrief {

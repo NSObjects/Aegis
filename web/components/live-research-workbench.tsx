@@ -11,6 +11,7 @@ import {
   type LiveArtifact, type LiveRun, type LiveSession, type LiveStageEvent,
 } from "@/lib/live-contract";
 import { cn } from "@/lib/utils";
+import { findPreviousComparableRun } from "@/lib/run-comparison";
 import { renderResearchMarkdown } from "@/lib/research-markdown";
 import ProviderSettings from "@/components/provider-settings";
 import ResearchConversationPanel from "@/components/research-conversation-panel";
@@ -26,10 +27,19 @@ const base = "/api/workbench";
 const states: Record<LiveRun["state"], string> = {
   PENDING: "等待执行", RUNNING: "研究中", COMPLETED: "已完成", FAILED: "失败", CANCELLED: "已取消",
 };
+const modeLabel = (mode: string) => ({
+  DECISION: "个股决策研究",
+  PORTFOLIO_REVIEW: "组合复核",
+  RESEARCH: "研究分析",
+}[mode] ?? mode.replaceAll("_", " "));
 const statusColors: Record<LiveRun["state"], string> = {
   PENDING: "blue", RUNNING: "blue", COMPLETED: "green", FAILED: "red", CANCELLED: "gray",
 };
-const formatDate = (value: string | undefined) => value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "—";
+const formatDate = (value: string | undefined) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "时间不可用" : date.toLocaleString("zh-CN", { hour12: false });
+};
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { cache: "no-store", credentials: "same-origin", ...init });
@@ -68,7 +78,7 @@ export default function LiveResearchWorkbench() {
   const [artifactRecord, setArtifactRecord] = useState<{ runId: string; value: LiveArtifact } | null>(null);
   const events = eventRecord?.runId === selectedId ? eventRecord.values : [];
   const artifact = artifactRecord?.runId === selectedId ? artifactRecord.value : null;
-  const [view, setView] = useState<WorkbenchView>("workspace");
+  const [view, setView] = useState<WorkbenchView>("overview");
   const [comparisonPair, setComparisonPair] = useState<{leftId:string|null;rightId:string|null}>({leftId:null,rightId:null});
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -97,6 +107,42 @@ export default function LiveResearchWorkbench() {
     setComparisonPair({leftId, rightId});
     setView("compare");
   }, []);
+
+  const compareWithPrevious = useCallback(async (runId: string) => {
+    const current = runs.find(run => run.run_id === runId && run.state === "COMPLETED");
+    if (!current) {
+      openComparison(runId, null);
+      return;
+    }
+    const candidates = new Map<string, LiveRun>();
+    let foundCurrent = false;
+    let offset = 0;
+    try {
+      // The default Run list is capped at 100 across all symbols. Query the
+      // selected symbol's persisted history and page until its prior Run is found.
+      for (let page = 0; page < 10; page++) {
+        const params = new URLSearchParams({ limit: "100", offset: String(offset), symbol: current.symbol, state: "COMPLETED" });
+        const data = await jsonRequest<{ runs: unknown[]; has_more?: boolean }>(`${base}/runs?${params}`);
+        const pageRuns = Array.isArray(data.runs) ? data.runs.filter(isLiveRun) : [];
+        for (const run of pageRuns) candidates.set(run.run_id, run);
+        foundCurrent ||= pageRuns.some(run => run.run_id === runId);
+        if (foundCurrent) {
+          const previous = findPreviousComparableRun([...candidates.values()], runId);
+          if (previous) {
+            openComparison(previous.run_id, runId);
+            return;
+          }
+        }
+        if (data.has_more !== true || pageRuns.length === 0) break;
+        offset += pageRuns.length;
+      }
+    } catch {
+      // If history lookup is unavailable, fall back to the already loaded sample.
+    }
+    const available = foundCurrent ? [...candidates.values()] : runs;
+    const previous = findPreviousComparableRun(available, runId);
+    openComparison(previous?.run_id ?? runId, previous ? runId : null);
+  }, [runs, openComparison]);
 
   const refresh = useCallback(async () => {
     const data = await jsonRequest<{ runs: unknown[] }>(`${base}/runs`);
@@ -314,28 +360,27 @@ export default function LiveResearchWorkbench() {
   return <div className="workspace live-workspace">
     <aside className="sidebar" aria-label="实时研究导航">
       <div className="brand"><span className="brand-mark"><Radar size={24}/></span><div><div className="brand-title">AEGIS<span style={{color:"#7ceac7"}}>.</span></div><div className="brand-sub">研究判断与证据</div></div></div>
-      <nav aria-label="研究导航"><div className="nav-label">WORKSPACE</div><button type="button" onClick={()=>navigate("overview")} className={cn("nav-item",view==="overview"&&"active")}><LayoutDashboard size={17}/><span>研究概览</span></button><button type="button" onClick={()=>navigate("workspace", selectedId)} className={cn("nav-item",view==="workspace"&&"active")}><Radar size={17}/><span>研究工作区</span></button><button type="button" onClick={()=>navigate("history")} className={cn("nav-item",view==="history"&&"active")}><FileClock size={17}/><span>研究历史</span><span className="nav-count">{runs.length}</span></button><button type="button" onClick={()=>navigate("compare")} className={cn("nav-item",view==="compare"&&"active")}><ArrowLeftRight size={17}/><span>研究对比</span></button><button type="button" onClick={()=>navigate("watchlist")} className={cn("nav-item",view==="watchlist"&&"active")}><Eye size={17}/><span>观察池</span></button><button type="button" onClick={()=>navigate("settings")} className={cn("nav-item",view==="settings"&&"active")}><ShieldCheck size={17}/><span>凭证设置</span></button></nav>
-      <div className="sidebar-sep"/><div className="watch-title">最新研究 <span>LIVE</span></div><div className="live-side-list">{runs.slice(0,12).map(r=><button type="button" key={r.run_id} onClick={()=>{navigate("workspace",r.run_id);setError("");}} className={cn("live-side-run",selectedId===r.run_id&&"chosen")}><strong>{r.symbol}</strong><small>{states[r.state]} · {formatDate(r.created_at)}</small></button>)}{runs.length===0&&<p className="live-empty">尚无真实研究任务</p>}</div>
-      <div className="sidebar-bottom"><div className="terminal-note"><ShieldCheck size={18}/><span><strong>研究服务已连接</strong><br/>研究结果由服务端生成并留存</span></div><button type="button" className="live-signout" onClick={()=>void signOut()}><LogOut size={15}/><span>退出会话</span></button></div>
+      <nav aria-label="研究导航"><div className="nav-label">工作空间</div><button type="button" onClick={()=>navigate("overview")} className={cn("nav-item",(view==="overview"||view==="workspace")&&"active")}><LayoutDashboard size={17}/><span>工作台</span></button><button type="button" onClick={()=>navigate("history")} className={cn("nav-item",view==="history"&&"active")}><FileClock size={17}/><span>研究档案</span></button><button type="button" onClick={()=>navigate("watchlist")} className={cn("nav-item",view==="watchlist"&&"active")}><Eye size={17}/><span>观察池</span></button><button type="button" onClick={()=>navigate("settings")} className={cn("nav-item",view==="settings"&&"active")}><ShieldCheck size={17}/><span>数据源设置</span></button></nav>
+      <div className="sidebar-bottom"><div className="terminal-note"><ShieldCheck size={18}/><span><strong>研究数据可追溯</strong><br/>来自服务端记录，不含交易执行</span></div><button type="button" className="live-signout" onClick={()=>void signOut()}><LogOut size={15}/><span>退出会话</span></button></div>
     </aside>
-    <main className="main-area"><header className="topbar"><div className="breadcrumb"><span>研究工作台</span><ChevronRight size={13}/><strong>{view==="overview"?"研究概览":view==="history"?"研究历史":view==="compare"?"研究对比":view==="watchlist"?"观察池":view==="settings"?"凭证设置":"实时研究"}</strong></div><div className="topbar-spacer"/><span className={`badge ${listSyncError ? "red" : lastListSync ? "green" : "gray"}`} role="status"><CircleDot size={12}/>{listSyncError ? "研究库同步失败" : lastListSync ? "研究库已同步" : "研究库同步中"}</span><button className="icon-button" aria-label="刷新" type="button" onClick={()=>void refresh().catch(e=>{setListSyncError((e as Error).message);setError((e as Error).message);})}><RefreshCcw size={16}/></button></header>
-    <div className="content live-content"><div className="page-heading"><div><div className="eyebrow">AEGIS · 研究工作台</div><h1>{view==="overview"?"研究任务概览":view==="history"?"研究历史":view==="compare"?"研究历史对比":view==="watchlist"?"观察池":view==="settings"?"数据源与模型凭证":"实时研究工作台"}</h1><p>{view==="settings"?"凭证加密保存在 Go 服务端；输入后立即清空表单，不回显密钥":view==="workspace"?"围绕结论、依据、风险与未知项组织研究结果":view==="watchlist"?"保存标的、理由与关注条件，并从池内直接启动研究":"查看已完成研究、历史记录与数据源设置"}</p></div><div className="heading-right">{view==="workspace"&&<button type="button" className="btn primary" onClick={focusNewResearch}><Search size={14}/>发起新研究</button>}<button className="btn" type="button" disabled={!artifact||selected?.state!=="COMPLETED"} onClick={downloadArtifact}><Download size={14}/>导出真实 JSON</button><button className="btn" type="button" disabled={!artifact||selected?.state!=="COMPLETED"} onClick={downloadMarkdown}><Download size={14}/>导出 Markdown</button></div></div>
+    <main className="main-area"><header className="topbar"><div className="breadcrumb"><span>研究工作台</span><ChevronRight size={13}/><strong>{view==="overview"?"工作台":view==="history"?"研究档案":view==="compare"?"研究对比":view==="watchlist"?"观察池":view==="settings"?"数据源设置":"研究详情"}</strong></div><div className="topbar-spacer"/><span className={`badge ${listSyncError ? "red" : lastListSync ? "green" : "gray"}`} role="status"><CircleDot size={12}/>{listSyncError ? "研究库同步失败" : lastListSync ? "研究库已同步" : "研究库同步中"}</span><button className="icon-button" aria-label="刷新" type="button" onClick={()=>void refresh().catch(e=>{setListSyncError((e as Error).message);setError((e as Error).message);})}><RefreshCcw size={16}/></button></header>
+    <div className={cn("content","live-content",view==="overview"&&"is-overview")}><div className="page-heading"><div><div className="eyebrow">AEGIS · 研究工作台</div><h1>{view==="overview"?"工作台":view==="history"?"研究档案":view==="compare"?"研究对比":view==="watchlist"?"观察池":view==="settings"?"数据源设置":"研究详情"}</h1><p>{view==="settings"?"管理模型与数据源凭证；密钥仅在服务端处理":view==="workspace"?"先看研究结论，再查看关键依据、风险与后续关注":view==="watchlist"?"保存标的、理由与关注条件，并从池内直接启动研究":"查看近期研究结果与任务状态；完整依据按需展开"}</p></div><div className="heading-right">{view==="workspace"&&<button type="button" className="btn primary" onClick={focusNewResearch}><Search size={14}/>发起新研究</button>}{view==="workspace"&&artifact&&selected?.state==="COMPLETED"&&<details className="live-export-menu"><summary className="btn"><Download size={14}/>导出</summary><div><button type="button" onClick={downloadMarkdown}>研究报告（Markdown）</button><button type="button" onClick={downloadArtifact}>原始工件（JSON）</button></div></details>}</div></div>
     <div className="live-context-note"><ShieldCheck size={14}/><span>研究截止时间以服务端记录为准 · 不包含交易执行</span></div>
     {error&&<div role="alert" className="live-alert"><TriangleAlert size={15}/>{error}<button onClick={()=>setError("")} type="button">关闭</button></div>}
     {info&&<div role="status" className="live-info">{info}</div>}
     {listSyncError&&view!=="overview"&&<div role="alert" className="live-alert"><TriangleAlert size={15}/>研究任务列表同步失败，当前记录可能已过期。<button type="button" onClick={()=>void refresh().catch(e=>setListSyncError((e as Error).message))}>重新同步</button></div>}
-    {view==="settings"?<ProviderSettings localDev={session.local_dev === true}/>:view==="overview"?<LiveRunOverview runs={runs} syncedAt={lastListSync} syncError={listSyncError} onOpen={id=>{navigate("workspace",id);setError("");}} onNew={()=>navigate("workspace",selectedId)} onCompare={()=>navigate("compare")} onRefresh={()=>void refresh().catch(e=>{setListSyncError((e as Error).message);setError((e as Error).message);})}/>:view==="compare"?<LiveRunComparison runs={runs} pair={comparisonPair} onPairChange={openComparison}/>:view==="history"?<section className="surface live-history"><div className="panel-head"><h2>服务端持久化记录</h2><div className="live-history-actions"><span className="badge blue">已匹配 {visibleHistory?.total ?? "—"} 条 · 每页 25 条</span><button type="button" className="btn" onClick={()=>navigate("compare")}><ArrowLeftRight size={14}/>对比历史研究</button></div></div><div className="live-history-filters"><label>按股票代码筛选<input aria-label="按股票代码筛选" value={historySymbol} onChange={e=>{setHistorySymbol(e.target.value);setHistoryPage(0);}} placeholder="例如 600519 或 .SH"/></label><label>按任务状态筛选<select aria-label="按任务状态筛选" value={historyState} onChange={e=>{setHistoryState(e.target.value as "ALL" | LiveRun["state"]);setHistoryPage(0);}}><option value="ALL">全部状态</option>{(Object.keys(states) as LiveRun["state"][]).map(state=><option key={state} value={state}>{states[state]}</option>)}</select></label><button type="button" className="btn" disabled={!historySymbol && historyState==="ALL"} onClick={()=>{setHistorySymbol("");setHistoryState("ALL");setHistoryPage(0);}}>清除筛选</button></div>{historyError?<div role="alert" className="live-alert">历史查询失败：{historyError}<button type="button" onClick={()=>{setHistoryError(null);setHistoryRetry(n=>n+1);}}>重新查询</button></div>:!visibleHistory?<p className="live-empty">正在查询服务端研究历史…</p>:visibleHistory.total===0?<p className="live-empty">没有符合条件的研究记录。</p>:<div className="live-history-table">{visibleHistory.runs.map(r=><button key={r.run_id} className="live-history-row" onClick={()=>{setRuns(current=>current.some(item=>item.run_id===r.run_id)?current:[r,...current]);navigate("workspace",r.run_id);setError("");}} type="button"><strong>{r.symbol}</strong><code>{r.run_id.slice(0,12)}…</code><small>{formatDate(r.created_at)}</small><span className={`badge ${statusColors[r.state]}`}>{states[r.state]}</span>{r.state==="FAILED"&&<span className="live-history-failure" title="后端返回的失败代码，非根因诊断">{r.failure_code ? `错误：${r.failure_code}` : "错误代码未提供"}</span>}<ArrowRight size={15}/></button>)}</div>}<div className="live-history-pagination"><button type="button" className="btn" disabled={historyPage===0} onClick={()=>setHistoryPage(page=>Math.max(0,page-1))}>上一页</button><span>第 {historyPage+1} 页 · {visibleHistory?.total ?? 0} 条匹配记录</span><button type="button" className="btn" disabled={!visibleHistory?.hasMore} onClick={()=>setHistoryPage(page=>page+1)}>下一页</button></div></section>:view==="watchlist"?<WatchlistPanel onOpenRun={id=>{navigate("workspace",id);setError("");}} onStartResearch={name=>{void startResearchFor(name);}} researching={busy}/>:<div className="live-workspace-layout">
+    {view==="settings"?<ProviderSettings localDev={session.local_dev === true}/>:view==="overview"?<LiveRunOverview runs={runs} syncedAt={lastListSync} syncError={listSyncError} onOpen={id=>{navigate("workspace",id);setError("");}} onNew={()=>{navigate("workspace",selectedId);window.setTimeout(focusNewResearch,0)}} onCompare={()=>navigate("compare")} onRefresh={()=>void refresh().catch(e=>{setListSyncError((e as Error).message);setError((e as Error).message);})}/>:view==="compare"?<LiveRunComparison runs={runs} pair={comparisonPair} onPairChange={openComparison}/>:view==="history"?<section className="surface live-history"><div className="panel-head"><h2>服务端持久化记录</h2><div className="live-history-actions"><span className="badge blue">已匹配 {visibleHistory?.total ?? "—"} 条 · 每页 25 条</span><button type="button" className="btn" onClick={()=>navigate("compare")}><ArrowLeftRight size={14}/>对比历史研究</button></div></div><div className="live-history-filters"><label>按股票代码筛选<input aria-label="按股票代码筛选" value={historySymbol} onChange={e=>{setHistorySymbol(e.target.value);setHistoryPage(0);}} placeholder="例如 600519 或 .SH"/></label><label>按任务状态筛选<select aria-label="按任务状态筛选" value={historyState} onChange={e=>{setHistoryState(e.target.value as "ALL" | LiveRun["state"]);setHistoryPage(0);}}><option value="ALL">全部状态</option>{(Object.keys(states) as LiveRun["state"][]).map(state=><option key={state} value={state}>{states[state]}</option>)}</select></label><button type="button" className="btn" disabled={!historySymbol && historyState==="ALL"} onClick={()=>{setHistorySymbol("");setHistoryState("ALL");setHistoryPage(0);}}>清除筛选</button></div>{historyError?<div role="alert" className="live-alert">历史查询失败：{historyError}<button type="button" onClick={()=>{setHistoryError(null);setHistoryRetry(n=>n+1);}}>重新查询</button></div>:!visibleHistory?<p className="live-empty">正在查询服务端研究历史…</p>:visibleHistory.total===0?<p className="live-empty">没有符合条件的研究记录。</p>:<div className="live-history-table">{visibleHistory.runs.map(r=><button key={r.run_id} className="live-history-row" onClick={()=>{setRuns(current=>current.some(item=>item.run_id===r.run_id)?current:[r,...current]);navigate("workspace",r.run_id);setError("");}} type="button"><strong>{r.symbol}</strong><code>{r.run_id.slice(0,12)}…</code><small>{formatDate(r.created_at)}</small><span className={`badge ${statusColors[r.state]}`}>{states[r.state]}</span>{r.state==="FAILED"&&<span className="live-history-failure" title="后端返回的失败代码，非根因诊断">{r.failure_code ? `错误：${r.failure_code}` : "错误代码未提供"}</span>}<ArrowRight size={15}/></button>)}</div>}<div className="live-history-pagination"><button type="button" className="btn" disabled={historyPage===0} onClick={()=>setHistoryPage(page=>Math.max(0,page-1))}>上一页</button><span>第 {historyPage+1} 页 · {visibleHistory?.total ?? 0} 条匹配记录</span><button type="button" className="btn" disabled={!visibleHistory?.hasMore} onClick={()=>setHistoryPage(page=>page+1)}>下一页</button></div></section>:view==="watchlist"?<WatchlistPanel onOpenRun={id=>{navigate("workspace",id);setError("");}} onStartResearch={name=>{void startResearchFor(name);}} researching={busy}/>:<div className="live-workspace-layout">
       {selected && <section className="surface live-current-run" aria-label="当前研究任务">
         <div className="live-current-run-main"><span className="eyebrow">当前研究</span><strong>{selected.symbol}</strong><small>研究时点 {formatDate(selected.requested_as_of)}</small></div>
         <span className={`badge ${statusColors[selected.state]}`}>{states[selected.state]}</span>
         <span className="live-current-run-note">研究结论优先展示 · 运行过程按需查看</span>
-        <div className="live-current-run-actions">{!isTerminal(selected.state)?<button type="button" className="btn danger" disabled={busy} onClick={()=>void cancelRun()}><Ban size={14}/>请求取消</button>:<button type="button" className="btn" disabled={busy} onClick={prepareRerun}><RotateCcw size={14}/>再次研究该标的</button>}{selected.state==="COMPLETED"&&<button type="button" className="btn" onClick={()=>openComparison(selected.run_id,null)}><ArrowLeftRight size={14}/>对比历史研究</button>}</div>
+        <div className="live-current-run-actions">{!isTerminal(selected.state)?<button type="button" className="btn danger" disabled={busy} onClick={()=>void cancelRun()}><Ban size={14}/>请求取消</button>:<button type="button" className="btn" disabled={busy} onClick={prepareRerun}><RotateCcw size={14}/>再次研究该标的</button>}{selected.state==="COMPLETED"&&<button type="button" className="btn" onClick={()=>void compareWithPrevious(selected.run_id)}><ArrowLeftRight size={14}/>对比历史研究</button>}</div>
       </section>}
-      <div className="live-primary-report">{selected?.state==="COMPLETED"&&artifact?<LiveResearchReport artifact={artifact} run={selected}/>:<section className="surface live-report-empty"><BookOpenText size={21}/><div><h2>研究结果</h2><p>{selected?.state==="COMPLETED"?"正在加载后端已完成工件…":selected?.state==="FAILED"||selected?.state==="CANCELLED"?"任务没有完成，研究报告不可用；不会显示上一次任务的结果。":"只有后端状态为 COMPLETED 才会展示真实报告。"}</p></div></section>}</div>
+      <div className="live-primary-report">{selected?.state==="COMPLETED"&&artifact?<LiveResearchReport artifact={artifact} run={selected} onCompare={()=>void compareWithPrevious(selected.run_id)}/>:<section className="surface live-report-empty"><BookOpenText size={21}/><div><h2>研究结果</h2><p>{selected?.state==="COMPLETED"?"正在加载后端已完成工件…":selected?.state==="FAILED"||selected?.state==="CANCELLED"?"任务没有完成，研究报告不可用；不会显示上一次任务的结果。":"只有后端状态为 COMPLETED 才会展示真实报告。"}</p></div></section>}</div>
       <div className="live-secondary-grid">
         <details className="surface live-create" open={!selected || selected.state !== "COMPLETED"}>
           <summary>开始新的研究 <span>输入标的和本次关注点</span></summary>
-          <div className="live-create-body"><div className="eyebrow">New research run</div><h2>发起股票研究</h2><p>研究时点由后端创建任务时确定。正式执行可能触发数据源请求和模型费用。</p>{rerunFrom&&<div className="live-rerun-notice" role="status"><strong>再次研究 · 来源任务 {rerunFrom.runId.slice(0, 12)}…</strong><span>仅预填标的，不会复制旧的关注点、账户状态或研究时间。请确认本次研究参数后手动启动全新任务。</span><button type="button" onClick={()=>{setRerunFrom(null);pendingStart.current=null;}}>取消再次研究</button></div>}<form onSubmit={startRun}><label>股票代码<input value={symbol} onChange={e=>{setSymbol(e.target.value.toUpperCase());setRerunFrom(null);pendingStart.current=null;}} placeholder="600519.SH" required/></label><label>研究关注点（可选）<input maxLength={1024} value={marketQuery} onChange={e=>setMarketQuery(e.target.value)} placeholder="例如：近期市场环境与标的事件"/></label><div className="live-create-foot"><span className="badge blue">{session.mode}</span>{session.mode==="PORTFOLIO_REVIEW"&&<span className="badge gray">账户：NOT_PROVIDED · 未知</span>}<button className="btn primary" type="submit" disabled={busy}><Search size={15}/>{busy?"处理中…":"启动真实研究"}</button></div></form></div>
+          <div className="live-create-body"><div className="eyebrow">New research run</div><h2>发起股票研究</h2><p>研究时点由后端创建任务时确定。正式执行可能触发数据源请求和模型费用。</p>{rerunFrom&&<div className="live-rerun-notice" role="status"><strong>再次研究 · 来源任务 {rerunFrom.runId.slice(0, 12)}…</strong><span>仅预填标的，不会复制旧的关注点、账户状态或研究时间。请确认本次研究参数后手动启动全新任务。</span><button type="button" onClick={()=>{setRerunFrom(null);pendingStart.current=null;}}>取消再次研究</button></div>}<form onSubmit={startRun}><label>股票代码<input value={symbol} onChange={e=>{setSymbol(e.target.value.toUpperCase());setRerunFrom(null);pendingStart.current=null;}} placeholder="600519.SH" required/></label><label>研究关注点（可选）<input maxLength={1024} value={marketQuery} onChange={e=>setMarketQuery(e.target.value)} placeholder="例如：近期市场环境与标的事件"/></label><div className="live-create-foot"><span className="badge blue">{modeLabel(session.mode)}</span>{session.mode==="PORTFOLIO_REVIEW"&&<span className="badge gray">账户：NOT_PROVIDED · 未知</span>}<button className="btn primary" type="submit" disabled={busy}><Search size={15}/>{busy?"处理中…":"启动真实研究"}</button></div></form></div>
         </details>
         <details className="live-secondary-panel" open={!selected && Boolean(selectedId)}>
           <summary>研究信息 <span>状态、研究时点、请求约束与来源索引</span></summary>
@@ -372,6 +417,6 @@ export default function LiveResearchWorkbench() {
         </details>
       </div>
     </div>}
-    {session?.authenticated && <ResearchConversationPanel selectedRunId={selectedId} onOpenRun={id => { navigate("workspace", id); setError(""); void refresh().catch(e => setError((e as Error).message)); }} />}
+    {session?.authenticated && <details id="research-follow-up" className="live-follow-up-disclosure"><summary>继续追问本次研究 <span>针对当前 Run 提问 · 默认只读</span></summary><ResearchConversationPanel selectedRunId={selectedId} onOpenRun={id => { navigate("workspace", id); setError(""); void refresh().catch(e => setError((e as Error).message)); }} /></details>}
     <footer className="live-footer">AEGIS RESEARCH · 研究结果仅供分析，不包含交易执行</footer></div></main></div>;
 }

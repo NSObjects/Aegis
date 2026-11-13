@@ -2,7 +2,10 @@ import { expect, test } from "@playwright/test";
 
 test("zero-secret loopback Live Web opens without login and can run a task", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "发起新研究", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "研究详情", exact: true })).toBeVisible();
+  await page.locator("details.live-create").evaluate((el: HTMLDetailsElement) => { el.open = true; });
   expect(await page.getByRole("heading", { name: "AEGIS · 研究工作台" }).count()).toBe(0);
   const session = await page.request.get("/api/workbench/session");
   expect(session.status()).toBe(200);
@@ -23,8 +26,8 @@ test("zero-secret loopback Live Web opens without login and can run a task", asy
 
 test("zero-secret dev Web can save provider configuration without login", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "实时研究工作台" })).toBeVisible();
-  await page.getByRole("button", { name: "凭证设置" }).click();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "数据源设置", exact: true }).click();
   await expect(page.getByRole("heading", { name: "模型与数据源凭证" })).toBeVisible();
   const secret = "fixture-local-browser-key-never-used-for-payments";
   await page.getByLabel("DeepSeek API Key").fill(secret);
@@ -35,14 +38,15 @@ test("zero-secret dev Web can save provider configuration without login", async 
   await expect(page.getByLabel("DeepSeek API Key")).toHaveValue("");
   expect(await page.locator("body").innerText()).not.toContain(secret);
   await page.reload();
-  await page.getByRole("button", { name: "凭证设置" }).click();
+  await page.getByRole("button", { name: "数据源设置", exact: true }).click();
   await expect(page.locator(".provider-settings-row").filter({ hasText: "DeepSeek" })).toContainText("已配置");
 });
 
 test("default local dev entry exposes the new operations overview rather than the legacy demo", async ({ page }) => {
   await page.goto("/?view=overview");
-  await expect(page.getByRole("heading", { name: "研究任务总览" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "研究概览", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工作台", exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "发起新研究", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "研究档案", exact: true })).toBeVisible();
   const session = await page.request.get("/api/workbench/session");
   expect((await session.json()).local_dev).toBe(true);
   expect(await page.getByText("DEMO MODE", { exact: false }).count()).toBe(0);
