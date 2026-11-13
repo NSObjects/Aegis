@@ -51,6 +51,8 @@ type PoolRecord struct {
 	NextOffset int `json:"next_offset"`
 	BatchScanIDs []string `json:"batch_scan_ids"`
 	ActiveScanID string `json:"active_scan_id,omitempty"`
+	CacheDaysDone int `json:"cache_days_done,omitempty"`
+	CacheDaysTotal int `json:"cache_days_total,omitempty"`
 	FailureCode string `json:"failure_code,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -95,6 +97,8 @@ func validatePool(r PoolRecord) error {
 	default: return errors.New("invalid pool state")
 	}
 	if len(r.FailureCode) > 64 { return errors.New("pool failure code too long") }
+ if r.CacheDaysTotal<0||r.CacheDaysTotal>technical.MarketCacheSessionCount||
+ r.CacheDaysDone<0||r.CacheDaysDone>r.CacheDaysTotal{return errors.New("invalid pool cache progress")}
 	return nil
 }
 
@@ -288,6 +292,23 @@ func (m *PoolManager) run(id string) {
 	}()
 	rec,err := m.store.Get(id)
 	if err != nil { return }
+ if m.scans.PoolCacheEnabled() {
+  rec.CacheDaysDone=0
+  rec.CacheDaysTotal=technical.MarketCacheSessionCount
+  rec.UpdatedAt=time.Now().UTC()
+  if err:=m.store.Save(rec);err!=nil{return}
+  err:=m.scans.PreparePool(m.ctx,rec.AsOf,rec.Symbols,func(done,total int)error{
+   m.mu.Lock();paused:=m.pauseRequested;m.mu.Unlock()
+   if paused{return ErrPoolState}
+   rec.CacheDaysDone=done;rec.CacheDaysTotal=total;rec.UpdatedAt=time.Now().UTC()
+   return m.store.Save(rec)
+  })
+  if err!=nil {
+   m.mu.Lock();paused:=m.pauseRequested;m.mu.Unlock()
+   if paused {m.stop(rec,PoolPaused,"OPERATOR_PAUSED")} else {m.stop(rec,PoolFailed,"MARKET_CACHE_PREFETCH_FAILED")}
+   return
+  }
+ }
 	for rec.NextOffset < len(rec.Symbols) {
 		select {
 		case <-m.ctx.Done(): return // restart reconciliation prevents silent relaunch

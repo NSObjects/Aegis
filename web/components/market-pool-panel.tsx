@@ -9,7 +9,7 @@ type PoolState = "RUNNING" | "PAUSED" | "FAILED" | "COMPLETED";
 type PoolSummary = {
   pool_id: string; as_of: string; state: PoolState; strategy_version: string;
   universe_source: string; universe_sha256: string; universe_count: number;
-  next_offset: number; failure_code?: string;
+  next_offset: number; cache_days_done?: number; cache_days_total?: number; failure_code?: string;
 };
 type PoolRecord = Omit<PoolSummary, "universe_count"> & { symbols: string[]; active_scan_id?: string };
 type PoolCandidate = {
@@ -120,6 +120,7 @@ export default function MarketPoolPanel({
         setSelected(data);
         setHistory(current=>current?.map(p=>p.pool_id===data.pool_id?{
           ...p,state:data.state,next_offset:data.next_offset,
+          cache_days_done:data.cache_days_done,cache_days_total:data.cache_days_total,
           failure_code:data.failure_code,universe_count:data.symbols.length}:p)??null);
       }catch(e){if(!cancelled)setError((e as Error).message);}
     };
@@ -179,6 +180,8 @@ export default function MarketPoolPanel({
 
   const total=selected?.symbols.length??0;
   const progress=total>0?Math.floor((selected!.next_offset/total)*100):0;
+  const cacheDays=selected?.cache_days_total??0;
+  const cacheReady=selected?.cache_days_done??0;
   const view=comparison?.pool_id===selectedId?comparison:null;
   return <section className="surface market-pool" aria-label="全市场主板策略候选池">
     <div className="panel-head"><div><h2>主板股票池 · 自动筛选</h2>
@@ -213,6 +216,10 @@ export default function MarketPoolPanel({
     {selected&&selected.pool_id===selectedId&&<div className="market-pool-progress">
       <div className="market-pool-progress-title"><strong>{fmtDate(selected.as_of)} · {label[selected.state]}</strong>
         <span>{selected.next_offset} / {total} 只 · {progress}%</span></div>
+      {cacheDays>0&&<div className="market-pool-progress-title">
+        <span>行情快照：{cacheReady} / {cacheDays} 个交易日</span>
+        <span>{cacheReady<cacheDays?"预热中或暂停":"预热完成"}</span>
+      </div>}
       <progress max={total||1} value={selected.next_offset}/>
       <small>完整范围摘要 {selected.universe_sha256.slice(0,16)}… · 批量上限 20/批 · 失败不会计入完成覆盖</small>
       {selected.failure_code&&<div className="market-pool-failure" role="status">状态原因：{selected.failure_code}</div>}

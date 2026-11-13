@@ -141,6 +141,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+  if err:=researcher.EnableMarketDayCache(filepath.Join(filepath.Dir(*path),"market-day-cache"));err!=nil{log.Fatal(err)}
 		scans, err := application.NewScanManager(scanStore, researcher)
 		if err != nil {
 			log.Fatal(err)
