@@ -20,6 +20,11 @@ func (r *HTTPResearcher) Research(ctx context.Context,req Request)(map[string]an
  if r==nil||r.api==nil{return nil,errors.New("technical HTTP researcher is nil")}
  symbol:=strings.ToUpper(strings.TrimSpace(req.Symbol));asof:=strings.TrimSpace(req.AsOf);if symbol==""||asof==""{return nil,errors.New("technical research symbol and as_of are required")}
  d,err:=time.Parse("20060102",asof);if err!=nil{return nil,fmt.Errorf("invalid technical as_of %q: %w",asof,err)}
+	// Only the PoolManager can supply a previously verified PIT cutoff.
+	// Generic research continues to check the listing and trade calendar.
+	if poolDate, ok := ctx.Value(verifiedPoolCutoffKey{}).(string); ok && poolDate == asof {
+		return r.researchVerifiedPool(ctx, symbol, asof, d)
+	}
  basic,err:=r.api.query(ctx,"stock_basic",map[string]any{"ts_code":symbol},"ts_code","list_status","list_date","delist_date");if err!=nil{return nil,err}
  if len(basic)>0 {ld:=str(basic[0]["list_date"]);dd:=str(basic[0]["delist_date"]);st:=str(basic[0]["list_status"]);if ld!=""&&asof<ld{return statusMap(symbol,asof,"NOT_LISTED","", "requested date precedes listing date"),nil};if (dd!=""&&asof>dd)||(st=="D"&&(dd==""||asof>dd)){return statusMap(symbol,asof,"DELISTED","", "listing metadata indicates delisted"),nil}}
  cal,err:=r.api.query(ctx,"trade_cal",map[string]any{"exchange":exchange(symbol),"start_date":asof,"end_date":asof},"is_open","pretrade_date");if err!=nil{return nil,err};if len(cal)==0{return statusMap(symbol,asof,"NO_DATA","","trade calendar unavailable"),nil}
