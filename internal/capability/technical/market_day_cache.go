@@ -299,13 +299,29 @@ func (c *MarketDayCache) Prepare(ctx context.Context, asOf string, symbols []str
   factors,err:=c.readDate(ctx,"adj_factor",date)
   if err!=nil{return nil,fmt.Errorf("market day factors %s: %w",date,err)}
   factorsBySymbol:=make(map[string]float64,len(factors.Factors))
-  for _,row:=range factors.Factors{factorsBySymbol[row.Symbol]=row.Factor}
+  factorMembers:=0
+  for _,row:=range factors.Factors{
+   factorsBySymbol[row.Symbol]=row.Factor
+   if _,ok:=membership[row.Symbol];ok{factorMembers++}
+  }
+  priceMembers:=0
   for _,row:=range prices.Prices{
    if _,ok:=membership[row.Symbol];!ok {continue}
+   priceMembers++
    series[row.Symbol]=append(series[row.Symbol],bar{
     Date:row.Date,Open:row.Open,High:row.High,Low:row.Low,Close:row.Close,
     Vol:row.Volume,Amount:row.Amount,Adj:factorsBySymbol[row.Symbol],
    })
+  }
+  // A response well below the advertised cap may still be a transient,
+  // incomplete provider page. Against a large frozen pool, reject severe
+  // undercoverage rather than publishing thousands of "no data" results.
+  // Thresholds are intentionally conservative: this is NOT a guarantee
+  // of complete market coverage, especially around new listings/suspensions.
+  if len(membership)>=100 &&
+   (factorMembers*100<len(membership)*90 || priceMembers*100<len(membership)*80) {
+    return nil,fmt.Errorf("market day %s has insufficient pool coverage: daily=%d factors=%d expected=%d",
+     date,priceMembers,factorMembers,len(membership))
   }
   if progress!=nil {if err:=progress(i+1,len(sessions));err!=nil{return nil,err}}
  }
