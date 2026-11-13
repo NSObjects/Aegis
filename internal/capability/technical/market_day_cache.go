@@ -7,6 +7,7 @@ import (
  "encoding/json"
  "errors"
  "fmt"
+ "io"
  "math"
  "os"
  "path/filepath"
@@ -142,8 +143,8 @@ func (c *MarketDayCache) readDate(ctx context.Context, api,date string)(marketDa
   var saved marketDayFile
   if err:=dec.Decode(&saved);err!=nil{return empty,fmt.Errorf("corrupt market day cache: %w",err)}
   var tail any
-  if !errors.Is(dec.Decode(&tail),os.ErrClosed) {
-   // The decoder's trailing-value condition is checked explicitly below.
+  if !errors.Is(dec.Decode(&tail),io.EOF) {
+   return empty,errors.New("market day cache contains trailing data")
   }
   if saved.API!=api || saved.Date!=date {return empty,errors.New("market day cache identity mismatch")}
   if err:=validMarketBody(saved.marketDayBody);err!=nil{return empty,err}
@@ -279,7 +280,7 @@ func (p *marketPrepared) research(symbol, asOf string)(map[string]any,error) {
 // Prepare constructs a bounded in-memory index of exactly the frozen universe.
 // A failed/missing/capped date leaves no usable new index; completed date
 // snapshots remain on disk so manual resumption only fetches missing days.
-func (c *MarketDayCache) Prepare(ctx context.Context, asOf string, symbols []string, progress func(done,total int))(*marketPrepared,error) {
+func (c *MarketDayCache) Prepare(ctx context.Context, asOf string, symbols []string, progress func(done,total int)error)(*marketPrepared,error) {
  sessions,err:=c.tradingSessions(ctx,asOf)
  if err!=nil{return nil,err}
  membership:=make(map[string]struct{},len(symbols))
@@ -305,7 +306,7 @@ func (c *MarketDayCache) Prepare(ctx context.Context, asOf string, symbols []str
     Vol:row.Volume,Amount:row.Amount,Adj:factorsBySymbol[row.Symbol],
    })
   }
-  if progress!=nil{progress(i+1,len(sessions))}
+  if progress!=nil {if err:=progress(i+1,len(sessions));err!=nil{return nil,err}}
  }
  return &marketPrepared{
   asOf:asOf,series:series,
