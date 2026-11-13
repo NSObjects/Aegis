@@ -22,6 +22,7 @@ const (
  marketDaySnapshotVersion = 1
  marketDayMaxRows = 6000
  marketDaySessions = 90
+ MarketCacheSessionCount = marketDaySessions
  marketDayCalendarLookback = 240
 )
 
