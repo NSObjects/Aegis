@@ -532,3 +532,68 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border: 1px solid #dce7e1; background: #fff; border-radius: 8px; padding: 8px 10px;
 }
 .live-follow-up-disclosure .surface button:not([type="submit"]):hover { background: #f3f8f5; }
+
+
+/* Operator-scoped strategy scan: keep ranking compact and evidence inspectable. */
+.live-workspace .scan-workspace { display: grid; gap: 18px; min-width: 0; }
+.live-workspace .scan-workspace > .surface { padding: 20px; }
+.live-workspace .scan-workspace .panel-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+  padding: 0; margin-bottom: 16px;
+}
+.live-workspace .scan-workspace .panel-head h2 { margin: 0 0 6px; font-size: 16px; color: #28494d; }
+.live-workspace .scan-workspace .panel-head p { margin: 0; font-size: 11px; color: #71888b; }
+.live-workspace .scan-form { display: grid; grid-template-columns: minmax(0, 1fr) 160px auto; gap: 12px; align-items: end; }
+.live-workspace .scan-form label, .live-workspace .scan-watch-reason {
+  display: grid; gap: 7px; color: #537075; font-size: 11px; font-weight: 600;
+}
+.live-workspace .scan-form input, .live-workspace .scan-form textarea,
+.live-workspace .scan-watch-reason input {
+  width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid #d9e5df;
+  border-radius: 9px; background: #fff; color: #2d484e; font-size: 12px;
+}
+.live-workspace .scan-form textarea { resize: vertical; min-height: 68px; }
+.live-workspace .scan-form .btn { min-height: 36px; }
+.live-workspace .scan-disclaimer { margin: 13px 0 0; font-size: 11px; line-height: 1.7; color: #82979a; }
+.live-workspace .scan-history-list { display: grid; gap: 7px; }
+.live-workspace .scan-history-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 11px 12px; border: 1px solid #e4ece8; border-radius: 9px; background: #fff;
+  color: #3a575c;
+}
+.live-workspace .scan-history-row.selected { border-color: #afd0c4; background: #f3f9f5; }
+.live-workspace .scan-history-row > span:first-child { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.live-workspace .scan-history-row strong { font-size: 12px; }
+.live-workspace .scan-history-row small { font-size: 10px; color: #82979a; }
+.live-workspace .scan-results .panel-head code { font-size: 10px; }
+.live-workspace .scan-result-message { padding: 12px 4px; margin: 0; color: #6a8488; font-size: 12px; }
+.live-workspace .scan-stats { display: flex; gap: 18px; flex-wrap: wrap; color: #6f8889; font-size: 11px; margin-bottom: 15px; }
+.live-workspace .scan-stats strong { color: #2f6860; font-size: 19px; }
+.live-workspace .scan-watch-reason { margin-bottom: 12px; max-width: 570px; }
+.live-workspace .scan-ranked-list { display: grid; gap: 8px; }
+.live-workspace .scan-rank-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 13px; padding: 13px;
+  border: 1px solid #e2ebe6; border-radius: 10px; background: #fbfdfb;
+}
+.live-workspace .scan-rank { width: 26px; text-align: center; color: #3d796e; font-size: 19px; }
+.live-workspace .scan-rank-main { display: grid; gap: 4px; min-width: 180px; flex: 1; }
+.live-workspace .scan-rank-main > strong { font-size: 14px; color: #24444b; }
+.live-workspace .scan-rank-main small { font-size: 10px; color: #6d878a; }
+.live-workspace .scan-rank-main a {
+  display: inline-flex; align-items: center; gap: 5px; width: fit-content; margin-top: 3px;
+  color: #387d71; font-size: 10px; text-decoration: underline; text-underline-offset: 2px;
+}
+.live-workspace .scan-rank-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.live-workspace .scan-excluded { margin-top: 16px; border-top: 1px solid #e5eeea; padding-top: 14px; font-size: 12px; color: #4d6b6e; }
+.live-workspace .scan-excluded summary { cursor: pointer; font-weight: 650; }
+.live-workspace .scan-excluded-row {
+  display: grid; grid-template-columns: 112px 80px minmax(0,1fr); gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid #eef2f0; color: #70868a; font-size: 11px;
+}
+.live-workspace .scan-excluded-row strong { color: #405c60; }
+@media (max-width: 780px) {
+  .live-workspace .scan-form { grid-template-columns: minmax(0, 1fr); }
+  .live-workspace .scan-form .btn { width: fit-content; }
+  .live-workspace .scan-excluded-row { grid-template-columns: 90px minmax(0, 1fr); }
+  .live-workspace .scan-excluded-row > span:last-child { grid-column: 1 / -1; }
+}
