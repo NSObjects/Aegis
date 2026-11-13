@@ -110,3 +110,15 @@ func (m *ScanManager) ListSource(limit int, source string)([]ScanRecord,error){
  if m==nil{return nil,errors.New("nil scan manager")}
  return m.store.ListSource(limit,source)
 }
+
+func (m *ScanManager) PoolCacheEnabled() bool {
+ if m==nil{return false}
+ p,ok:=m.researcher.(interface{PoolCacheEnabled() bool})
+ return ok&&p.PoolCacheEnabled()
+}
+func (m *ScanManager) PreparePool(ctx context.Context,asOf string,symbols []string,progress func(int,int)error)error {
+ if m==nil{return errors.New("nil scan manager")}
+ p,ok:=m.researcher.(interface{PreparePool(context.Context,string,[]string,func(int,int)error)error})
+ if !ok{return nil}
+ return p.PreparePool(ctx,asOf,symbols,progress)
+}
