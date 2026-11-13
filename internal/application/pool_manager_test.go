@@ -151,7 +151,7 @@ func TestPoolRejectsNonTradingDayBeforeFetchingUniverse(t *testing.T) {
 	store,err:=NewFilePoolStore(filepath.Join(dir,"pools"));if err!=nil{t.Fatal(err)}
 	pool,err:=NewPoolManager(ctx,store,scans,poolFakeUniverse{err:errors.New("should never fetch")},poolFakeCalendar{open:false})
 	if err!=nil{t.Fatal(err)}
-	if _,err:=pool.Start(ctx,"20261114");!errors.Is(err,ErrPoolNonTradingDay){t.Fatalf("nontrading day accepted: %v",err)}
+	if _,err:=pool.Start(ctx,"20261024");!errors.Is(err,ErrPoolNonTradingDay){t.Fatalf("nontrading day accepted: %v",err)}
 	history,err:=pool.List(10)
 	if err!=nil||len(history)!=0{t.Fatalf("invalid jobs created: %+v %v",history,err)}
 }
