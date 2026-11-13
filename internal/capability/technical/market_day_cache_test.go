@@ -164,3 +164,18 @@ func TestMarketDayCacheResumeOnlyMissingDates(t *testing.T){
  if err:=r.PreparePool(context.Background(),asOf,[]string{"600519.SH"},nil);err!=nil{t.Fatal(err)}
  if f.count("daily")!=90||f.count("adj_factor")!=90{t.Fatalf("reused dates were fetched again %+v",f.counts)}
 }
+
+func TestMarketDayCacheRejectsGrossIncompleteUniverse(t *testing.T){
+ f:=&dayFixture{}
+ r,done:=newFakeMarketDay(t,f,filepath.Join(t.TempDir(),"cache"));defer done()
+ symbols:=make([]string,0,100)
+ for i:=0;i<100;i++ {symbols=append(symbols,fmt.Sprintf("600%03d.SH",i))}
+ err:=r.PreparePool(context.Background(),"20261022",symbols,nil)
+ if err==nil||!strings.Contains(err.Error(),"insufficient pool coverage"){
+  t.Fatalf("partial cross-section was promoted to complete pool: %v",err)
+ }
+ if f.count("daily")!=1||f.count("adj_factor")!=1{
+  t.Fatalf("partial market data should fail on first day: %+v",f.counts)
+ }
+ if r.prepared!=nil{t.Fatal("rejected cache published prepared index")}
+}
