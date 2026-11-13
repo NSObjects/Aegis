@@ -338,7 +338,7 @@ func (m *PoolManager) run(id string) {
 		var batch ScanRecord
 		var err error
 		for attempt:=0;attempt<3;attempt++ {
-			batch,err = m.scans.Submit(m.ctx,rec.AsOf,rec.UniverseSource,rec.Symbols[rec.NextOffset:end])
+			batch,err = m.scans.Submit(technical.WithVerifiedPoolCutoff(m.ctx, rec.AsOf),rec.AsOf,rec.UniverseSource,rec.Symbols[rec.NextOffset:end])
 			if err == nil { break }
 			if !strings.Contains(err.Error(),"already running") { break }
 			select { case <-m.ctx.Done(): return; case <-time.After(350*time.Millisecond): }
