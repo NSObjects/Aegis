@@ -49,13 +49,16 @@ func (h *Handler) poolRoute(w http.ResponseWriter,r *http.Request) {
 				UniverseSHA256 string `json:"universe_sha256"`
 				Count int `json:"universe_count"`
 				NextOffset int `json:"next_offset"`
+				CacheDaysDone int `json:"cache_days_done"`
+				CacheDaysTotal int `json:"cache_days_total"`
 				FailureCode string `json:"failure_code,omitempty"`
 				CreatedAt interface{} `json:"created_at"`
 			}
 			out:=make([]summary,0,len(pools))
 			for _,p:=range pools { out=append(out,summary{ID:p.ID,AsOf:p.AsOf,State:p.State,
 				StrategyVersion:p.StrategyVersion,UniverseSource:p.UniverseSource,UniverseSHA256:p.UniverseSHA256,
-				Count:len(p.Symbols),NextOffset:p.NextOffset,FailureCode:p.FailureCode,CreatedAt:p.CreatedAt}) }
+				Count:len(p.Symbols),NextOffset:p.NextOffset,CacheDaysDone:p.CacheDaysDone,CacheDaysTotal:p.CacheDaysTotal,
+    FailureCode:p.FailureCode,CreatedAt:p.CreatedAt}) }
 			sendJSON(w,http.StatusOK,map[string]any{"pools":out})
 			return
 		}
