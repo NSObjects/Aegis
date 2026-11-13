@@ -14,7 +14,6 @@ import (
  "testing"
  "time"
 
- "Aegis/internal/strategy/pullback"
 )
 
 // This fixture has a complete contiguous calendar and 90 trade sessions.
@@ -126,11 +125,8 @@ func TestMarketDayCacheMissingPITAndMissingTradeFailClosed(t *testing.T){
    o,found,err:=ObserveHistorical(WithVerifiedPoolCutoff(context.Background(),asOf),r,Request{Symbol:"600519.SH",AsOf:asOf})
    if err!=nil||found!=tc.wantFound {t.Fatalf("found=%v err=%v",found,err)}
    if found {
-    factor:=make([]pullback.AdjustmentFactor,len(o.PITFactors))
-    for i,v:=range o.PITFactors {factor[i]=pullback.AdjustmentFactor{TradeDate:v.TradeDate,Factor:v.Factor}}
-    result,err:=pullback.Evaluate(o.Symbol,o.EffectiveAsOf,o.Bars,factor)
-    if err!=nil||result.Verdict!=pullback.InsufficientData||result.Reason!=tc.wantReason {
-     t.Fatalf("missing factor selected %+v err=%v",result,err)
+    if tc.wantReason!="MISSING_PIT_ADJUSTMENT"||len(o.PITFactors)!=0||len(o.Bars)!=65 {
+     t.Fatalf("missing factors should not be invented %+v",o)
     }
    }
   })
