@@ -1,7 +1,7 @@
 name: Market Data Canary (manual, no LLM)
 
 # Intentionally no push, pull_request, schedule, or reusable-workflow trigger.
-# A real provider request requires BOTH an operator dispatch and execute=true.
+# A real provider request requires BOTH an operator dispatch and choosing LIVE.
 on:
   workflow_dispatch:
     inputs:
@@ -19,11 +19,14 @@ on:
           - "1"
           - "2"
           - "3"
-      execute:
-        description: "Explicitly spend up to 6/8/10 TuShare requests; false = no-network dry run"
+      mode:
+        description: "Choose LIVE explicitly for real provider data; PREVIEW is no-network"
         required: true
-        type: boolean
-        default: false
+        type: choice
+        default: "PREVIEW - no TuShare requests"
+        options:
+          - "PREVIEW - no TuShare requests"
+          - "LIVE - call TuShare (up to 10 requests)"
 
 permissions:
   contents: read
@@ -54,7 +57,7 @@ jobs:
           go build -o "$RUNNER_TEMP/aegis-market-canary" ./cmd/aegis-market-canary
 
       - name: Preview bounded provider budget (no token or network)
-        if: ${{ !inputs.execute }}
+        if: ${{ inputs.mode == 'PREVIEW - no TuShare requests' }}
         shell: bash
         env:
           CANARY_AS_OF: ${{ inputs.as_of }}
@@ -62,10 +65,19 @@ jobs:
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/aegis-market-canary" --as-of "$CANARY_AS_OF" --days "$CANARY_DAYS"
-          echo "Dry run only. No real TuShare coverage was checked." >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::PREVIEW ONLY: TuShare WAS NOT CALLED. Green workflow status does NOT mean real market data acceptance."
+          {
+            echo "## ⚠️ PREVIEW ONLY — NO REAL TUSHARE DATA"
+            echo ""
+            echo "**This successful workflow did NOT call TuShare.**"
+            echo "This is only a request-budget preview; market data coverage, factors and cache bytes remain UNVERIFIED."
+            echo ""
+            echo "To validate real data, start a NEW run and deliberately choose:"
+            echo "\`LIVE - call TuShare (up to 10 requests)\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Live opt-in TuShare sample only (no LLM and no full pool)
-        if: ${{ inputs.execute }}
+        if: ${{ inputs.mode == 'LIVE - call TuShare (up to 10 requests)' }}
         shell: bash
         env:
           CANARY_AS_OF: ${{ inputs.as_of }}
