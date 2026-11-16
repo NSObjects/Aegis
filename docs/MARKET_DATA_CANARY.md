@@ -14,6 +14,26 @@
 
 该工作流**仅支持手动触发**，不会在 Push、PR 或定时器中运行。此前的 #43797900901 和 #43821653733 都是 Preview，真实 TuShare 步骤被跳过；看到 workflow 的绿色状态不代表 LIVE 成功。GitHub Actions 不需要、也不会通过模型获取 Token。日志中的汇总结果可能对仓库读者可见；请不要把原始数据或密钥添加到汇总里。若仓库没有这个 Secret，执行模式会在第一条行情请求之前报错并退出。
 
+## 连续 3 日 LIVE 结果与后续 90 日验收
+
+2026-11-16 [3 日 LIVE 运行 #43844650357](https://github.com/NSObjects/Aegis/actions/runs/43844650357) 实测（截止日 20261113）通过：
+
+| 交易日 | 冻结主板 | 有效日线 | 同日因子 | 低覆盖警报 |
+| --- | ---: | ---: | ---: | --- |
+| 20261111 | 3194 | 3191 | 3194 | 否 |
+| 20261112 | 3194 | 3190 | 3194 | 否 |
+| 20261113 | 3194 | 3189 | 3194 | 否 |
+
+3 天 JSON 快照合计约 3.12 MB，线性外推 90 日约 93.5 MB。**这只是行情日期横截面缓存的大小，不是 Aegis 数据库或历史扫描结果总量。** 3 日 LIVE 不能证明 90 日全部数据可用，因此下一道单独的人工门禁是：
+
+1. 打开 [Full Market Cache Prewarm（manual, no scans）](https://github.com/NSObjects/Aegis/actions/workflows/market-full-prewarm.yml)。
+2. **Run workflow** 选择 `main`、`as_of=20261113`。默认 `mode=PREVIEW - no TuShare requests`：不会联网、不会读取密钥；绿色只代表预览成功。
+3. 认可额度后，新开一次手动运行，明确选择 `mode=LIVE - full 90-day TuShare prewarm (up to 184 requests)`。需要预先配置仓库 `TUSHARE_TOKEN` GitHub Secret。CLI 通过私有临时目录执行生产 `MarketDayCache.Prepare`，上限计划 3 次 stock_basic、1 次 trade_cal、90 次 daily 和 90 次 adj_factor。
+4. 查看日志的 `90-session prewarm: n/90 complete` 进度、日历首末日、数据源覆盖率下限、全量实际 JSON 磁盘字节数以及 `contiguous_65_with_factors`。`ready_for_pool_review=false` 或红色执行失败必须先查明原因，不得直接启动股票池。
+5. **即使 LIVE 成功，本工作流也不会启动/存储生产股票池**，不会调用 LLM，不会保留约 90 日原始行情缓存。临时数据在任务结束后删除。正式股票池运行和约 3,194 只证券的历史信号验收是**下一道独立门禁**。
+
+这项 90 日验收复用了生产代码路径，验证数据可读与 65 日连续性，但不能证明 TuShare 历史复权因子的当时真实发布版本或回测 PIT 无前视。这项风险在严格历史回测前仍需单独处理。
+
 ## 操作
 
 指定**已结束的上海市场日期**（格式 `YYYYMMDD`）。当天即使已经收盘也不接受，以免取得尚未完整发布的数据。建议先验证最近一个已结束的交易日，再扩大到 3 日。

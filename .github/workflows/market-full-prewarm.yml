@@ -1,0 +1,122 @@
+name: Full Market Cache Prewarm (manual, no scans)
+
+# Deliberately manual-only; real TuShare requests require explicit LIVE mode.
+# This does not schedule scans or create provider/data artifacts in the repo.
+on:
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: "Completed Shanghai market cutoff YYYYMMDD (strictly before today)"
+        required: true
+        type: string
+        default: "20261113"
+      mode:
+        description: "PREVIEW uses no token; LIVE intentionally checks all 90 trading sessions (up to 184 requests)"
+        required: true
+        type: choice
+        default: "PREVIEW - no TuShare requests"
+        options:
+          - "PREVIEW - no TuShare requests"
+          - "LIVE - full 90-day TuShare prewarm (up to 184 requests)"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-full-market-prewarm
+  cancel-in-progress: false
+
+jobs:
+  prewarm:
+    name: Validate production 90-session market cache without stock scans
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout main or selected commit
+        uses: actions/checkout@v5
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build isolated prewarm probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o "$RUNNER_TEMP/aegis-market-prewarm" ./cmd/aegis-market-prewarm
+
+      - name: Preview provider budget only (NO live data)
+        if: ${{ inputs.mode == 'PREVIEW - no TuShare requests' }}
+        shell: bash
+        env:
+          PREWARM_AS_OF: ${{ inputs.as_of }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/aegis-market-prewarm" --as-of "$PREWARM_AS_OF"
+          echo "::warning::PREVIEW ONLY — real TuShare was NOT called. No historical market cache is validated."
+          {
+            echo "## PREVIEW ONLY: NO REAL MARKET DATA"
+            echo ""
+            echo "Green status here does NOT mean 90-day market prewarm acceptance."
+            echo "Select LIVE explicitly in a NEW manual run to spend up to 184 TuShare requests."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: LIVE validate 90 sessions using production cache preflight
+        if: ${{ inputs.mode == 'LIVE - full 90-day TuShare prewarm (up to 184 requests)' }}
+        shell: bash
+        env:
+          PREWARM_AS_OF: ${{ inputs.as_of }}
+          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TUSHARE_TOKEN" ]; then
+            echo "::error::TUSHARE_TOKEN GitHub Secret missing; no provider requests made."
+            exit 1
+          fi
+          umask 077
+          report="$RUNNER_TEMP/aegis-90day-prewarm-summary.json"
+          set +e
+          "$RUNNER_TEMP/aegis-market-prewarm" --as-of "$PREWARM_AS_OF" \
+            --timeout 12m --execute > "$report"
+          status=$?
+          set -e
+
+          if [ -s "$report" ] && jq -e '
+            .universe_source == "TUSHARE_STOCK_BASIC_L_D_P" and
+            .sessions_verified == 90 and
+            .daily_snapshots == 90 and
+            .factor_snapshots == 90 and
+            .main_board_symbols > 0 and
+            .max_provider_calls == 184 and
+            (.ready_for_pool_review | type) == "boolean"
+          ' "$report" >/dev/null; then
+            # Aggregate only: no raw prices, historical rows, stock list, or token.
+            jq '{
+              as_of, universe_source, main_board_symbols,
+              sessions_verified, first_session, last_session,
+              max_provider_calls, daily_snapshots, factor_snapshots,
+              daily_snapshot_bytes, factor_snapshot_bytes,
+              min_main_board_daily, min_main_board_factors,
+              contiguous_65_symbols, contiguous_65_with_factors,
+              gap_or_short_65_symbols, missing_factor_65_symbols,
+              ready_for_pool_review, warnings
+            }' "$report"
+            jq -r '
+              "## 90-session TuShare production cache prewarm (LIVE)",
+              "",
+              "- First session: " + .first_session,
+              "- Last session: " + .last_session,
+              "- Verified sessions: " + (.sessions_verified | tostring),
+              "- Frozen main board: " + (.main_board_symbols | tostring),
+              "- Contiguous 65 with factors: " + (.contiguous_65_with_factors | tostring),
+              "- Cache disk bytes: " + ((.daily_snapshot_bytes+.factor_snapshot_bytes)|tostring),
+              "- Ready for **separate** pool review: " + (.ready_for_pool_review | tostring),
+              "",
+              "No stock scan ran. This was a disposable cache preflight; it does NOT prove historical PIT factor revisions."
+            ' "$report" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo "::error::90-session real-data prewarm failed; do not start the full stock pool."
+            exit "$status"
+          fi
+          jq -e '.ready_for_pool_review == true and .sessions_verified == 90' "$report" >/dev/null
