@@ -2,6 +2,18 @@
 
 使用 `aegis-market-canary` 在真实全市场扫描前检查 TuShare 接口、日期横截面、PIT 股票范围与磁盘快照大小。**必须由操作者主动开启联网；CI 全部使用模拟 HTTP，不调用真实行情。**
 
+## GitHub Actions 手动执行（不需要本地终端）
+
+仓库已有 `Integration` 工作流会同时提供多个付费研究测试选项；**不要通过 Integration 来尝试行情 Canary**。使用独立工作流即可只执行受限 TuShare 行情验收，不会运行 Agent、LLM、全市场股票扫描或定时任务。
+
+1. 打开 [Aegis Actions → Market Data Canary (manual, no LLM)](https://github.com/NSObjects/Aegis/actions/workflows/market-data-canary.yml)。
+2. 选择 **Run workflow**，分支选 `main`，填写已结束的上海市场日期 `as_of`（例如 `20261113`）、`days=1`，保持 **`execute=false`**。这个默认模式不读取密钥也不联网；检查 dry-run 输出及请求预算。
+3. 确认仓库 GitHub Actions Secret 已配置 `TUSHARE_TOKEN`。GitHub Secret 名称必须准确，**不要在日志、Issue、PR 或聊天里粘贴 Token**。
+4. 再次手动运行相同日期和天数，并且**主动改为 `execute=true`**。只有这一步会向 TuShare 发出请求（1 日上限计划 6 次、3 日上限计划 10 次）。
+5. 查看对应运行的 `Bounded TuShare market data canary` Job 及 Summary。它会输出聚合覆盖率、复权因子配对量、快照大小估算与异常原因；若未成功或 `ready_for_full_pool=false`，不要启动完整主板任务。
+
+该工作流**仅支持手动触发**，不会在 Push、PR 或定时器中运行。GitHub Actions 不需要、也不会通过模型获取 Token。日志中的汇总结果可能对仓库读者可见；请不要把原始数据或密钥添加到汇总里。若仓库没有这个 Secret，执行模式会在第一条行情请求之前报错并退出。
+
 ## 操作
 
 指定**已结束的上海市场日期**（格式 `YYYYMMDD`）。当天即使已经收盘也不接受，以免取得尚未完整发布的数据。建议先验证最近一个已结束的交易日，再扩大到 3 日。
