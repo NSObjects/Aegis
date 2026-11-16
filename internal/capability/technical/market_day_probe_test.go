@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"strings"
 	"sync"
 	"testing"
@@ -166,4 +167,23 @@ func TestMarketDayProbeRejectsInvalidInputBeforeNetwork(t *testing.T) {
 		}
 	}
 	if len(fixture.count()) != 0 {t.Fatal("invalid parameters caused provider calls")}
+}
+
+func TestCanaryClientRejectsRedirectWithoutLeakingToken(t *testing.T) {
+	var redirected atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirected.Add(1)
+		http.Error(w,"unexpected second hop",500)
+	}))
+	defer other.Close()
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w,r,other.URL,http.StatusTemporaryRedirect)
+	}))
+	defer source.Close()
+	client,err:=NewCanaryTushareClient("private-test-token")
+	if err!=nil{t.Fatal(err)}
+	client.endpoint=source.URL
+	_,err=client.ListStockUniverse(context.Background(),"20261022")
+	if err==nil{t.Fatal("redirect was incorrectly accepted")}
+	if redirected.Load()!=0{t.Fatal("canary followed redirect with token-bearing POST")}
 }
