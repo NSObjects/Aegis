@@ -64,7 +64,7 @@ func run(ctx context.Context, asOf string, days int, execute bool, token string,
 	if strings.TrimSpace(token) == "" {
 		return errors.New("--execute requires TUSHARE_TOKEN in the local environment")
 	}
-	client, err := technical.NewTushareClient(token)
+	client, err := technical.NewCanaryTushareClient(token)
 	if err != nil {
 		return errors.New("invalid local TuShare token configuration")
 	}
@@ -81,7 +81,8 @@ func run(ctx context.Context, asOf string, days int, execute bool, token string,
 	}
 	probe, err := cache.Probe(ctx, asOf, days)
 	if err != nil {
-		return fmt.Errorf("live market canary failed (no scan was started): %w", err)
+		return fmt.Errorf("live market canary failed (no scan was started): %s",
+			strings.ReplaceAll(err.Error(), token, "[REDACTED]"))
 	}
 	if err := encoder.Encode(probe); err != nil {
 		return err
