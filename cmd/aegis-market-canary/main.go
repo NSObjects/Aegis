@@ -82,7 +82,7 @@ func run(ctx context.Context, asOf string, days int, execute bool, token string,
 	probe, err := cache.Probe(ctx, asOf, days)
 	if err != nil {
 		return fmt.Errorf("live market canary failed (no scan was started): %s",
-			strings.ReplaceAll(err.Error(), token, "[REDACTED]"))
+			strings.ReplaceAll(err.Error(), strings.TrimSpace(token), "[REDACTED]"))
 	}
 	if err := encoder.Encode(probe); err != nil {
 		return err
