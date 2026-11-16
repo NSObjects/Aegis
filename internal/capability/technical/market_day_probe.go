@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 )
@@ -17,6 +18,8 @@ type MarketDayProbe struct {
 	UniverseSource     string               `json:"universe_source"`
 	MainBoardSymbols   int                  `json:"main_board_symbols"`
 	TradingDaysSampled int                  `json:"trading_days_sampled"`
+	SampleBytes        int64                `json:"sample_snapshot_bytes"`
+	Projected90DayBytes int64               `json:"projected_90_day_bytes"`
 	MaxProviderCalls   int                  `json:"max_provider_calls"`
 	Days               []MarketDayProbeDate `json:"days"`
 	ReadyForFullPool   bool                 `json:"ready_for_full_pool"`
@@ -136,8 +139,23 @@ func (c *MarketDayCache) Probe(ctx context.Context, asOf string, days int) (Mark
 					date, snapshot.MainBoardDaily-snapshot.PairedRows))
 		}
 		report.Days = append(report.Days, snapshot)
+		report.SampleBytes += snapshot.DailyBytes + snapshot.FactorBytes
 	}
+	// Planning estimate only, not a measured production disk-use guarantee.
+	report.Projected90DayBytes = report.SampleBytes * int64(marketDaySessions) / int64(days)
 	report.Warnings = append(report.Warnings,
 		"Passing this limited sample does not prove full 90-day coverage, provider revisions, or historical point-in-time factor availability")
 	return report, nil
+}
+
+// NewCanaryTushareClient forbids provider HTTP redirects. A redirected POST
+// must never carry the body-embedded TuShare token to a different endpoint,
+// nor add uncontrolled network requests to the canary budget.
+func NewCanaryTushareClient(token string) (*TushareClient,error) {
+	c,err:=NewTushareClient(token)
+	if err!=nil{return nil,err}
+	c.client.CheckRedirect=func(*http.Request,[]*http.Request)error{
+		return http.ErrUseLastResponse
+	}
+	return c,nil
 }
