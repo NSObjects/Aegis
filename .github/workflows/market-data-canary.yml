@@ -1,0 +1,122 @@
+name: Market Data Canary (manual, no LLM)
+
+# Intentionally no push, pull_request, schedule, or reusable-workflow trigger.
+# A real provider request requires BOTH an operator dispatch and execute=true.
+on:
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: "Completed Shanghai market cutoff YYYYMMDD (must be before today)"
+        required: true
+        type: string
+        default: "20261113"
+      days:
+        description: "Number of trading sessions; maximum 3"
+        required: true
+        type: choice
+        default: "1"
+        options:
+          - "1"
+          - "2"
+          - "3"
+      execute:
+        description: "Explicitly spend up to 6/8/10 TuShare requests; false = no-network dry run"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Queue additional operator attempts rather than interrupting an active probe
+# midway and accidentally inducing repeated requests.
+concurrency:
+  group: manual-market-data-canary
+  cancel-in-progress: false
+
+jobs:
+  market_canary:
+    name: Bounded TuShare market data canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout selected repository commit
+        uses: actions/checkout@v5
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build canary only (no research service)
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o "$RUNNER_TEMP/aegis-market-canary" ./cmd/aegis-market-canary
+
+      - name: Preview bounded provider budget (no token or network)
+        if: ${{ !inputs.execute }}
+        shell: bash
+        env:
+          CANARY_AS_OF: ${{ inputs.as_of }}
+          CANARY_DAYS: ${{ inputs.days }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/aegis-market-canary" --as-of "$CANARY_AS_OF" --days "$CANARY_DAYS"
+          echo "Dry run only. No real TuShare coverage was checked." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Live opt-in TuShare sample only (no LLM and no full pool)
+        if: ${{ inputs.execute }}
+        shell: bash
+        env:
+          CANARY_AS_OF: ${{ inputs.as_of }}
+          CANARY_DAYS: ${{ inputs.days }}
+          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TUSHARE_TOKEN" ]; then
+            echo "::error::Repository secret TUSHARE_TOKEN is missing; no provider calls were made."
+            exit 1
+          fi
+
+          umask 077
+          report="$RUNNER_TEMP/aegis-market-canary-report.json"
+          set +e
+          "$RUNNER_TEMP/aegis-market-canary" \
+            --as-of "$CANARY_AS_OF" \
+            --days "$CANARY_DAYS" \
+            --timeout 3m --execute > "$report"
+          result=$?
+          set -e
+
+          if [ -s "$report" ] && jq -e '
+            .as_of and .universe_source == "TUSHARE_STOCK_BASIC_L_D_P"
+            and (.days | type == "array")
+            and (.trading_days_sampled | type == "number")
+            and (.max_provider_calls | type == "number")
+            and (.ready_for_full_pool | type == "boolean")
+          ' "$report" > /dev/null; then
+            # Report contains only aggregate counts and disk size estimates.
+            jq '{
+              as_of, universe_source, main_board_symbols,
+              trading_days_sampled, max_provider_calls,
+              sample_snapshot_bytes, projected_90_day_bytes,
+              ready_for_full_pool, days, warnings
+            }' "$report"
+            jq -r '
+              "### TuShare market canary (bounded live sample)",
+              "",
+              "- Cutoff: " + .as_of,
+              "- Trading days: " + (.trading_days_sampled|tostring),
+              "- Main-board universe: " + (.main_board_symbols|tostring),
+              "- Request upper bound: " + (.max_provider_calls|tostring),
+              "- 90-day projected cache bytes: " + (.projected_90_day_bytes|tostring),
+              "- Severe undercoverage flag: " + ((.ready_for_full_pool|not)|tostring),
+              "",
+              "Even if successful, this does not prove historical PIT revisions or all 90 trading days."
+            ' "$report" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ "$result" -ne 0 ]; then
+            echo "::error::Real TuShare canary did not pass. Do NOT launch the full market pool."
+            exit "$result"
+          fi
