@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"Aegis/internal/application"
+	"Aegis/internal/portfolio"
 )
 
 // webScheduleRunner drives the existing engines from scheduler tasks. The
@@ -14,8 +15,10 @@ import (
 // task and trading day, so even a duplicated trigger cannot start a second
 // paid run for the same day.
 type webScheduleRunner struct {
-	scans    *application.ScanManager
-	runs     *application.RunManager
+	scans *application.ScanManager
+	runs  interface {
+		Submit(context.Context, application.ResearchRequest) (application.RunRecord, error)
+	}
 	monitor  *application.Monitor
 	mode     application.ResearchMode
 	lookback time.Duration
@@ -43,7 +46,7 @@ func (r *webScheduleRunner) RunResearch(ctx context.Context, task application.Sc
 		Input:          input,
 	}
 	if r.mode == application.ModePortfolio {
-		request.Portfolio = nil
+		request.Portfolio = &portfolio.Context{State: portfolio.StateNotProvided}
 	}
 	rec, err := r.runs.Submit(ctx, request)
 	if err != nil {
@@ -61,8 +64,11 @@ func (r *webScheduleRunner) RunMonitor(ctx context.Context, task application.Sch
 
 // webScheduleTracker maps engine objects back to terminal execution state.
 type webScheduleTracker struct {
-	scans *application.ScanManager
-	runs  *application.RunManager
+	hypotheses *application.FileHypothesisStore
+	scans      *application.ScanManager
+	runs       interface {
+		Get(context.Context, string) (application.RunRecord, error)
+	}
 }
 
 func (t *webScheduleTracker) RefTerminal(ctx context.Context, task application.ScheduleTask, refID string) (bool, bool, string, error) {
@@ -86,6 +92,11 @@ func (t *webScheduleTracker) RefTerminal(ctx context.Context, task application.S
 		}
 		switch record.State {
 		case application.RunCompleted:
+			if t.hypotheses != nil {
+				if err := t.hypotheses.ObserveAutomaticRun(ctx, record); err != nil {
+					return false, false, "", err
+				}
+			}
 			return true, false, "", nil
 		case application.RunFailed:
 			return true, true, record.FailureCode, nil

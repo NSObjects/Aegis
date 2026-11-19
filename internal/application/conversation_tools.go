@@ -10,6 +10,7 @@ import (
 // It delegates to the same ResearchRun manager used by the HTTP workspace;
 // it never manufactures research output or bypasses Run authorization.
 type ConversationResearchTools struct {
+ memory *FileHypothesisStore
  runs interface {
   Submit(context.Context, ResearchRequest) (RunRecord, error)
   Get(context.Context, string) (RunRecord, error)
@@ -20,6 +21,11 @@ type ConversationResearchTools struct {
 func NewConversationResearchTools(runs *RunManager) (*ConversationResearchTools, error) {
  if runs == nil { return nil, errors.New("conversation tools require a run manager") }
  return &ConversationResearchTools{runs:runs}, nil
+}
+
+func (t *ConversationResearchTools) WithResearchMemory(store *FileHypothesisStore) *ConversationResearchTools {
+ t.memory = store
+ return t
 }
 
 type ConversationRunSummary struct {

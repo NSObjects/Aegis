@@ -5,6 +5,7 @@ import (
  "encoding/json"
  "errors"
  "fmt"
+ "time"
 
  "github.com/cloudwego/eino/components/tool"
  "github.com/cloudwego/eino/components/tool/utils"
@@ -62,5 +63,13 @@ func (t *ConversationResearchTools) EinoReadTools() ([]tool.InvokableTool, error
   return t.ReadEvidenceIndex(ctx,arg.RunID)
  })
  if err!=nil{return nil,fmt.Errorf("evidence index tool: %w",err)}
- return []tool.InvokableTool{get,list,artifact,debate,compare,evidence},nil
+ reads := []tool.InvokableTool{get,list,artifact,debate,compare,evidence}
+ if t.memory != nil {
+  memory, err := utils.InferTool("ReadResearchMemory", "Read prior same-symbol hypotheses, follow-up observations and unretracted retrospective samples with their source run IDs. Historical findings are not current market evidence.", func(ctx context.Context, args ConversationMemoryArgs) (ConversationMemoryResult, error) {
+   return t.memory.ConversationMemory(ctx, args, time.Now().UTC())
+  })
+  if err != nil {return nil,fmt.Errorf("research memory tool: %w",err)}
+  reads = append(reads, memory)
+ }
+ return reads,nil
 }

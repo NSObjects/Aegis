@@ -22,6 +22,7 @@ type conversationRuntime struct {
  credentials *settings.Store
  configPath string
  bindings *application.FileConversationBindingStore
+ memory *application.FileHypothesisStore
 }
 
 func (r *conversationRuntime) Respond(ctx context.Context,message string)(string,error) {
@@ -47,7 +48,7 @@ func (r *conversationRuntime) Respond(ctx context.Context,message string)(string
  if err!=nil{return "",fmt.Errorf("create conversation model: %w",err)}
  researchTools,err:=application.NewConversationResearchTools(r.runs)
  if err!=nil{return "",err}
- agent,err:=application.NewConversationAgent(ctx,chatModel,researchTools,nil)
+ agent,err:=application.NewConversationAgent(ctx,chatModel,researchTools.WithResearchMemory(r.memory),nil)
  if err!=nil{return "",err}
  responder,err:=application.NewConversationRunnerResponder(ctx,agent)
  if err!=nil{return "",err}

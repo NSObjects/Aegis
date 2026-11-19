@@ -66,10 +66,11 @@ type TriggerRunSubmitter interface {
 }
 
 type TriggerRouter struct {
-	store    *FileTriggerStore
-	runs     TriggerRunSubmitter
-	mode     ResearchMode
-	lookback time.Duration
+	hypotheses *FileHypothesisStore
+	store      *FileTriggerStore
+	runs       TriggerRunSubmitter
+	mode       ResearchMode
+	lookback   time.Duration
 }
 
 func NewTriggerRouter(store *FileTriggerStore, runs TriggerRunSubmitter, mode ResearchMode, lookback time.Duration) (*TriggerRouter, error) {
@@ -77,6 +78,11 @@ func NewTriggerRouter(store *FileTriggerStore, runs TriggerRunSubmitter, mode Re
 		return nil, errors.New("trigger router requires store and run controller")
 	}
 	return &TriggerRouter{store: store, runs: runs, mode: mode, lookback: lookback}, nil
+}
+
+func (t *TriggerRouter) WithHypothesisStore(store *FileHypothesisStore) *TriggerRouter {
+	t.hypotheses = store
+	return t
 }
 
 // RouteFor is the deterministic escalation table:
@@ -178,6 +184,11 @@ func (t *TriggerRouter) Advance(ctx context.Context) error {
 		}
 		switch rec.State {
 		case RunCompleted:
+			if t.hypotheses != nil {
+				if err := t.hypotheses.ObserveAutomaticRun(ctx, rec); err != nil {
+					return err
+				}
+			}
 			record.State = ScheduleCompleted
 		case RunFailed:
 			record.State = ScheduleFailed

@@ -85,6 +85,10 @@ historical-as-of HTTP parameter** in this first slice.
 - `GET /api/v1/research/memory` 支持 `symbol`、`q`（论点关键词）、`market_phase`、`category`、`outcome`、`offset`。每页最多 50 条，按入库时间倒序返回。
 - `POST /api/v1/research/memory/{memory_id}/revoke` 保存撤销时间，并将样本从检索中移除。原始假设、观察和复盘继续保留。
 
+对话的只读工具 `ReadResearchMemory` 按标的和可选论点关键词查询既有假设、最新观察和未撤销的记忆样本。结果包含原报告和后续报告的 ID、研究时点及人工复盘出处。历史观察仅用于回顾其记录时点。
+
+定时研究和监控触发研究进入完成状态时，会对研究开始前已录入、在其研究时点仍有效的同标的结构化假设追加后验观察。收盘价规则仅在目标日收盘后评估，缺少合格证据时保留证据不足。同一后续报告重复轮询不会产生重复观察。组合审查的定时任务以显式未知账户启动。
+
 ### Retry-safe Run creation
 
 The optional `Idempotency-Key` header on `POST /api/v1/research/runs` is

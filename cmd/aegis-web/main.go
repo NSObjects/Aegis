@@ -127,6 +127,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	hypothesisStore, err := application.NewFileHypothesisStore(filepath.Join(filepath.Dir(*path), "hypotheses"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	handler.WithHypothesisStore(hypothesisStore)
 	handler.WithCredentialStore(credentialStore)
 	// Scans and the daily scheduler remain opt-in: without TUSHARE_TOKEN the
 	// research API stays available while scan routes explicitly report service
@@ -201,10 +206,10 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		monitor.WithTriggerRouter(router)
+		monitor.WithTriggerRouter(router.WithHypothesisStore(hypothesisStore))
 		handler.WithMonitorController(monitorStore).WithTriggerController(triggerStore)
 		handler.WithResearchDigest(monitorStore, location)
-		scheduler, err := application.NewScheduler(scheduleStore, calendar, &webScheduleRunner{scans: scans, runs: runs, monitor: monitor, mode: mode, lookback: *lookback}, &webScheduleTracker{scans: scans, runs: runs}, location)
+		scheduler, err := application.NewScheduler(scheduleStore, calendar, &webScheduleRunner{scans: scans, runs: runs, monitor: monitor, mode: mode, lookback: *lookback}, &webScheduleTracker{scans: scans, runs: runs, hypotheses: hypothesisStore}, location)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -221,16 +226,11 @@ func main() {
 		log.Fatal(err)
 	}
 	handler.WithWatchlistStore(watchlistStore)
-	hypothesisStore, err := application.NewFileHypothesisStore(filepath.Join(filepath.Dir(*path), "hypotheses"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	handler.WithHypothesisStore(hypothesisStore)
 	bindingStore, err := application.NewFileConversationBindingStore(filepath.Join(filepath.Dir(*path), "conversation-sessions"), runs)
 	if err != nil {
 		log.Fatal(err)
 	}
-	handler.WithConversationResponder(&conversationRuntime{runs: runs, credentials: credentialStore, configPath: *cfg, bindings: bindingStore})
+	handler.WithConversationResponder(&conversationRuntime{runs: runs, credentials: credentialStore, configPath: *cfg, bindings: bindingStore, memory: hypothesisStore})
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 16 << 10}
 	go func() {
 		<-ctx.Done()
