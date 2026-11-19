@@ -13,8 +13,8 @@ function pathFor(segments: string[], method: string): string | null {
   if (segments[0] === "memory") {
     const memory = "/api/v1/research/memory";
     if (segments.length === 1) return memory;
-    if (segments.length === 3 && isRunID(segments[1]) && segments[2] === "revoke" && method === "POST") {
-      return `${memory}/${segments[1]}/revoke`;
+    if (segments.length === 3 && isRunID(segments[1]) && ["revoke", "feedback"].includes(segments[2]) && method === "POST") {
+      return `${memory}/${segments[1]}/${segments[2]}`;
     }
     return null;
   }
@@ -40,9 +40,9 @@ async function proxy(req: NextRequest, ctx: Context, method: "GET" | "POST") {
   if (!path) return NextResponse.json({ error: "route not found" }, { status: 404, headers: defaultHeaders });
   const headers = new Headers({ Authorization: `Bearer ${config.apiToken}` });
   let body: string | undefined;
-  if (method === "POST" && (segments.length === 0 || segments[1] === "hypotheses" || (segments[0] === "memory" && segments.length === 1))) {
+  if (method === "POST" && (segments.length === 0 || segments[1] === "hypotheses" || (segments[0] === "memory" && (segments.length === 1 || segments[2] === "feedback")))) {
     const raw = await req.text();
-    if (new TextEncoder().encode(raw).byteLength > (segments[3] === "observations" ? 1024 : segments[0] === "memory" ? 2048 : segments.length === 0 ? 16384 : 32768)) return NextResponse.json({ error: "payload too large" }, { status: 413, headers: defaultHeaders });
+    if (new TextEncoder().encode(raw).byteLength > (segments[2] === "feedback" ? 16 * 1024 * 1024 : segments[3] === "observations" ? 1024 : segments[0] === "memory" ? 2048 : segments.length === 0 ? 16384 : 32768)) return NextResponse.json({ error: "payload too large" }, { status: 413, headers: defaultHeaders });
     body = raw;
     headers.set("Content-Type", "application/json");
     // Forward only this allowlisted request-deduplication header, never arbitrary client headers.

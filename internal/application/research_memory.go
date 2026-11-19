@@ -39,6 +39,7 @@ type ResearchMemory struct {
 	CreatedAt time.Time  `json:"created_at"`
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 	MemorySource
+	Feedback []ResearchFeedback `json:"feedback,omitempty"`
 }
 
 type MemoryFilter struct {
@@ -223,7 +224,7 @@ func (s *FileHypothesisStore) readMemory() ([]ResearchMemory, error) {
 	seen := make(map[string]bool, len(records))
 	for _, entry := range records {
 		id, err := memoryID(entry.MemorySource)
-		if err != nil || id != entry.ID || seen[id] || entry.CreatedAt.IsZero() {
+		if err != nil || id != entry.ID || seen[id] || entry.CreatedAt.IsZero() || len(entry.Feedback) > maxMemoryFeedback {
 			return nil, errors.New("invalid persisted memory entry")
 		}
 		seen[id] = true

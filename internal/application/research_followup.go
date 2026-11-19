@@ -154,6 +154,13 @@ func (s *FileHypothesisStore) ConversationMemory(ctx context.Context, args Conve
 			if !found || entry.HypothesisID != item.ID || entry.RevokedAt != nil || entry.CreatedAt.After(cutoff) {
 				continue
 			}
+			feedback := make([]ResearchFeedback, 0, len(entry.Feedback))
+			for _, item := range entry.Feedback {
+				if !item.RecordedAt.After(cutoff) {
+					feedback = append(feedback, item)
+				}
+			}
+			entry.Feedback = feedback
 			sample := ConversationMemorySample{Memory: entry, Observation: observation}
 			if entry.ReviewID != "" {
 				reviews, err := s.readReviews(item.RunID, item.ID)

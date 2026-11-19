@@ -14,7 +14,76 @@ type Memory = {
   category?: keyof typeof reviewCategories;
   source_run_id: string;
   observation_run_id: string;
+  feedback?: Feedback[];
 };
+type Feedback = {
+  archive_sha256: string;
+  strategy_version: string;
+  test_through: string;
+  direction: string;
+  selection: string;
+  data_quality: string;
+  timing: string;
+  candidate_outcome?: { source: string };
+};
+
+const feedbackLabels: Record<string, string> = {
+  UNASSESSED: "待评估", SUPPORTED: "支持", REFUTED: "反驳",
+  TRUE_POSITIVE: "命中", TRUE_NEGATIVE: "正确排除", FALSE_POSITIVE: "误选", FALSE_NEGATIVE: "漏选",
+  EVALUABLE: "可评估", MISSING_CALENDAR_WINDOW: "交易日窗口不足",
+  HALTED_SESSION_IN_WINDOW: "窗口内停牌", MISSING_PIT_ADJUSTMENT: "缺少可用复权因子",
+  MISSING_TRADING_SESSION_DATA: "缺少交易日数据", ARCHIVE_CUTOFF_CHECKED: "已检查归档时点",
+  LABEL_AFTER_TEST_WINDOW: "结果标签晚于测试窗口",
+};
+
+function FeedbackPanel({ item, onSaved }: { item: Memory; onSaved: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const label = (value: string) => feedbackLabels[value] ?? value;
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const archive = new FormData(form).get("archive");
+    if (!(archive instanceof File) || !archive.size || archive.size > 16 * 1024 * 1024) {
+      setMessage("请选择不超过 16 MiB 的回测验证 JSON。");
+      return;
+    }
+    setMessage("");
+    setSaving(true);
+    try {
+      const response = await fetch(`${endpoint}/${item.memory_id}/feedback`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: archive,
+      });
+      if (response.status === 409) {
+        setMessage("归档与此记忆的标的、原研究时点或后续观察不匹配。");
+        return;
+      }
+      if (!response.ok) throw Error();
+      form.reset();
+      setMessage("已记录回测反馈。");
+      onSaved();
+    } catch {
+      setMessage("归档验证失败。请确认上传的是回测验证输入。");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return <details>
+    <summary>回测反馈</summary>
+    {item.feedback?.map(record => <div key={record.archive_sha256}>
+      <p>{record.strategy_version} · 样本截至 {record.test_through}</p>
+      <p>方向 {label(record.direction)} · 筛选 {label(record.selection)} · 数据 {label(record.data_quality)} · 时点 {label(record.timing)}</p>
+      {record.candidate_outcome && <p>结果标签来源 · {record.candidate_outcome.source}</p>}
+      <p><code title={record.archive_sha256}>{record.archive_sha256.slice(0, 12)}…</code></p>
+    </div>)}
+    <form onSubmit={save}>
+      <label>回测验证 JSON<input type="file" name="archive" accept=".json,application/json" required /></label>
+      <button className="btn" type="submit" disabled={saving}>核验并附上反馈</button>
+    </form>
+    {message && <p role="status">{message}</p>}
+  </details>;
+}
+
 type Results = { memories: Memory[]; total: number; has_more: boolean };
 
 export default function ResearchMemoryPanel() {
@@ -100,6 +169,7 @@ export default function ResearchMemoryPanel() {
           {" · "}<a href={`/?run=${item.source_run_id}`}>原报告</a>
           {" · "}<a href={`/?run=${item.observation_run_id}`}>后续报告</a>
         </p>
+        <FeedbackPanel item={item} onSaved={() => setRevision(value => value + 1)} />
         <button className="btn" type="button" disabled={revoking} onClick={() => void revoke(item)}>撤销记忆</button>
       </div>)}
       {(offset > 0 || results?.has_more) && <nav aria-label="研究记忆分页">

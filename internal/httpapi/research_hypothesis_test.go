@@ -146,12 +146,18 @@ func TestResearchHypothesisBoundToCompletedArtifactAndRetried(t *testing.T) {
 	checkMemory("?symbol=600519.sh&q=%E5%9B%9E%E8%B4%AD&market_phase=%E7%9B%98%E6%95%B4&category=DATA_MISSING&outcome=INCONCLUSIVE", 1)
 	checkMemory("?category=CITATION_ERROR", 0)
 	checkMemory("?outcome=SUPPORTED", 0)
+	feedbackPath := memory + "/" + entry.ID + "/feedback"
+	check(http.MethodPost, feedbackPath, "{}", false, http.StatusUnauthorized)
+	check(http.MethodGet, feedbackPath, "", true, http.StatusMethodNotAllowed)
+	check(http.MethodPost, feedbackPath, `{"forged_verdict":"SUPPORTED"}`, true, http.StatusBadRequest)
+	check(http.MethodPost, feedbackPath, "{}", true, http.StatusConflict)
 	revokePath := memory + "/" + entry.ID + "/revoke"
 	check(http.MethodPost, revokePath, "", true, http.StatusOK)
 	reopen()
 	check(http.MethodPost, revokePath, "", true, http.StatusOK)
 	check(http.MethodPost, memory, string(body), true, http.StatusConflict)
 	checkMemory("", 0)
+	check(http.MethodPost, feedbackPath, "{}", true, http.StatusConflict)
 	check(http.MethodGet, reviews, "", true, http.StatusOK)
 
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"Aegis/internal/application"
+	"Aegis/internal/strategy/pullback"
 )
 
 func (h *Handler) researchMemoryRoute(w http.ResponseWriter, r *http.Request) {
@@ -19,12 +20,16 @@ func (h *Handler) researchMemoryRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path != path {
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, path+"/"), "/")
-		if len(parts) != 2 || !isRunID(parts[0]) || parts[1] != "revoke" {
+		if len(parts) != 2 || !isRunID(parts[0]) || (parts[1] != "revoke" && parts[1] != "feedback") {
 			http.NotFound(w, r)
 			return
 		}
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w, "POST")
+			return
+		}
+		if parts[1] == "feedback" {
+			h.addResearchFeedback(w, r, parts[0])
 			return
 		}
 		entry, err := h.hypotheses.RevokeMemory(parts[0], h.now())
@@ -75,11 +80,28 @@ func sendMemoryResult(w http.ResponseWriter, status int, body any, err error) {
 	case errors.Is(err, application.ErrHypothesisNotFound), errors.Is(err, application.ErrMemoryNotFound):
 		http.Error(w, err.Error(), http.StatusNotFound)
 	case errors.Is(err, application.ErrMemorySource), errors.Is(err, application.ErrMemoryCapacity),
-		errors.Is(err, application.ErrMemoryRevoked):
+		errors.Is(err, application.ErrMemoryRevoked), errors.Is(err, application.ErrFeedbackUnavailable):
 		http.Error(w, err.Error(), http.StatusConflict)
 	case err != nil:
 		http.Error(w, "research memory unavailable", http.StatusInternalServerError)
 	default:
 		sendJSON(w, status, body)
 	}
+}
+
+func (h *Handler) addResearchFeedback(w http.ResponseWriter, r *http.Request, memoryID string) {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20))
+	decoder.DisallowUnknownFields()
+	var input pullback.ValidationInput
+	var extra any
+	if decoder.Decode(&input) != nil || decoder.Decode(&extra) != io.EOF {
+		sendMemoryResult(w, 0, nil, application.ErrInvalidMemory)
+		return
+	}
+	feedback, created, err := h.hypotheses.AddResearchFeedback(memoryID, input, h.now())
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	sendMemoryResult(w, status, feedback, err)
 }

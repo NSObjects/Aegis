@@ -280,6 +280,18 @@ const server = createServer(async (req, res) => {
       return json(res, 201, entry);
     }
   }
+  const feedback = url.pathname.match(/^\/api\/v1\/research\/memory\/([a-f0-9]{32})\/feedback$/);
+  if (feedback && req.method === "POST") {
+    const entry = researchMemory.get(feedback[1]);
+    if (!entry || entry.revoked_at) return json(res, 409, { error: "inactive memory" });
+    const archive = await readBody(req);
+    if (!archive.folds?.length) return json(res, 400, { error: "invalid fixture" });
+    const record = { archive_sha256: "c".repeat(64), strategy_version: "trend-pullback-v1",
+      test_through: archive.folds[0].test_through, direction: "REFUTED", selection: "FALSE_POSITIVE",
+      data_quality: "EVALUABLE", timing: "ARCHIVE_CUTOFF_CHECKED", candidate_outcome: { source: "独立测试标签" } };
+    (entry.feedback ??= []).push(record);
+    return json(res, 201, record);
+  }
   const revoke = url.pathname.match(/^\/api\/v1\/research\/memory\/([a-f0-9]{32})\/revoke$/);
   if (revoke && req.method === "POST") {
     const entry = researchMemory.get(revoke[1]);

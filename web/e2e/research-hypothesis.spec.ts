@@ -73,6 +73,14 @@ test("a hypothesis can be saved and reopened from its source report", async ({ p
   await page.getByRole("button", { name: "检索研究记忆" }).click();
   await expect(page.getByText("找到 1 条记忆")).toBeVisible();
   await expect(page.getByRole("link", { name: "原报告", exact: true })).toHaveAttribute("href", `/?run=${run_id}`);
+  await page.getByText("回测反馈", { exact: true }).click();
+  await page.getByLabel("回测验证 JSON").setInputFiles({
+    name: "archive.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ folds: [{ test_through: "20261120" }] })),
+  });
+  await page.getByRole("button", { name: "核验并附上反馈" }).click();
+  await expect(page.getByText("已记录回测反馈。")).toBeVisible();
+  await expect(page.getByText("结果标签来源 · 独立测试标签")).toBeVisible();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "撤销记忆" }).click();
   await expect(page.getByText("没有符合条件的记忆。")).toBeVisible();
