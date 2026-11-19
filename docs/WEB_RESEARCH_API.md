@@ -101,6 +101,14 @@ historical-as-of HTTP parameter** in this first slice.
 
 输出包含输入和策略的 SHA-256，以及逐标的结果。回放依赖归档方提供真实的可用时间和完整的股票池及交易日历。当前接口回取的历史数据须另外核对发布版本。
 
+### 离线成交模拟
+
+`go run ./cmd/aegis-pullback-scan --backtest archive.json` 运行开盘成交模拟。文件包含 `signals`（上一节的 PIT 快照数组）、`sessions`（依交易日排列的模拟日历）和 `policy`。策略参数包括 `shares`（100 股的整数倍）、`hold_sessions`（至少一个交易日）、`buy_fee_bps`、`sell_fee_bps` 和 `slippage_bps`。
+
+每个模拟交易日包含 `date` 和 `rows`。每行填入 `symbol`、`state`、`known_at` 及 `continuous_price`。成交行还需归档 `open`、`upper_limit`、`lower_limit` 和买卖两侧的可成交股数 `buy_shares`、`sell_shares`。开盘数据须在上海时间 09:25 到 09:30 之间可用。停牌或缺失行不填价格和深度。持仓期间须逐日确认价格连续性；除权、分红或数据缺失导致无法核对时，模拟保留持仓并标为估值不可用。
+
+买入只尝试信号后的第一个交易日开盘，卖出在持有期届满后按交易日重试。相关方向涨跌停或流动性不足会阻止模拟成交。输出保留原始信号、未成交原因、每次成交成本和已平仓的净损益。同一标的同时最多有一个固定股数的模拟持仓，各标的独立模拟，尚无共享资金预算或组合净值计算。
+
 ### Retry-safe Run creation
 
 The optional `Idempotency-Key` header on `POST /api/v1/research/runs` is

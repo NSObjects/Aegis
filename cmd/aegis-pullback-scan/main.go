@@ -77,7 +77,15 @@ func main(){
  limit:=flag.Int("limit",20,"universe slice length, max 20")
  describe:=flag.Bool("describe-strategy",false,"print the registered strategy definition and its SHA-256 without scanning")
  pitReplay:=flag.String("replay-pit","","replay an archived PIT JSON snapshot offline")
+ backtest:=flag.String("backtest","","simulate opening fills using archived PIT signals and execution data")
  flag.Parse()
+ if *backtest!="" {
+  if *pitReplay!="" || *describe || *useUniverse || *symbols!="" || *asOf!="" {
+   fmt.Fprintln(os.Stderr,"--backtest requires a standalone archive"); os.Exit(1)
+  }
+  if err:=backtestFile(*backtest,os.Stdout);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}
+  return
+ }
  if *pitReplay!="" {
   if *describe || *useUniverse || *symbols!="" || *asOf!="" {
    fmt.Fprintln(os.Stderr,"--replay-pit cannot be combined with live scan arguments or --describe-strategy"); os.Exit(1)
