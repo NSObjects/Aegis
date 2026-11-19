@@ -66,6 +66,7 @@ func main() {
 	runTimeout := flag.Duration("run-timeout", 20*time.Minute, "maximum wall-clock time for a queued or running research task")
 	lookback := flag.Duration("event-lookback", 7*24*time.Hour, "live event evidence lookback")
 	full := flag.Bool("portfolio-review", true, "full research with explicit account state")
+	accountMaxAge := flag.Duration("portfolio-account-max-age", 24*time.Hour, "maximum observed account snapshot age")
 	flag.Parse()
 	if *dev {
 		host, _, err := net.SplitHostPort(*addr)
@@ -133,6 +134,15 @@ func main() {
 	}
 	handler.WithHypothesisStore(hypothesisStore)
 	handler.WithCredentialStore(credentialStore)
+	if key := os.Getenv("AEGIS_PORTFOLIO_MASTER_KEY"); !*dev && key != "" {
+		accounts, err := settings.NewPortfolioAccountStore(
+			filepath.Join(filepath.Dir(*path), "portfolio-accounts", "versions.enc"), key, *accountMaxAge,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		handler.WithPortfolioAccounts(accounts)
+	}
 	// Scans and the daily scheduler remain opt-in: without TUSHARE_TOKEN the
 	// research API stays available while scan routes explicitly report service
 	// unavailable, and there is no verifiable trading calendar so the scheduler

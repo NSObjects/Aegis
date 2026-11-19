@@ -16,4 +16,12 @@
 
 ## 后续接入
 
-R7-02 负责账号导入、来源认证、安全存储、授权和版本保存。R7-03 在已有敞口上增加可审计的行业分类与预算画像。在真实账户及历史归档验收前，领域模型可离线验证，组合功能仍按阶段推进。
+R7-02 已支持经过认证的操作者显式导入、安全存储与不可覆盖的版本保存。供应商接入仍需来源认证适配器。R7-03 在已有敞口上增加可审计的行业分类与预算画像。在真实账户及历史归档验收前，领域模型可离线验证，组合功能仍按阶段推进。
+
+## 显式导入
+
+生产服务设置独立的 `AEGIS_PORTFOLIO_MASTER_KEY`，格式为 32 随机字节的十六进制编码。账户 API 继承服务端 Bearer 认证，并在无密钥或 `-dev` 模式下保持关闭。归档位于运行存储旁的 `portfolio-accounts/versions.enc`，目录与文件分别使用私有权限和 AES-GCM 加密。账户与风险政策版本独立保存，每次导入在同一次写入中生效。
+
+`POST /api/v1/portfolio/account-versions` 接受 `{"snapshot": {...}, "policy": {...}}`，其中政策可省略。账户与政策的 `source.kind` 使用 `OPERATOR`，`source.reference` 使用非敏感引用。省略 `source.available_at`，服务端在首次成功导入时记录可用时间。同账户、同版本、同内容的重试保留原时点。同版本提交不同内容返回 HTTP 409。
+
+`GET /api/v1/portfolio/account-versions` 要求 `account_id` 和 `snapshot_version`，支持可选的 `policy_version` 与 RFC3339 的 `as_of`。查询时点默认当前时间。快照年龄由 `-portfolio-account-max-age` 控制，默认 24 小时。早于导入时间、超出有效期或使用未来政策的请求返回 HTTP 422。操作者上传的声明由本人确认，API 校验格式、金额及时间，不代为验证经纪商来源。

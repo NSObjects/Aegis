@@ -45,6 +45,7 @@ type Handler struct {
 	lookback     time.Duration
 	now          func() time.Time
 	poll         time.Duration
+	portfolioAccounts *settings.PortfolioAccountStore
 	localDev     bool
 	credentials  *settings.Store
 	scans        ScanController
@@ -144,6 +145,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/v1/conversation/sessions/") {
 		h.conversationSessionRead(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/portfolio/account-versions" {
+		h.portfolioAccountVersions(w, r)
 		return
 	}
 	if r.URL.Path == "/api/v1/settings/credentials" {
