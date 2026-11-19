@@ -10,6 +10,10 @@ import (
 )
 
 func decodeArchive(path string, target any) error {
+	return decodeArchiveTo(path, target, io.Discard)
+}
+
+func decodeArchiveTo(path string, target any, archiveBytes io.Writer) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -17,7 +21,7 @@ func decodeArchive(path string, target any) error {
 	defer file.Close()
 	const maxArchiveBytes = 128 << 20
 	limit := &io.LimitedReader{R: file, N: maxArchiveBytes + 1}
-	decoder := json.NewDecoder(limit)
+	decoder := json.NewDecoder(io.TeeReader(limit, archiveBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
