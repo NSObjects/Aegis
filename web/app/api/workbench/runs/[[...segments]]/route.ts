@@ -10,9 +10,21 @@ const defaultHeaders = { "Cache-Control": "no-store", "X-Content-Type-Options": 
 
 function pathFor(segments: string[], method: string): string | null {
   if (segments.length === 0) return method === "GET" || method === "POST" ? prefix : null;
+  if (segments[0] === "memory") {
+    const memory = "/api/v1/research/memory";
+    if (segments.length === 1) return memory;
+    if (segments.length === 3 && isRunID(segments[1]) && segments[2] === "revoke" && method === "POST") {
+      return `${memory}/${segments[1]}/revoke`;
+    }
+    return null;
+  }
   if (!isRunID(segments[0])) return null;
   if (segments.length === 1) return method === "GET" ? `${prefix}/${segments[0]}` : null;
+  if (segments.length === 4 && segments[1] === "hypotheses" && isRunID(segments[2]) && ["observations", "reviews"].includes(segments[3])) {
+    return `${prefix}/${segments[0]}/hypotheses/${segments[2]}/${segments[3]}`;
+  }
   if (segments.length !== 2) return null;
+  if (segments[1] === "hypotheses") return `${prefix}/${segments[0]}/hypotheses`;
   if (segments[1] === "cancel" && method === "POST") return `${prefix}/${segments[0]}/cancel`;
   if (["artifact", "events", "stream"].includes(segments[1]) && method === "GET") return `${prefix}/${segments[0]}/${segments[1]}`;
   return null;
@@ -28,13 +40,13 @@ async function proxy(req: NextRequest, ctx: Context, method: "GET" | "POST") {
   if (!path) return NextResponse.json({ error: "route not found" }, { status: 404, headers: defaultHeaders });
   const headers = new Headers({ Authorization: `Bearer ${config.apiToken}` });
   let body: string | undefined;
-  if (method === "POST" && segments.length === 0) {
+  if (method === "POST" && (segments.length === 0 || segments[1] === "hypotheses" || (segments[0] === "memory" && segments.length === 1))) {
     const raw = await req.text();
-    if (raw.length > 16384) return NextResponse.json({ error: "payload too large" }, { status: 413, headers: defaultHeaders });
+    if (new TextEncoder().encode(raw).byteLength > (segments[3] === "observations" ? 1024 : segments[0] === "memory" ? 2048 : segments.length === 0 ? 16384 : 32768)) return NextResponse.json({ error: "payload too large" }, { status: 413, headers: defaultHeaders });
     body = raw;
     headers.set("Content-Type", "application/json");
     // Forward only this allowlisted request-deduplication header, never arbitrary client headers.
-    const key = req.headers.get("Idempotency-Key");
+    const key = segments.length === 0 ? req.headers.get("Idempotency-Key") : null;
     if (key !== null) {
       if (!/^[a-zA-Z0-9_.:-]{8,128}$/.test(key)) return NextResponse.json({ error: "invalid Idempotency-Key" }, { status: 400, headers: defaultHeaders });
       headers.set("Idempotency-Key", key);
@@ -48,17 +60,19 @@ async function proxy(req: NextRequest, ctx: Context, method: "GET" | "POST") {
     }
   }
   try {
-    // Forward only bounded history filters on the list route; never arbitrary query parameters.
+    const historyFilters = ["limit", "offset", "symbol", "state"];
+    const memoryFilters = ["symbol", "q", "market_phase", "category", "outcome", "offset"];
+    const filters = segments.length === 0 ? historyFilters : segments[0] === "memory" ? memoryFilters : null;
     let target = path;
-    if (method === "GET" && segments.length === 0) {
+    if (method === "GET" && filters) {
       const params = new URLSearchParams();
-      for (const key of ["limit", "offset", "symbol", "state"]) {
+      for (const key of filters) {
         const values = req.nextUrl.searchParams.getAll(key);
-        if (values.length > 1) return NextResponse.json({ error: "duplicate history filter" }, { status: 400, headers: defaultHeaders });
+        if (values.length > 1) return NextResponse.json({ error: "duplicate filter" }, { status: 400, headers: defaultHeaders });
         if (values.length === 1) params.set(key, values[0]);
       }
-      if ([...req.nextUrl.searchParams.keys()].some(key => !["limit", "offset", "symbol", "state"].includes(key))) {
-        return NextResponse.json({ error: "unsupported history filter" }, { status: 400, headers: defaultHeaders });
+      if ([...req.nextUrl.searchParams.keys()].some(key => !filters.includes(key))) {
+        return NextResponse.json({ error: "unsupported filter" }, { status: 400, headers: defaultHeaders });
       }
       if (params.size > 0) target += "?" + params.toString();
     }

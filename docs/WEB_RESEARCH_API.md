@@ -61,6 +61,30 @@ current live research cutoff and keeps the original CLI PIT evidence task
 parameters (lookback is configured server-side). There is **no arbitrary
 historical-as-of HTTP parameter** in this first slice.
 
+### 监控提醒与研究摘要
+
+配置服务进程的 `TUSHARE_TOKEN`，再通过 `POST /api/v1/monitors` 建立规则、通过 `POST /api/v1/schedules` 创建启用的 `MONITOR` 任务。监控在交易日当地 18 点起执行，默认时区为上海。公告可触发一项 `DECISION` 研究。价格和量能提醒记录行情变化。
+
+`GET /api/v1/research-digest?period=daily` 返回当日提醒。`period=weekly` 返回截至指定日期的七个日历日。可用 `through=YYYYMMDD` 查询历史范围。响应包含记录的行情或公告变化、数据源故障数、关联触发状态、研究和此前报告的 ID。观察池呈现同一摘要。数据不可用会显示为告警。
+
+### 研究假设
+
+在已完成报告中展开「研究假设」，录入陈述、有效期、失效条件、验证规则与正反证据。浏览器按上海时间解释有效期。
+
+`GET /api/v1/research/runs/{run_id}/hypotheses` 返回该 Run 的假设。向相同路径发送 `POST`，提交 `statement`、RFC3339 格式的 `expires_at`、`invalidation` 和 `verification_rule`。可选的 `supporting_evidence` 与 `contrary_evidence` 各接受最多八条 `{ "reference": "...", "detail": "..." }`。证据由操作者引用。可选的 `close_rule` 指定 `trade_date`（YYYYMMDD）、`operator`（GTE 或 LTE）和正数 `threshold`，用于核验指定交易日的未复权收盘价。也可改用 `document_rule`，指定 `document_id` 和 `on_match`（SUPPORTED 或 REFUTED）。公告须为报告所引用的原始来源，在原研究时点之后发布，并在有效期及后续报告时点内可用。来源 Run、标的、研究时点和报告 SHA-256 由服务端取得。相同内容重试返回原记录。每份报告最多保存 50 条假设。
+
+通过 `GET /api/v1/research/runs/{run_id}/hypotheses/{hypothesis_id}/observations` 查看后验观察。向同一路径 POST 后续报告的 `run_id`，可为同一标的的原假设追加验证结果。服务端从后续报告读取行情或公告证据。缺失数据或文本规则在有效期内返回 `INCONCLUSIVE`，期满后仍缺可判定证据则返回 `EXPIRED`。每条观察保存后续报告的 ID、时点和指纹。
+
+在后验观察下展开「错误复盘」可归档原因。通过 `GET /api/v1/research/runs/{run_id}/hypotheses/{hypothesis_id}/reviews` 读取复盘。向相同路径 POST，提交已关联观察的 `observation_run_id`、`category`、`reason`、至少一条 `supporting_evidence` 和可选 `counterexamples`。两类证据各最多八条，沿用假设的来源与说明字段。类别值为 `DATA_MISSING`、`CITATION_ERROR`、`REASONING_BIAS`、`CONTEXT_CHANGED` 或 `HINDSIGHT_BIAS`。复盘是操作者归因记录，每个假设最多保存 50 条。
+
+### 研究记忆
+
+从报告的后验观察选择「收入研究记忆」，可选填市场阶段或关联该观察的复盘。在「研究档案」展开「研究记忆」检索。列表中的原报告与后续报告可直接打开。
+
+- `POST /api/v1/research/memory` 接受 `source_run_id`、`hypothesis_id`、`observation_run_id`，以及可选的 `review_id`、`market_phase`。标的、论点、结果和失败类别由已保存的来源记录派生。
+- `GET /api/v1/research/memory` 支持 `symbol`、`q`（论点关键词）、`market_phase`、`category`、`outcome`、`offset`。每页最多 50 条，按入库时间倒序返回。
+- `POST /api/v1/research/memory/{memory_id}/revoke` 保存撤销时间，并将样本从检索中移除。原始假设、观察和复盘继续保留。
+
 ### Retry-safe Run creation
 
 The optional `Idempotency-Key` header on `POST /api/v1/research/runs` is

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Eye, Plus, RefreshCcw, Search, Trash2, TriangleAlert } from "lucide-react";
 import { isWatchItem, type LiveState, type WatchItem } from "@/lib/live-contract";
 import { cn } from "@/lib/utils";
+import ResearchDigestPanel from "@/components/research-digest-panel";
 
 const base = "/api/workbench";
 const stateLabels: Record<LiveState, string> = {
@@ -89,7 +90,8 @@ export default function WatchlistPanel({
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  return <section className="surface live-history" aria-label="观察池">
+  return <>
+  <section className="surface live-history" aria-label="观察池">
     <div className="panel-head">
       <h2>观察池</h2>
       <div className="live-history-actions">
@@ -134,5 +136,7 @@ export default function WatchlistPanel({
           </div>
         </div>))}</div> : null}
     <p className="watch-footnote"><Eye size={13} />观察池仅保存操作者自填的理由与条件，重启后保留；不代表任何研究结论。</p>
-  </section>;
+  </section>
+  <ResearchDigestPanel onOpenRun={onOpenRun} />
+  </>;
 }

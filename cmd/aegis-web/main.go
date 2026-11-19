@@ -180,11 +180,35 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		scheduler, err := application.NewScheduler(scheduleStore, calendar, &webScheduleRunner{scans: scans, runs: runs, mode: mode, lookback: *lookback}, &webScheduleTracker{scans: scans, runs: runs}, location)
+		monitorStore, err := application.NewFileMonitorStore(filepath.Join(filepath.Dir(*path), "monitors"))
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := scheduler.Start(time.Minute); err != nil {
+		triggerStore, err := application.NewFileTriggerStore(filepath.Join(filepath.Dir(*path), "triggers"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		source, err := application.NewTushareMonitorSource(researcher, tushareClient)
+		if err != nil {
+			log.Fatal(err)
+		}
+		monitor, err := application.NewMonitor(monitorStore, source)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Automated monitors have no operator-supplied account snapshot.
+		router, err := application.NewTriggerRouter(triggerStore, runs, application.ModeDecision, *lookback)
+		if err != nil {
+			log.Fatal(err)
+		}
+		monitor.WithTriggerRouter(router)
+		handler.WithMonitorController(monitorStore).WithTriggerController(triggerStore)
+		handler.WithResearchDigest(monitorStore, location)
+		scheduler, err := application.NewScheduler(scheduleStore, calendar, &webScheduleRunner{scans: scans, runs: runs, monitor: monitor, mode: mode, lookback: *lookback}, &webScheduleTracker{scans: scans, runs: runs}, location)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := scheduler.WithTriggerRouter(router).Start(time.Minute); err != nil {
 			log.Fatal(err)
 		}
 		defer scheduler.Stop()
@@ -197,6 +221,11 @@ func main() {
 		log.Fatal(err)
 	}
 	handler.WithWatchlistStore(watchlistStore)
+	hypothesisStore, err := application.NewFileHypothesisStore(filepath.Join(filepath.Dir(*path), "hypotheses"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	handler.WithHypothesisStore(hypothesisStore)
 	bindingStore, err := application.NewFileConversationBindingStore(filepath.Join(filepath.Dir(*path), "conversation-sessions"), runs)
 	if err != nil {
 		log.Fatal(err)

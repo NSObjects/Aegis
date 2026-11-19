@@ -53,6 +53,9 @@ type Handler struct {
 	schedules    ScheduleController
 	monitors     MonitorController
 	triggers     TriggerController
+	digest       ResearchDigestController
+	digestZone   *time.Location
+	hypotheses   *application.FileHypothesisStore
 	conversation ConversationResponder
 	rateMu       sync.Mutex
 	windowStart  time.Time
@@ -127,6 +130,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.triggerRoute(w, r)
 		return
 	}
+	if r.URL.Path == "/api/v1/research/memory" || strings.HasPrefix(r.URL.Path, "/api/v1/research/memory/") {
+		h.researchMemoryRoute(w, r)
+		return
+	}
+	if r.URL.Path == "/api/v1/research-digest" {
+		h.researchDigest(w, r)
+		return
+	}
 	if r.URL.Path == "/api/v1/conversation/query" {
 		h.conversationQuery(w, r)
 		return
@@ -166,8 +177,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.get(w, r, id)
 		return
 	}
+	if len(parts) == 4 && parts[1] == "hypotheses" && isRunID(parts[2]) {
+		switch parts[3] {
+		case "observations":
+			h.hypothesisObservationRoute(w, r, id, parts[2])
+			return
+		case "reviews":
+			h.hypothesisReviewRoute(w, r, id, parts[2])
+			return
+		}
+	}
 	if len(parts) == 2 {
 		switch parts[1] {
+		case "hypotheses":
+			h.hypothesisRoute(w, r, id)
+			return
 		case "artifact":
 			if r.Method == http.MethodGet {
 				h.artifact(w, r, id)

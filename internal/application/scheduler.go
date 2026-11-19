@@ -37,6 +37,7 @@ type Scheduler struct {
 	runner   ScheduleActionRunner
 	tracker  ScheduleRefTracker
 	location *time.Location
+	triggers *TriggerRouter
 	now      func() time.Time
 
 	mu      sync.Mutex
@@ -53,6 +54,12 @@ func NewScheduler(store *FileScheduleStore, calendar technical.TradingCalendar, 
 		return nil, errors.New("scheduler timezone required")
 	}
 	return &Scheduler{store: store, calendar: calendar, runner: runner, tracker: tracker, location: location, now: func() time.Time { return time.Now().UTC() }, stop: make(chan struct{}), done: make(chan struct{})}, nil
+}
+
+// WithTriggerRouter registers trigger reconciliation before Start.
+func (s *Scheduler) WithTriggerRouter(router *TriggerRouter) *Scheduler {
+	s.triggers = router
+	return s
 }
 
 // ReconcileInterrupted must run once at startup before the loop starts:
@@ -114,7 +121,13 @@ func (s *Scheduler) tickOnce() {
 }
 
 func (s *Scheduler) tickContext(ctx context.Context) {
-	today := s.now().In(s.location).Format("20060102")
+	if s.triggers != nil {
+		if err := s.triggers.Advance(ctx); err != nil {
+			log.Printf("AEGIS_TRIGGER_ADVANCE_ERROR err=%v", err)
+		}
+	}
+	now := s.now().In(s.location)
+	today := now.Format("20060102")
 	trading, err := s.calendar.IsTradingDay(ctx, today)
 	if err != nil {
 		// Calendar unavailable: skip the cycle loudly. Never trigger paid work
@@ -135,6 +148,11 @@ func (s *Scheduler) tickContext(ctx context.Context) {
 			return
 		}
 		if !task.Enabled {
+			continue
+		}
+		// Monitoring consumes a single daily slot and needs the published
+		// end-of-day bar. Delay the pass until the evening market-data window.
+		if task.Kind == ScheduleKindMonitor && now.Hour() < 18 {
 			continue
 		}
 		if err := s.processTask(ctx, task, today); err != nil {

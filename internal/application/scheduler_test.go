@@ -416,7 +416,8 @@ func TestSchedulerRunsMonitorPassOnTradingDays(t *testing.T) {
 		return monitor.Tick(context.Background(), tradeDate)
 	}}
 	tracker := trackerStub{}
-	sch, store := newSchedulerTest(t, calendarStub{open: true}, runner, tracker, func() time.Time { return time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC) })
+	now := time.Date(2026, 10, 23, 17, 59, 0, 0, time.UTC)
+	sch, store := newSchedulerTest(t, calendarStub{open: true}, runner, tracker, func() time.Time { return now })
 	task := ScheduleTask{ID: "0123456789abcdef", Name: "观察池监控", Kind: ScheduleKindMonitor, Enabled: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if err := store.SaveTask(task); err != nil {
 		t.Fatal(err)
@@ -425,6 +426,11 @@ func TestSchedulerRunsMonitorPassOnTradingDays(t *testing.T) {
 	if err := monitorStore.SaveRule(rule); err != nil {
 		t.Fatal(err)
 	}
+	sch.Tick(context.Background())
+	if runner.monitorCalls != 0 {
+		t.Fatalf("monitor consumed trading day before evening: %d", runner.monitorCalls)
+	}
+	now = now.Add(time.Minute)
 	sch.Tick(context.Background())
 	if runner.monitorCalls != 1 {
 		t.Fatalf("monitor pass not triggered: %d", runner.monitorCalls)

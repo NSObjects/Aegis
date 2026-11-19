@@ -96,11 +96,14 @@ func RouteFor(kind MonitorKind) ResearchRoute {
 // record rather than a silent loss. Duplicate handling of the same event is
 // idempotent: the (rule, trade date) uniqueness returns the existing record.
 func (t *TriggerRouter) Handle(ctx context.Context, event MonitorEvent) (TriggerRecord, error) {
+	if err := validateMonitorEvent(event); err != nil {
+		return TriggerRecord{}, err
+	}
 	if event.Outcome != MonitorFired {
 		return TriggerRecord{}, fmt.Errorf("only FIRED events route to research: %s", event.Outcome)
 	}
 	route := RouteFor(event.Kind)
-	id := triggerID(event.RuleID, event.TradeDate)
+	id := event.TriggerID()
 	now := time.Now().UTC()
 	record := TriggerRecord{
 		ID: id, RuleID: event.RuleID, Symbol: event.Symbol, MonitorKind: event.Kind,
@@ -122,7 +125,7 @@ func (t *TriggerRouter) Handle(ctx context.Context, event MonitorEvent) (Trigger
 		record.ObservationDigest = event.Detail
 		record.State = ScheduleCompleted
 	case RouteThesisReview, RouteFullGraph:
-		input, err := NewLiveResearchInput(event.Symbol, "监控触发复查："+event.Detail, now, t.lookback)
+		input, err := NewLiveResearchInput(event.Symbol, "复查监控触发后近期公告和市场变化", now, t.lookback)
 		if err != nil {
 			t.fail(&record, "TRIGGER_INPUT_INVALID")
 			return record, t.store.Save(record)
@@ -133,13 +136,8 @@ func (t *TriggerRouter) Handle(ctx context.Context, event MonitorEvent) (Trigger
 			Input:          input,
 		})
 		if err != nil {
-			record.State = ScheduleFailed
-			record.FailureNote = err.Error()
-			if len(record.FailureNote) > 200 {
-				record.FailureNote = record.FailureNote[:200]
-			}
-			_ = t.store.Save(record)
-			return record, nil
+			t.fail(&record, "RESEARCH_SUBMISSION_FAILED")
+			return record, t.store.Save(record)
 		}
 		record.RunID = rec.ID
 		record.State = ScheduleRunning
@@ -155,8 +153,12 @@ func (t *TriggerRouter) fail(record *TriggerRecord, code string) {
 	record.FailureNote = code
 }
 
-func triggerID(ruleID, tradeDate string) string {
-	return ruleID[:16] + tradeDate[2:] // 16 hex + YYMMDD = 24 chars, deterministic
+// TriggerID returns the stable audit identifier for a valid monitor event.
+func (e MonitorEvent) TriggerID() string {
+	if !monitorIDPattern.MatchString(e.RuleID) || len(e.TradeDate) != 8 {
+		return ""
+	}
+	return e.RuleID + e.TradeDate[2:]
 }
 
 // Advance moves RUNNING triggers with an engine run to a terminal state by
@@ -179,6 +181,12 @@ func (t *TriggerRouter) Advance(ctx context.Context) error {
 			record.State = ScheduleCompleted
 		case RunFailed:
 			record.State = ScheduleFailed
+			switch rec.FailureCode {
+			case FailureInterrupted, FailureInvalidResult, FailurePersistence, FailureTimeout:
+				record.FailureNote = rec.FailureCode
+			default:
+				record.FailureNote = FailureResearch
+			}
 		case RunCancelled:
 			record.State = ScheduleFailed
 			record.FailureNote = "RESEARCH_CANCELLED"
@@ -350,11 +358,19 @@ func (s *FileTriggerStore) Get(id string) (TriggerRecord, error) {
 
 // List returns triggers newest first; limit bounds the listing.
 func (s *FileTriggerStore) List(limit int) ([]TriggerRecord, error) {
-	if s == nil {
-		return nil, errors.New("nil trigger store")
-	}
 	if limit < 1 || limit > 100 {
 		return nil, errors.New("trigger list limit must be 1..100")
+	}
+	records, err := s.list()
+	if len(records) > limit {
+		records = records[:limit]
+	}
+	return records, err
+}
+
+func (s *FileTriggerStore) list() ([]TriggerRecord, error) {
+	if s == nil {
+		return nil, errors.New("nil trigger store")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -380,20 +396,18 @@ func (s *FileTriggerStore) List(limit int) ([]TriggerRecord, error) {
 		}
 		return records[i].CreatedAt.After(records[j].CreatedAt)
 	})
-	if len(records) > limit {
-		records = records[:limit]
-	}
 	return records, nil
 }
 
 // ListPending returns every non-terminal trigger, oldest first.
 func (s *FileTriggerStore) ListPending() ([]TriggerRecord, error) {
-	all, err := s.List(100)
+	all, err := s.list()
 	if err != nil {
 		return nil, err
 	}
 	pending := make([]TriggerRecord, 0, len(all))
-	for _, record := range all {
+	for i := len(all) - 1; i >= 0; i-- {
+		record := all[i]
 		if record.State == SchedulePending || record.State == ScheduleRunning {
 			pending = append(pending, record)
 		}

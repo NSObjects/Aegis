@@ -82,7 +82,7 @@ func (m *Monitor) Tick(ctx context.Context, tradeDate string) error {
 		}
 		outcome, detail, evalErr := m.evaluateRule(ctx, rule, tradeDate)
 		if evalErr != nil {
-			log.Printf("AEGIS_MONITOR_SOURCE_UNAVAILABLE rule=%s symbol=%s err=%v", rule.ID, rule.Symbol, evalErr)
+			log.Printf("AEGIS_MONITOR_SOURCE_UNAVAILABLE rule=%s symbol=%s", rule.ID, rule.Symbol)
 			outcome, detail = MonitorSourceDown, "SOURCE_UNAVAILABLE"
 		}
 		if outcome == MonitorQuiet {
@@ -98,12 +98,18 @@ func (m *Monitor) Tick(ctx context.Context, tradeDate string) error {
 			}
 		}
 		event := MonitorEvent{RuleID: rule.ID, Symbol: rule.Symbol, Kind: rule.Kind, TradeDate: tradeDate, Outcome: outcome, Detail: detail, CreatedAt: m.now().UTC()}
-		if err := m.store.SaveEvent(event); err != nil && !errors.Is(err, ErrMonitorEventExists) {
-			return fmt.Errorf("save monitor event: %w", err)
+		if err := m.store.SaveEvent(event); err != nil {
+			if !errors.Is(err, ErrMonitorEventExists) {
+				return fmt.Errorf("save monitor event: %w", err)
+			}
+			event, err = m.store.GetEvent(rule.ID, tradeDate)
+			if err != nil {
+				return fmt.Errorf("read persisted monitor event: %w", err)
+			}
 		}
 		// Only a persisted, non-suppressed FIRED event may route research;
 		// suppression and outages never start paid work.
-		if outcome == MonitorFired && m.router != nil {
+		if event.Outcome == MonitorFired && m.router != nil {
 			if _, err := m.router.Handle(ctx, event); err != nil {
 				log.Printf("AEGIS_MONITOR_TRIGGER_ERROR rule=%s err=%v", rule.ID, err)
 			}

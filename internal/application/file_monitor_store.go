@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -346,12 +347,42 @@ func (s *FileMonitorStore) ListEvents(ruleID string) ([]MonitorEvent, error) {
 		}
 		events = append(events, event)
 	}
-	for i := 1; i < len(events); i++ {
-		for j := i; j > 0 && events[j].TradeDate > events[j-1].TradeDate; j-- {
-			events[j], events[j-1] = events[j-1], events[j]
-		}
-	}
+	sortMonitorEvents(events)
 	return events, nil
+}
+
+// EventsBetween returns persisted outcomes in an inclusive trade-date range,
+// including outcomes whose rules have since been removed.
+func (s *FileMonitorStore) EventsBetween(from, through string) ([]MonitorEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]MonitorEvent, 0)
+	for _, entry := range entries {
+		ruleID, date, ok := strings.Cut(strings.TrimPrefix(strings.TrimSuffix(entry.Name(), ".json"), "event-"), "-")
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "event-") || !strings.HasSuffix(entry.Name(), ".json") || !ok || date < from || date > through {
+			continue
+		}
+		event, err := s.readEvent(ruleID, date)
+		if err != nil {
+			return nil, fmt.Errorf("monitor event %s: %w", entry.Name(), err)
+		}
+		events = append(events, event)
+	}
+	sortMonitorEvents(events)
+	return events, nil
+}
+
+func sortMonitorEvents(events []MonitorEvent) {
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].TradeDate == events[j].TradeDate {
+			return events[i].RuleID < events[j].RuleID
+		}
+		return events[i].TradeDate > events[j].TradeDate
+	})
 }
 
 // LatestEvent returns the most recent outcome for one rule.

@@ -8,6 +8,7 @@ const port = 18686;
 const secret = "ci-go-api-fixture-only-secret-32-characters";
 const runs = new Map();
 const watchlist = new Map();
+const researchMemory = new Map();
 const requestKeys = new Map();
 const prefix = "/api/v1/research/runs";
 const providerSecrets = new Map();
@@ -164,6 +165,15 @@ const server = createServer(async (req, res) => {
   }
   // In-memory watchlist fixture mirroring the Go contract: operator-curated
   // entries only, latest run linked from the fixture run map, never persisted.
+  if (url.pathname === "/api/v1/research-digest" && req.method === "GET") {
+    const period = url.searchParams.get("period");
+    const alerts = period === "weekly" ? [{
+      rule_id: "0123456789abcdef", symbol: "600519.SH", trade_date: "20261024",
+      outcome: "SOURCE_UNAVAILABLE", detail: "SOURCE_UNAVAILABLE",
+    }] : [];
+    return json(res, 200, { period, from: period === "weekly" ? "20261018" : "20261024",
+      through: "20261024", alerts, source_outages: alerts.length });
+  }
   if (url.pathname === "/api/v1/watchlist" && req.method === "GET") {
     const items = [...watchlist.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([symbol, item]) => {
       const latest = [...runs.values()].filter(r => r.symbol === symbol)
@@ -251,7 +261,60 @@ const server = createServer(async (req, res) => {
     res.setHeader("Location", `${prefix}/${run_id}`);
     return json(res, 202, metadata(run));
   }
-  const match = url.pathname.match(/^\/api\/v1\/research\/runs\/([a-f0-9]{32})(?:\/(artifact|events|stream|cancel))?$/);
+  if (url.pathname === "/api/v1/research/memory") {
+    if (req.method === "GET") {
+      const memories = [...researchMemory.values()].filter(item => !item.revoked_at &&
+        (!url.searchParams.get("q") || item.thesis.includes(url.searchParams.get("q"))));
+      return json(res, 200, { memories, total: memories.length, has_more: false });
+    }
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const run = runs.get(body.source_run_id);
+      const hypothesis = run?.hypotheses?.find(item => item.hypothesis_id === body.hypothesis_id);
+      const observation = hypothesis?.observations?.find(item => item.run_id === body.observation_run_id);
+      const review = hypothesis?.reviews?.find(item => item.review_id === body.review_id);
+      if (!observation) return json(res, 409, { error: "invalid observation" });
+      const entry = { ...body, memory_id: randomBytes(16).toString("hex"), symbol: run.symbol,
+        thesis: hypothesis.statement, outcome: observation.status, category: review?.category };
+      researchMemory.set(entry.memory_id, entry);
+      return json(res, 201, entry);
+    }
+  }
+  const revoke = url.pathname.match(/^\/api\/v1\/research\/memory\/([a-f0-9]{32})\/revoke$/);
+  if (revoke && req.method === "POST") {
+    const entry = researchMemory.get(revoke[1]);
+    if (!entry) return json(res, 404, { error: "entry missing" });
+    entry.revoked_at = asOf();
+    return json(res, 200, entry);
+  }
+  const observationPath = url.pathname.match(/^\/api\/v1\/research\/runs\/([a-f0-9]{32})\/hypotheses\/([a-f0-9]{32})\/(observations|reviews)$/);
+  if (observationPath) {
+    const source = runs.get(observationPath[1]);
+    const hypothesis = source?.hypotheses?.find(item => item.hypothesis_id === observationPath[2]);
+    if (!hypothesis) return json(res, 404, { error: "hypothesis not found" });
+    if (observationPath[3] === "reviews") {
+      if (req.method === "GET") return json(res, 200, { reviews: hypothesis.reviews ?? [] });
+      if (req.method === "POST") {
+        const body = await readBody(req);
+        if (!hypothesis.observations?.some(item => item.run_id === body.observation_run_id)) {
+          return json(res, 409, { error: "observation not found" });
+        }
+        const item = { ...body, review_id: randomBytes(16).toString("hex") };
+        (hypothesis.reviews ??= []).push(item);
+        return json(res, 201, item);
+      }
+    }
+    if (req.method === "GET") return json(res, 200, { observations: hypothesis.observations ?? [] });
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const followup = runs.get(body.run_id);
+      if (!followup || followup === source) return json(res, 409, { error: "invalid follow-up" });
+      const item = { run_id: followup.run_id, as_of: followup.requested_as_of, status: "INCONCLUSIVE", reason: "NO_STRUCTURED_RULE" };
+      (hypothesis.observations ??= []).push(item);
+      return json(res, 201, item);
+    }
+  }
+  const match = url.pathname.match(/^\/api\/v1\/research\/runs\/([a-f0-9]{32})(?:\/(artifact|events|stream|cancel|hypotheses))?$/);
   if (!match) return json(res, 404, { error: "not found" });
   const run = runs.get(match[1]);
   if (!run) return json(res, 404, { error: "not found" });
@@ -262,6 +325,16 @@ const server = createServer(async (req, res) => {
     if (run.state === "CANCELLED" || run.state === "FAILED" || run.state === "COMPLETED") return json(res, 409, { error: "not active" });
     run.state = "CANCELLED"; run.finished_at = asOf(); append(run, "Run", "CANCELLED");
     return json(res, 202, { status: "CANCELLATION_REQUESTED" });
+  }
+  if (action === "hypotheses" && req.method === "GET") {
+    return json(res, 200, { hypotheses: run.hypotheses ?? [] });
+  }
+  if (action === "hypotheses" && req.method === "POST") {
+    if (run.state !== "COMPLETED") return json(res, 409, { error: "artifact not ready" });
+    const draft = await readBody(req);
+    const item = { ...draft, hypothesis_id: randomBytes(16).toString("hex"), run_id: run.run_id };
+    (run.hypotheses ??= []).push(item);
+    return json(res, 201, item);
   }
   if (action === "artifact" && req.method === "GET") return run.state === "COMPLETED" ? json(res, 200, report(run)) : json(res, 409, { error: "artifact not ready" });
   if (action === "events" && req.method === "GET") return json(res, 200, { events: run.events });

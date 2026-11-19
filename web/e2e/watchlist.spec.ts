@@ -101,3 +101,13 @@ test("watchlist deep link, empty state, and invalid symbol rejected", async ({ p
   await expect(page.locator(".watch-row")).toHaveCount(0);
   await expect(page.getByText("观察池为空。加入标的后可从这里直接启动研究。")).toBeVisible();
 });
+
+test("monitor digest shows source outages separately from an empty alert period", async ({ page }) => {
+  await signIn(page);
+  await openWatchlist(page);
+  const digest = page.getByRole("region", { name: "监控与研究摘要" });
+  await expect(digest.getByText("此时段无已记录的提醒。")).toBeVisible();
+  await digest.getByLabel("时段").selectOption("weekly");
+  await expect(digest.getByRole("alert")).toContainText("1 条监控因数据源不可用而无法判定");
+  await expect(digest.getByRole("listitem")).toContainText("600519.SH");
+});

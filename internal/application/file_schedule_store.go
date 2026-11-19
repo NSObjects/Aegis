@@ -198,7 +198,7 @@ func writeJSONFile(path string, value any) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0600); err == nil {
+	if err = tmp.Chmod(0600); err == nil {
 		_, err = tmp.Write(raw)
 	}
 	if err == nil {
