@@ -106,6 +106,10 @@ func TestScanPersistsPerSymbolInputSnapshots(t *testing.T) {
  }
  close(stub.release)
  final := waitScanDone(t, manager, submitted.ID)
+ if len(submitted.StrategyDefinitionSHA256) != 64 || submitted.StrategyDefinitionSHA256 != final.StrategyDefinitionSHA256 ||
+  len(submitted.InputSnapshotSHA256) != 64 || submitted.InputSnapshotSHA256 != final.InputSnapshotSHA256 {
+  t.Fatalf("scan must bind the strategy definition from submission through completion: %+v", final)
+ }
  if final.State != ScanCompleted {
   t.Fatalf("state=%s failure=%s", final.State, final.FailureCode)
  }

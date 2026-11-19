@@ -11,6 +11,20 @@ import (
 // providers, invoking an LLM, or initiating any trading action. Every member
 // must have a unique symbol and match the same requested as-of cutoff.
 func Scan(asOf string, observations []technical.HistoricalObservation) ([]Result,error) {
+ return ScanVersion(StrategyVersion, asOf, observations)
+}
+
+// ScanVersion dispatches to the evaluator registered for the recorded rule.
+func ScanVersion(version, asOf string, observations []technical.HistoricalObservation) ([]Result, error) {
+ switch version {
+ case strategyVersionV1:
+  return scanV1(asOf, observations)
+ default:
+  return nil, ErrUnknownStrategy
+ }
+}
+
+func scanV1(asOf string, observations []technical.HistoricalObservation) ([]Result,error) {
  if asOf=="" {return nil,errors.New("scan as-of required")}
  seen:=make(map[string]struct{},len(observations))
  results:=make([]Result,0,len(observations))

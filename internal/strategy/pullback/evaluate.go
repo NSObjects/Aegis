@@ -11,8 +11,6 @@ import (
  "Aegis/internal/capability/technical"
 )
 
-const StrategyVersion = "trend-pullback-v1"
-
 type Verdict string
 const (
  Selected Verdict = "SELECTED"
@@ -38,7 +36,7 @@ type Result struct {
 // [SMA20, SMA20*1.03] define this explicit first candidate rule.
 // Factor visibility at asOf must be guaranteed by the provider; no future factors.
 func Evaluate(symbol, asOf string, bars []technical.HistoricalBar, factors []AdjustmentFactor) (Result,error) {
- out:=Result{Symbol:symbol,AsOf:asOf,Version:StrategyVersion,Verdict:InsufficientData,Reason:"MISSING_BARS"}
+ out:=Result{Symbol:symbol,AsOf:asOf,Version:strategyVersionV1,Verdict:InsufficientData,Reason:"MISSING_BARS"}
  if _,err:=time.Parse("20060102",asOf);err!=nil || len(asOf)!=8{return out,errors.New("invalid as-of date")}
  if len(symbol)!=9 || (!strings.HasSuffix(symbol,".SH") && !strings.HasSuffix(symbol,".SZ")) {return out,errors.New("invalid stock symbol")}
  for i:=0;i<6;i++ {if symbol[i]<'0' || symbol[i]>'9' {return out,errors.New("invalid stock symbol")}}
@@ -55,7 +53,7 @@ func Evaluate(symbol, asOf string, bars []technical.HistoricalBar, factors []Adj
   }
   if b.Open<=0||b.Close<=0||b.Low<=0||b.High<b.Low||b.High<math.Max(b.Open,b.Close)||b.Low>math.Min(b.Open,b.Close) {return out,errors.New("inconsistent OHLC")}
  }
- if len(bars)<65 || bars[len(bars)-1].TradeDate!=asOf {return out,nil}
+ if len(bars)<v1TrendSlowSessions+v1SlopeLagSessions || bars[len(bars)-1].TradeDate!=asOf {return out,nil}
  if len(factors)!=len(bars) {out.Reason="MISSING_PIT_ADJUSTMENT";return out,nil}
  for i,a:=range factors {
   if a.TradeDate!=bars[i].TradeDate || math.IsNaN(a.Factor) || math.IsInf(a.Factor,0) || a.Factor<=0 {out.Reason="INVALID_PIT_ADJUSTMENT";return out,nil}
@@ -63,10 +61,10 @@ func Evaluate(symbol, asOf string, bars []technical.HistoricalBar, factors []Adj
  last:=bars[len(bars)-1]
  if last.Volume==0 {out.Reason="HALTED_OR_NO_VOLUME";return out,nil}
  anchor:=factors[len(factors)-1].Factor
- n:=len(bars);ma20:=adjustedSMA(bars,factors,anchor,n,20);ma60:=adjustedSMA(bars,factors,anchor,n,60);old60:=adjustedSMA(bars,factors,anchor,n-5,60)
+ n:=len(bars);ma20:=adjustedSMA(bars,factors,anchor,n,v1TrendFastSessions);ma60:=adjustedSMA(bars,factors,anchor,n,v1TrendSlowSessions);old60:=adjustedSMA(bars,factors,anchor,n-v1SlopeLagSessions,v1TrendSlowSessions)
  out.Verdict=Rejected
  if ma20<=ma60 || ma60<=old60 {out.Reason="TREND_NOT_UP";return out,nil}
- if last.Close<ma20 || last.Close>ma20*1.03 {out.Reason="NOT_NEAR_MA20";return out,nil}
+ if last.Close<ma20 || last.Close>ma20*v1CloseUpperRatio {out.Reason="NOT_NEAR_MA20";return out,nil}
  out.Verdict=Selected;out.Reason="TREND_PULLBACK_V1";return out,nil
 }
 

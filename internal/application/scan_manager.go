@@ -36,8 +36,13 @@ func (m *ScanManager) Submit(ctx context.Context,asOf,source string,symbols []st
  sort.Strings(sorted)
  id,err:=NewScanID()
  if err!=nil{m.busy=false;m.mu.Unlock();return ScanRecord{},err}
+ definition,err:=pullback.Definition(pullback.StrategyVersion)
+ if err!=nil{m.busy=false;m.mu.Unlock();return ScanRecord{},err}
+ digest,err:=definition.SHA256()
+ if err!=nil{m.busy=false;m.mu.Unlock();return ScanRecord{},err}
  now:=time.Now().UTC()
- record:=ScanRecord{ID:id,AsOf:asOf,StrategyVersion:pullback.StrategyVersion,State:ScanPending,UniverseSource:source,Symbols:sorted,CreatedAt:now,UpdatedAt:now}
+ record:=ScanRecord{ID:id,AsOf:asOf,StrategyVersion:pullback.StrategyVersion,StrategyDefinitionSHA256:digest,State:ScanPending,UniverseSource:source,Symbols:sorted,CreatedAt:now,UpdatedAt:now}
+ record.InputSnapshotSHA256=ScanInputSnapshotSHA256(record)
  if err:=m.store.Save(record);err!=nil{m.busy=false;m.mu.Unlock();return ScanRecord{},err}
  m.mu.Unlock()
  // The asynchronous task survives HTTP request completion but has a bounded lifetime.

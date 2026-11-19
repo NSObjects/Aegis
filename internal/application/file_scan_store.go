@@ -32,6 +32,7 @@ type ScanRecord struct {
  ID string `json:"scan_id"`
  AsOf string `json:"as_of"`
  StrategyVersion string `json:"strategy_version"`
+ StrategyDefinitionSHA256 string `json:"strategy_definition_sha256,omitempty"`
  State ScanState `json:"state"`
  UniverseSource string `json:"universe_source"`
  InputSnapshotSHA256 string `json:"input_snapshot_sha256"`
@@ -75,12 +76,19 @@ func validScanID(s string)bool{
 // it does not claim to fingerprint the provider's underlying market bars.
 func ScanInputSnapshotSHA256(r ScanRecord) string {
  canonical:=r.AsOf+"\n"+r.StrategyVersion+"\n"+r.UniverseSource+"\n"+strings.Join(r.Symbols,"\n")
+ if r.StrategyDefinitionSHA256!="" { canonical += "\n"+r.StrategyDefinitionSHA256 }
  sum:=sha256.Sum256([]byte(canonical))
  return hex.EncodeToString(sum[:])
 }
 
 func validateScanRecord(r ScanRecord)error{
- if !validScanID(r.ID)||r.AsOf==""||r.StrategyVersion!=pullback.StrategyVersion||r.CreatedAt.IsZero()||r.UpdatedAt.IsZero()||r.UpdatedAt.Before(r.CreatedAt){return errors.New("invalid scan metadata")}
+ if !validScanID(r.ID)||r.AsOf==""||r.CreatedAt.IsZero()||r.UpdatedAt.IsZero()||r.UpdatedAt.Before(r.CreatedAt){return errors.New("invalid scan metadata")}
+ definition,err:=pullback.Definition(r.StrategyVersion)
+ if err!=nil{return err}
+ if r.StrategyDefinitionSHA256!="" {
+  digest,err:=definition.SHA256()
+  if err!=nil||r.StrategyDefinitionSHA256!=digest{return errors.New("scan strategy definition mismatch")}
+ }
  date,err:=time.Parse("20060102",r.AsOf);if err!=nil||date.Format("20060102")!=r.AsOf{return errors.New("invalid PIT scan cutoff")}
  if len(r.Symbols)==0||len(r.Symbols)>20{return errors.New("invalid bounded scan universe")}
  if r.UniverseSource==""||r.InputSnapshotSHA256==""||r.InputSnapshotSHA256!=ScanInputSnapshotSHA256(r){return errors.New("scan input snapshot mismatch")}
@@ -131,7 +139,7 @@ func (s *FileScanStore) Save(r ScanRecord)error{
  if old,err:=os.ReadFile(path);err==nil{
   var prior ScanRecord;if json.Unmarshal(old,&prior)!=nil||validateScanRecord(prior)!=nil{return errors.New("corrupt previous scan record")}
   if prior.State==ScanCompleted||prior.State==ScanFailed{return errors.New("terminal scan immutable")}
-  if (prior.State==ScanRunning&&r.State==ScanPending)||prior.ID!=r.ID||prior.AsOf!=r.AsOf||prior.StrategyVersion!=r.StrategyVersion||prior.UniverseSource!=r.UniverseSource||prior.CreatedAt!=r.CreatedAt||len(prior.Symbols)!=len(r.Symbols){return errors.New("invalid scan transition")}
+  if (prior.State==ScanRunning&&r.State==ScanPending)||prior.ID!=r.ID||prior.AsOf!=r.AsOf||prior.StrategyVersion!=r.StrategyVersion||prior.StrategyDefinitionSHA256!=r.StrategyDefinitionSHA256||prior.UniverseSource!=r.UniverseSource||prior.CreatedAt!=r.CreatedAt||len(prior.Symbols)!=len(r.Symbols){return errors.New("invalid scan transition")}
   for i:=range prior.Symbols{if prior.Symbols[i]!=r.Symbols[i]{return errors.New("scan universe changed")}}
  }else if !os.IsNotExist(err){return err}
  raw,err:=json.Marshal(r);if err!=nil{return err}

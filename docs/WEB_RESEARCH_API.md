@@ -89,6 +89,10 @@ historical-as-of HTTP parameter** in this first slice.
 
 定时研究和监控触发研究进入完成状态时，会对研究开始前已录入、在其研究时点仍有效的同标的结构化假设追加后验观察。收盘价规则仅在目标日收盘后评估，缺少合格证据时保留证据不足。同一后续报告重复轮询不会产生重复观察。组合审查的定时任务以显式未知账户启动。
 
+### 策略定义与扫描回放
+
+`go run ./cmd/aegis-pullback-scan --describe-strategy` 离线输出当前注册的策略定义与 SHA-256。新扫描的输入指纹同时绑定策略参数指纹。通过 `GET /api/v1/scans/{scan_id}/replay` 按原版本重算已保存的输入。响应包含 `strategy_definition`、`strategy_definition_sha256` 和 `strategy_definition_bound`。旧扫描按记录版本解析定义，此时 `strategy_definition_bound` 为 `false`。无法核实参数指纹时，回放返回错误。
+
 ### Retry-safe Run creation
 
 The optional `Idempotency-Key` header on `POST /api/v1/research/runs` is

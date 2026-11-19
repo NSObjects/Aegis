@@ -44,7 +44,7 @@ func ComputeMetrics(asOf string, bars []technical.HistoricalBar, factors []Adjus
 	if _, err := time.Parse("20060102", asOf); err != nil || len(asOf) != 8 {
 		return Metrics{}, errors.New("invalid as-of date")
 	}
-	if len(bars) < 65 || bars[len(bars)-1].TradeDate != asOf {
+	if len(bars) < v1TrendSlowSessions+v1SlopeLagSessions || bars[len(bars)-1].TradeDate != asOf {
 		return Metrics{}, ErrMetricsInsufficientBars
 	}
 	if len(factors) != len(bars) {
@@ -52,9 +52,9 @@ func ComputeMetrics(asOf string, bars []technical.HistoricalBar, factors []Adjus
 	}
 	anchor := factors[len(factors)-1].Factor
 	n := len(bars)
-	ma20 := adjustedSMA(bars, factors, anchor, n, 20)
-	ma60 := adjustedSMA(bars, factors, anchor, n, 60)
-	old60 := adjustedSMA(bars, factors, anchor, n-5, 60)
+	ma20 := adjustedSMA(bars, factors, anchor, n, v1TrendFastSessions)
+	ma60 := adjustedSMA(bars, factors, anchor, n, v1TrendSlowSessions)
+	old60 := adjustedSMA(bars, factors, anchor, n-v1SlopeLagSessions, v1TrendSlowSessions)
 	m := Metrics{Close: bars[n-1].Close, MA20: ma20, MA60: ma60, MA20OverMA60: ma20 / ma60, CloseOverMA20: bars[n-1].Close / ma20, MA60Slope5: ma60/old60 - 1}
 	for _, v := range []float64{m.Close, m.MA20, m.MA60, m.MA20OverMA60, m.CloseOverMA20, m.MA60Slope5} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {

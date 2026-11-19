@@ -12,13 +12,16 @@ import (
 // must reproduce the persisted results symbol for symbol. Mismatches are
 // reported, never silently repaired.
 type ScanReplay struct {
-	ScanID          string                   `json:"scan_id"`
-	AsOf            string                   `json:"as_of"`
-	StrategyVersion string                   `json:"strategy_version"`
-	Replayable      bool                     `json:"replayable"`
-	Matches         bool                     `json:"matches"`
-	Rows            []ScanReplayRow          `json:"rows"`
-	Unreplayable    []ScanReplayUnreplayable `json:"unreplayable"`
+	ScanID                   string                     `json:"scan_id"`
+	AsOf                     string                     `json:"as_of"`
+	StrategyDefinition       pullback.StrategyCandidate `json:"strategy_definition"`
+	StrategyDefinitionSHA256 string                     `json:"strategy_definition_sha256"`
+	StrategyDefinitionBound  bool                       `json:"strategy_definition_bound"`
+	StrategyVersion          string                     `json:"strategy_version"`
+	Replayable               bool                       `json:"replayable"`
+	Matches                  bool                       `json:"matches"`
+	Rows                     []ScanReplayRow            `json:"rows"`
+	Unreplayable             []ScanReplayUnreplayable   `json:"unreplayable"`
 }
 
 type ScanReplayRow struct {
@@ -58,7 +61,19 @@ func (m *ScanManager) ReplayScan(scanID string) (ScanReplay, error) {
 	for _, ref := range record.Snapshots {
 		refs[ref.Symbol] = ref
 	}
-	replay := ScanReplay{ScanID: record.ID, AsOf: record.AsOf, StrategyVersion: record.StrategyVersion}
+	definition, err := pullback.Definition(record.StrategyVersion)
+	if err != nil {
+		return ScanReplay{}, err
+	}
+	digest, err := definition.SHA256()
+	if err != nil {
+		return ScanReplay{}, err
+	}
+	replay := ScanReplay{
+		ScanID: record.ID, AsOf: record.AsOf, StrategyVersion: record.StrategyVersion,
+		StrategyDefinition: definition, StrategyDefinitionSHA256: digest,
+		StrategyDefinitionBound: record.StrategyDefinitionSHA256 == digest,
+	}
 	observations := make([]technical.HistoricalObservation, 0, len(record.Symbols))
 	for _, symbol := range record.Symbols {
 		ref, ok := refs[symbol]
@@ -77,7 +92,7 @@ func (m *ScanManager) ReplayScan(scanID string) (ScanReplay, error) {
 		observations = append(observations, obs)
 	}
 	if len(observations) > 0 {
-		replayed, err := pullback.Scan(record.AsOf, observations)
+		replayed, err := pullback.ScanVersion(record.StrategyVersion, record.AsOf, observations)
 		if err != nil {
 			return ScanReplay{}, err
 		}

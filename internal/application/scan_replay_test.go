@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"Aegis/internal/strategy/pullback"
 )
 
-func replayScanRecord(t *testing.T, store *FileScanStore) ScanRecord {
+func replayScanRecord(t *testing.T, store *FileScanStore, bindDefinition bool) ScanRecord {
 	t.Helper()
 	bars := map[string][]technical.HistoricalBar{
 		"000001.SZ": flatBars(),
@@ -22,6 +23,16 @@ func replayScanRecord(t *testing.T, store *FileScanStore) ScanRecord {
 	asOf := bars["600519.SH"][64].TradeDate
 	now := time.Now().UTC()
 	record := ScanRecord{ID: "0123456789abcdef0123456789abcdef", AsOf: asOf, StrategyVersion: pullback.StrategyVersion, State: ScanCompleted, UniverseSource: "USER_SUPPLIED", Symbols: symbols, CreatedAt: now, UpdatedAt: now}
+	if bindDefinition {
+		definition, err := pullback.Definition(record.StrategyVersion)
+		if err != nil {
+			t.Fatal(err)
+		}
+		record.StrategyDefinitionSHA256, err = definition.SHA256()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, symbol := range symbols {
 		b := bars[symbol]
 		if b == nil {
@@ -57,7 +68,7 @@ func TestScanReplayReproducesPersistedResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := replayScanRecord(t, store)
+	record := replayScanRecord(t, store, false)
 	manager, err := NewScanManager(store, &scanStub{})
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +79,9 @@ func TestScanReplayReproducesPersistedResults(t *testing.T) {
 	}
 	if !replay.Replayable || !replay.Matches {
 		t.Fatalf("identical inputs must replay: %+v", replay)
+	}
+	if replay.StrategyDefinitionBound || replay.StrategyDefinition.Version != record.StrategyVersion || len(replay.StrategyDefinitionSHA256) != 64 {
+		t.Fatalf("legacy scan must resolve the v1 definition as unbound: %+v", replay)
 	}
 	if len(replay.Rows) != 2 || len(replay.Unreplayable) != 1 {
 		t.Fatalf("rows/unreplayable wrong: %+v", replay)
@@ -93,7 +107,7 @@ func TestScanReplayDetectsTamperedResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := replayScanRecord(t, store)
+	record := replayScanRecord(t, store, false)
 	// Hand-edit the persisted JSON the way a corrupted record would appear.
 	// The input fingerprint only covers inputs, so the forged results pass
 	// record validation while contradicting the persisted snapshots; the
@@ -150,5 +164,37 @@ func TestScanReplayFailsClosed(t *testing.T) {
 	}
 	if _, err := manager.ReplayScan(running.ID); !errors.Is(err, ErrScanNotCompleted) {
 		t.Fatalf("unfinished err=%v", err)
+	}
+}
+
+func TestScanReplayVerifiesBoundStrategyDefinition(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "private")
+	store, err := NewFileScanStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := replayScanRecord(t, store, true)
+	manager, err := NewScanManager(store, &scanStub{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		replayed, err := manager.ReplayScan(record.ID)
+		if err != nil || !replayed.Matches || !replayed.StrategyDefinitionBound ||
+			replayed.StrategyDefinitionSHA256 != record.StrategyDefinitionSHA256 {
+			t.Fatalf("same strategy and data must reproduce results: %+v, %v", replayed, err)
+		}
+	}
+	record.StrategyDefinitionSHA256 = strings.Repeat("0", 64)
+	record.InputSnapshotSHA256 = ScanInputSnapshotSHA256(record)
+	raw, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, record.ID+".json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ReplayScan(record.ID); err == nil {
+		t.Fatal("replay accepted an unregistered definition digest")
 	}
 }

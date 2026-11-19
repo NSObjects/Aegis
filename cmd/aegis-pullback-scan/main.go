@@ -8,6 +8,7 @@ import (
  "errors"
  "flag"
  "fmt"
+ "io"
  "os"
  "strings"
  "time"
@@ -74,7 +75,12 @@ func main(){
  useUniverse:=flag.Bool("universe",false,"use point-in-time Tushare stock universe instead of --symbols")
  offset:=flag.Int("offset",0,"sorted universe slice offset")
  limit:=flag.Int("limit",20,"universe slice length, max 20")
+ describe:=flag.Bool("describe-strategy",false,"print the registered strategy definition and its SHA-256 without scanning")
  flag.Parse()
+ if *describe {
+  if err:=describeStrategy(os.Stdout);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}
+  return
+ }
  ctx,cancel:=context.WithTimeout(context.Background(),*timeout);defer cancel()
  var err error
  if *useUniverse {
@@ -84,4 +90,16 @@ func main(){
   err=run(ctx,*asOf,*symbols)
  }
  if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}
+}
+
+
+func describeStrategy(out io.Writer) error {
+ definition,err:=pullback.Definition(pullback.StrategyVersion)
+ if err!=nil{return err}
+ digest,err:=definition.SHA256()
+ if err!=nil{return err}
+ return json.NewEncoder(out).Encode(struct{
+  Definition pullback.StrategyCandidate `json:"strategy_definition"`
+  SHA256 string `json:"strategy_definition_sha256"`
+ }{definition,digest})
 }
