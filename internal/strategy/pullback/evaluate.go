@@ -38,8 +38,7 @@ type Result struct {
 func Evaluate(symbol, asOf string, bars []technical.HistoricalBar, factors []AdjustmentFactor) (Result,error) {
  out:=Result{Symbol:symbol,AsOf:asOf,Version:strategyVersionV1,Verdict:InsufficientData,Reason:"MISSING_BARS"}
  if _,err:=time.Parse("20060102",asOf);err!=nil || len(asOf)!=8{return out,errors.New("invalid as-of date")}
- if len(symbol)!=9 || (!strings.HasSuffix(symbol,".SH") && !strings.HasSuffix(symbol,".SZ")) {return out,errors.New("invalid stock symbol")}
- for i:=0;i<6;i++ {if symbol[i]<'0' || symbol[i]>'9' {return out,errors.New("invalid stock symbol")}}
+ if !validStockSymbol(symbol) {return out,errors.New("invalid stock symbol")}
  if !technical.IsMainBoardSymbol(symbol) {
   out.Verdict=Rejected;out.Reason="OUTSIDE_STOCK_UNIVERSE";return out,nil
  }
@@ -66,6 +65,12 @@ func Evaluate(symbol, asOf string, bars []technical.HistoricalBar, factors []Adj
  if ma20<=ma60 || ma60<=old60 {out.Reason="TREND_NOT_UP";return out,nil}
  if last.Close<ma20 || last.Close>ma20*v1CloseUpperRatio {out.Reason="NOT_NEAR_MA20";return out,nil}
  out.Verdict=Selected;out.Reason="TREND_PULLBACK_V1";return out,nil
+}
+
+func validStockSymbol(symbol string) bool {
+ if len(symbol)!=9 || (!strings.HasSuffix(symbol,".SH") && !strings.HasSuffix(symbol,".SZ")) {return false}
+ for i:=0;i<6;i++ {if symbol[i]<'0'||symbol[i]>'9' {return false}}
+ return true
 }
 
 // adjustedSMA is the single moving-average formula shared by the selection

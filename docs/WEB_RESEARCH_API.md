@@ -93,6 +93,14 @@ historical-as-of HTTP parameter** in this first slice.
 
 `go run ./cmd/aegis-pullback-scan --describe-strategy` 离线输出当前注册的策略定义与 SHA-256。新扫描的输入指纹同时绑定策略参数指纹。通过 `GET /api/v1/scans/{scan_id}/replay` 按原版本重算已保存的输入。响应包含 `strategy_definition`、`strategy_definition_sha256` 和 `strategy_definition_bound`。旧扫描按记录版本解析定义，此时 `strategy_definition_bound` 为 `false`。无法核实参数指纹时，回放返回错误。
 
+### 离线时点回放
+
+`go run ./cmd/aegis-pullback-scan --replay-pit snapshot.json` 使用归档输入在单个研究时点重放。文件的顶层字段为 `strategy_version`、`cutoff`、`calendar_source`、`calendar_known_at`、`sessions`、`universe_source`、`universe_known_at` 和 `members`。时间戳使用 RFC3339，整份股票池和交易日历均须在截止前可用。交易日按 `YYYYMMDD` 升序排列，最后一天须为上海时间截止日且已收盘。
+
+`members` 中每个标的提供 `symbol` 和 `rows`。每行包含 `session`、`state`（`TRADED`、`HALTED` 或 `MISSING`）和 `known_at`。成交行另含未复权日线 `bar`（`trade_date`、`open`、`high`、`low`、`close`、`volume`、`amount`）。有复权因子时同时填 `factor` 和 `factor_known_at`。停牌或缺失行不带价格和因子。最近 65 个交易日出现停牌、缺行或缺因子时，该标的返回证据不足。截止之后才可用的数据会导致回放失败。
+
+输出包含输入和策略的 SHA-256，以及逐标的结果。回放依赖归档方提供真实的可用时间和完整的股票池及交易日历。当前接口回取的历史数据须另外核对发布版本。
+
 ### Retry-safe Run creation
 
 The optional `Idempotency-Key` header on `POST /api/v1/research/runs` is
