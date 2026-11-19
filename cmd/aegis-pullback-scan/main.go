@@ -78,7 +78,15 @@ func main(){
  describe:=flag.Bool("describe-strategy",false,"print the registered strategy definition and its SHA-256 without scanning")
  pitReplay:=flag.String("replay-pit","","replay an archived PIT JSON snapshot offline")
  backtest:=flag.String("backtest","","simulate opening fills using archived PIT signals and execution data")
+ validation:=flag.String("validate-backtest","","evaluate fixed-policy in-sample and out-of-sample windows")
  flag.Parse()
+ if *validation!="" {
+  if *backtest!="" || *pitReplay!="" || *describe || *useUniverse || *symbols!="" || *asOf!="" {
+   fmt.Fprintln(os.Stderr,"--validate-backtest requires a standalone archive"); os.Exit(1)
+  }
+  if err:=validateBacktestFile(*validation,os.Stdout);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}
+  return
+ }
  if *backtest!="" {
   if *pitReplay!="" || *describe || *useUniverse || *symbols!="" || *asOf!="" {
    fmt.Fprintln(os.Stderr,"--backtest requires a standalone archive"); os.Exit(1)

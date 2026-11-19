@@ -52,3 +52,15 @@ func backtestFile(path string, out io.Writer) error {
 	}
 	return json.NewEncoder(out).Encode(report)
 }
+
+func validateBacktestFile(path string, out io.Writer) error {
+	var input pullback.ValidationInput
+	if err := decodeArchive(path, &input); err != nil {
+		return err
+	}
+	report, err := pullback.ValidateBacktest(input)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(out).Encode(report)
+}

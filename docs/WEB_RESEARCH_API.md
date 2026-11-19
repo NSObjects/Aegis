@@ -109,6 +109,14 @@ historical-as-of HTTP parameter** in this first slice.
 
 买入只尝试信号后的第一个交易日开盘，卖出在持有期届满后按交易日重试。相关方向涨跌停或流动性不足会阻止模拟成交。输出保留原始信号、未成交原因、每次成交成本和已平仓的净损益。同一标的同时最多有一个固定股数的模拟持仓，各标的独立模拟，尚无共享资金预算或组合净值计算。
 
+### 滚动回测验证
+
+`go run ./cmd/aegis-pullback-scan --validate-backtest validation.json` 读取 `backtest`（完整模拟输入）和 `folds`。每折包含四个交易日边界 `train_from`、`train_through`、`test_from`、`test_through`。每折训练期须先于测试期，测试期之间不得重叠。各窗口独立起始持仓，沿用同一策略版本和固定模拟参数，窗口结束时尚未平仓的样本保留原状态。
+
+可选的 `regimes` 使用 `date`、`label`、`known_at` 对信号日进行市场阶段归类。阶段标签须在该信号截止前可用。可选的 `candidate_outcomes` 使用 `date`、`symbol`、布尔值 `positive`、`known_at` 和 `source` 提供独立结果标签。只计算在信号之后形成、且于各窗口结束日内可用的标签。证据不足的候选保留计数，并排除在误判率分母之外。
+
+报告分别展示样本内外及各市场阶段的成交状态、已实现净损益、已平仓成本收益率、累计已实现损益的最大回撤金额和模拟成交总额。有独立标签时另列混淆矩阵和分类误判率。成交总额是买卖金额之和。由于模拟没有共享资金和逐日估值，报告不计算组合收益率、净值回撤或资金换手率。输出供独立审核使用。
+
 ### Retry-safe Run creation
 
 The optional `Idempotency-Key` header on `POST /api/v1/research/runs` is
