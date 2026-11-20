@@ -208,11 +208,17 @@ func (c *MarketDayCache) readDate(ctx context.Context, api,date string)(marketDa
 // tradingSessions obtains and checks the complete contiguous calendar range.
 // A missing session cannot silently shrink MA60/MA20 windows.
 func (c *MarketDayCache) tradingSessions(ctx context.Context, asOf string)([]string,error) {
+ return c.api.RecentCompletedTradingSessions(ctx,asOf)
+}
+
+// RecentCompletedTradingSessions checks the full calendar before returning
+// the same bounded trading window used by the market cache.
+func (c *TushareClient) RecentCompletedTradingSessions(ctx context.Context, asOf string)([]string,error) {
  if !withinPoolWindow(asOf,asOf,asOf){return nil,errors.New("invalid pool cache cutoff")}
  end,_:=time.Parse("20060102",asOf)
  begin:=end.AddDate(0,0,-marketDayCalendarLookback)
  from:=begin.Format("20060102")
- rows,err:=c.api.query(ctx,"trade_cal",map[string]any{
+ rows,err:=c.query(ctx,"trade_cal",map[string]any{
   "exchange":"SSE","start_date":from,"end_date":asOf,
  },"cal_date","is_open")
  if err!=nil{return nil,err}

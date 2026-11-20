@@ -80,7 +80,16 @@ func main(){
  backtest:=flag.String("backtest","","simulate opening fills using archived PIT signals and execution data")
  validation:=flag.String("validate-backtest","","evaluate fixed-policy in-sample and out-of-sample windows")
  evidence:=flag.String("r6-evidence","","replay a validation archive twice and emit reproducibility evidence")
+ capture:=flag.String("capture-pit","","capture a new, same-day PIT snapshot at the given path")
  flag.Parse()
+ if *capture!="" {
+  if *evidence!="" || *validation!="" || *backtest!="" || *pitReplay!="" || *describe || *useUniverse || *asOf!="" {
+   fmt.Fprintln(os.Stderr,"--capture-pit uses today's date and requires only --symbols and an output path"); os.Exit(1)
+  }
+  ctx,cancel:=context.WithTimeout(context.Background(),*timeout);defer cancel()
+  if err:=capturePITFile(ctx,*capture,*symbols);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(1)}
+  return
+ }
  if *evidence!="" {
   if *validation!="" || *backtest!="" || *pitReplay!="" || *describe || *useUniverse || *symbols!="" || *asOf!="" {
    fmt.Fprintln(os.Stderr,"--r6-evidence requires a standalone validation archive"); os.Exit(1)
